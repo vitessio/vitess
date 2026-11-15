@@ -865,41 +865,81 @@ func TestBuildPlayerPlanMultiDelete(t *testing.T) {
 		"this test requires VPlayer batching to be enabled in the default config")
 
 	testcases := []struct {
-		name            string
-		filter          string
-		wantMultiDelete string
+		name                         string
+		filter                       string
+		pkInfos                      map[string][]*ColumnInfo
+		sourceUniqueKeyTargetColumns string
+		wantMultiDelete              string
+		wantMultiDeleteValue         string
 	}{{
-		name:            "insertNormal builds a bulk delete",
-		filter:          "select c1, c2 from t1",
-		wantMultiDelete: "delete from t1 where c1 in ::bulk_pks",
+		name:                 "insertNormal builds a bulk delete",
+		filter:               "select c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_c1",
+	}, {
+		name:                 "pk after an expression reads its own source field",
+		filter:               "select concat(c2, c3) as c2, c1 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_c1",
+	}, {
+		name:                 "renamed pk reads the source column",
+		filter:               "select src as c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: ":b_src",
+	}, {
+		name:                 "pk computed by an expression is evaluated per row",
+		filter:               "select c1+1000 as c1, c2 from t1",
+		wantMultiDelete:      "delete from t1 where c1 in ",
+		wantMultiDeleteValue: "(:b_c1 + 1000)",
 	}, {
 		name:   "insertOnDup (partial group by) must not build a bulk delete",
 		filter: "select c1, count(*) as c2 from t1 group by c1",
 	}, {
 		name:   "insertIgnore (full group by) must not build a bulk delete",
 		filter: "select c1, c2 from t1 group by c1, c2",
+	}, {
+		name:   "composite pk must not build a bulk delete",
+		filter: "select c1, c2 from t1",
+		pkInfos: map[string][]*ColumnInfo{
+			"t1": {{Name: "c1", IsPK: true}, {Name: "c2", IsPK: true}},
+		},
+	}, {
+		name:   "extra source pk column must not build a bulk delete",
+		filter: "select c1, c2 from t1",
+		pkInfos: map[string][]*ColumnInfo{
+			"t1": {{Name: "c1", IsPK: true}, {Name: "c2"}},
+		},
+		sourceUniqueKeyTargetColumns: "c2",
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.name, func(t *testing.T) {
 			input := &binlogdatapb.Filter{
 				Rules: []*binlogdatapb.Rule{{
-					Match:  "t1",
-					Filter: tcase.filter,
+					Match:                        "t1",
+					Filter:                       tcase.filter,
+					SourceUniqueKeyTargetColumns: tcase.sourceUniqueKeyTargetColumns,
 				}},
 			}
 			vr := &vreplicator{
 				workflowConfig: vttablet.DefaultVReplicationConfig,
 			}
-			plan, err := vr.buildReplicatorPlan(getSource(input), PrimaryKeyInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
+			pkInfos := PrimaryKeyInfos
+			if tcase.pkInfos != nil {
+				pkInfos = tcase.pkInfos
+			}
+			plan, err := vr.buildReplicatorPlan(getSource(input), pkInfos, nil, binlogplayer.NewStats(), collations.MySQL8(), sqlparser.NewTestParser())
 			require.NoError(t, err)
 			tplan := plan.TargetTables["t1"]
 			require.NotNil(t, tplan)
 			if tcase.wantMultiDelete == "" {
 				require.Nil(t, tplan.MultiDelete)
+				require.Nil(t, tplan.MultiDeleteValue)
 			} else {
 				require.NotNil(t, tplan.MultiDelete)
 				require.Equal(t, tcase.wantMultiDelete, tplan.MultiDelete.Query)
+				require.NotNil(t, tplan.MultiDeleteValue)
+				require.Equal(t, tcase.wantMultiDeleteValue, tplan.MultiDeleteValue.Query)
 			}
 		})
 	}
@@ -1305,13 +1345,13 @@ func TestApplyBulkInsertChangesMaxQuerySize(t *testing.T) {
 func TestApplyBulkDeleteChanges(t *testing.T) {
 	newTablePlan := func() *TablePlan {
 		return &TablePlan{
-			TargetName:  "t",
-			MultiDelete: sqlparser.BuildParsedQuery("delete from t where id in %a", "::bulk_pks"),
+			TargetName:       "t",
+			MultiDelete:      sqlparser.BuildParsedQuery("delete from t where id in "),
+			MultiDeleteValue: sqlparser.BuildParsedQuery("%a", ":b_id"),
 			Fields: []*querypb.Field{
 				{Name: "id", Type: querypb.Type_INT64},
 				{Name: "v", Type: querypb.Type_VARCHAR},
 			},
-			PKIndices: []bool{true, false},
 			TablePlanBuilder: &tablePlanBuilder{
 				pkCols: []*colExpr{{}},
 				stats:  binlogplayer.NewStats(),
@@ -1343,13 +1383,125 @@ func TestApplyBulkDeleteChanges(t *testing.T) {
 		assert.Equal(t, "delete from t where id in (1, 2)", executed[0])
 	})
 
-	t.Run("malformed Before image is rejected before MakeRowTrusted", func(t *testing.T) {
-		// A Before image with fewer values than the table has fields used to
-		// make vals[pkIndex] index out of range once the PK column sat past
-		// the short row's end. TestValidateRowImage covers the individual
-		// malformed shapes; this pins that the bulk-delete path validates.
+	t.Run("pk is read from its source field, not its target position", func(t *testing.T) {
+		// "select concat(a, b) as v, id from t" sends fields a, b, id.
 		tp := newTablePlan()
-		tp.PKIndices = []bool{false, true}
+		tp.Fields = []*querypb.Field{
+			{Name: "a", Type: querypb.Type_VARCHAR},
+			{Name: "b", Type: querypb.Type_VARCHAR},
+			{Name: "id", Type: querypb.Type_INT64},
+		}
+		makeRow := func(a, b string, id int64) *binlogdatapb.RowChange {
+			return &binlogdatapb.RowChange{Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewVarChar(a), sqltypes.NewVarChar(b), sqltypes.NewInt64(id),
+			})}
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRow("p", "3", 1), makeRow("q", "4", 2)},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 1024)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in (1, 2)"}, executed)
+	})
+
+	t.Run("pk charset conversion is applied", func(t *testing.T) {
+		tp := newTablePlan()
+		tp.Fields = []*querypb.Field{
+			{Name: "id", Type: querypb.Type_VARCHAR},
+			{Name: "v", Type: querypb.Type_VARCHAR},
+		}
+		tp.ConvertCharset = map[string]*binlogdatapb.CharsetConversion{
+			"id": {FromCharset: "latin1", ToCharset: "utf8mb4"},
+		}
+		tp.CollationEnv = collations.MySQL8()
+		latin1Row := func(id string) *binlogdatapb.RowChange {
+			return &binlogdatapb.RowChange{Before: sqltypes.RowToProto3([]sqltypes.Value{
+				sqltypes.NewVarChar(id), sqltypes.NewVarChar("x"),
+			})}
+		}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{latin1Row("\xe91"), latin1Row("\xe92")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 1024)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in ('é1', 'é2')"}, executed)
+	})
+
+	t.Run("pk expression is evaluated for each row", func(t *testing.T) {
+		tp := newTablePlan()
+		tp.MultiDeleteValue = sqlparser.BuildParsedQuery("(%a + 1000)", ":b_id")
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 1024)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in ((1 + 1000), (2 + 1000))"}, executed)
+	})
+
+	t.Run("statement is split at the max query size", func(t *testing.T) {
+		tp := newTablePlan()
+		var executed []string
+		maxQuerySize := int64(len("delete from t where id in (1, 2)"))
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b"), makeRowDelete(3, "c")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, maxQuerySize)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in (1, 2)", "delete from t where id in (3)"}, executed)
+	})
+
+	t.Run("statement is split one byte below the exact fit", func(t *testing.T) {
+		tp := newTablePlan()
+		var executed []string
+		maxQuerySize := int64(len("delete from t where id in (1, 2)")) - 1
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b"), makeRowDelete(3, "c")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, maxQuerySize)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in (1)", "delete from t where id in (2)", "delete from t where id in (3)"}, executed)
+	})
+
+	t.Run("limit smaller than one element still sends each row", func(t *testing.T) {
+		tp := newTablePlan()
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 10)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in (1)", "delete from t where id in (2)"}, executed)
+	})
+
+	t.Run("int to enum conversion is applied to the pk", func(t *testing.T) {
+		// An enum PK compared with an int matches by index, not by value.
+		tp := newTablePlan()
+		tp.ConvertIntToEnum = map[string]bool{"id": true}
+		var executed []string
+		_, err := tp.applyBulkDeleteChanges([]*binlogdatapb.RowChange{makeRowDelete(1, "a"), makeRowDelete(2, "b")},
+			func(sql string) (*sqltypes.Result, error) {
+				executed = append(executed, sql)
+				return &sqltypes.Result{RowsAffected: 1}, nil
+			}, 1024)
+		require.NoError(t, err)
+		require.Equal(t, []string{"delete from t where id in ('1', '2')"}, executed)
+	})
+
+	t.Run("malformed Before image is rejected before MakeRowTrusted", func(t *testing.T) {
+		// A Before image with fewer values than the table has fields would
+		// make vals[i] index out of range when every field is bound.
+		// TestValidateRowImage covers the individual malformed shapes; this
+		// pins that the bulk-delete path validates.
+		tp := newTablePlan()
 		rowDeletes := []*binlogdatapb.RowChange{{
 			Before: sqltypes.RowToProto3([]sqltypes.Value{
 				sqltypes.NewInt64(1),
