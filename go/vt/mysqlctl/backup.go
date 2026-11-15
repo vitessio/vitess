@@ -487,6 +487,15 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	params.Logger.Info("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
+		if re.ShouldStartMySQLAfterRestore() {
+			// Don't leave the --skip-grant-tables mysqld running, even when the
+			// caller gave up.
+			shutdownCtx, cancel := context.WithTimeout(detachedCtx, params.MysqlShutdownTimeout+MysqldShutdownGracePeriod)
+			if shutdownErr := params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true, params.MysqlShutdownTimeout); shutdownErr != nil {
+				params.Logger.Error("Restore: failed to shut down mysqld after mysql_upgrade failed", slog.Any("error", shutdownErr))
+			}
+			cancel()
+		}
 		return backupManifest, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
