@@ -136,6 +136,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&currentConfig.Oltp.MaxRows, "queryserver-config-max-result-size", defaultConfig.Oltp.MaxRows, "query server max result size, maximum number of rows allowed to return from vttablet for non-streaming queries.")
 	fs.IntVar(&currentConfig.Oltp.WarnRows, "queryserver-config-warn-result-size", defaultConfig.Oltp.WarnRows, "query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this")
 	fs.BoolVar(&currentConfig.PassthroughDML, "queryserver-config-passthrough-dmls", defaultConfig.PassthroughDML, "query server pass through all dml statements without rewriting")
+	fs.BoolVar(&currentConfig.RawResultCharset, "queryserver-config-raw-result-charset", defaultConfig.RawResultCharset, "query server reads from MySQL with character_set_results = NULL on the connections that serve queries, so that MySQL does not convert the text of results, and returns results unconverted only to callers that say they convert them (vtgate). Every other caller, including vtgates and clients that predate this flag, gets the result it gets without the flag")
 
 	fs.IntVar(&currentConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", defaultConfig.StreamBufferSize, "query server stream buffer size, the maximum number of bytes sent from vttablet for each stream call. It's recommended to keep this value in sync with vtgate's stream-buffer-size.")
 
@@ -341,8 +342,11 @@ type TabletConfig struct {
 	ReplicationTracker ReplicationTrackerConfig `json:"replicationTracker"`
 
 	// Consolidator can be enable, disable, or notOnPrimary. Default is enable.
-	Consolidator                string        `json:"consolidator,omitempty"`
-	PassthroughDML              bool          `json:"passthroughDML,omitempty"`
+	Consolidator   string `json:"consolidator,omitempty"`
+	PassthroughDML bool   `json:"passthroughDML,omitempty"`
+	// RawResultCharset makes the pools that serve queries read with
+	// character_set_results = NULL (see dbconfigs.Connector.WithRawResultCharset).
+	RawResultCharset            bool          `json:"rawResultCharset,omitempty"`
 	StreamBufferSize            int           `json:"streamBufferSize,omitempty"`
 	ConsolidatorStreamTotalSize int64         `json:"consolidatorStreamTotalSize,omitempty"`
 	ConsolidatorStreamQuerySize int64         `json:"consolidatorStreamQuerySize,omitempty"`
@@ -890,6 +894,18 @@ func NewCurrentConfig() *TabletConfig {
 // NewDefaultConfig returns a new TabletConfig with pre-initialized defaults.
 func NewDefaultConfig() *TabletConfig {
 	return defaultConfig.Clone()
+}
+
+// QueryServingConnector returns the connector for a pool that serves the
+// queries of clients: conn itself, and with RawResultCharset a copy of it whose
+// connections read with character_set_results = NULL. Only the OLTP and OLAP
+// read pools and the transaction pool use it; every other pool of the tablet
+// keeps reading text in the connection character set.
+func (c *TabletConfig) QueryServingConnector(conn dbconfigs.Connector) dbconfigs.Connector {
+	if c.RawResultCharset {
+		return conn.WithRawResultCharset()
+	}
+	return conn
 }
 
 // Clone creates a clone of TabletConfig.

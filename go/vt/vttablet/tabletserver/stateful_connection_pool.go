@@ -93,8 +93,12 @@ func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbco
 	sf.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.MysqlParams()
 	foundRowsParam.EnableClientFoundRows()
-	appParams = dbconfigs.New(foundRowsParam)
-	sf.foundRowsPool.Open(appParams, dbaParams, appDebugParams)
+	foundRowsParams := dbconfigs.New(foundRowsParam)
+	if appParams.RawResultCharset() {
+		// the found-rows connections serve the same clients
+		foundRowsParams = foundRowsParams.WithRawResultCharset()
+	}
+	sf.foundRowsPool.Open(foundRowsParams, dbaParams, appDebugParams)
 	sf.state.Store(scpOpen)
 }
 

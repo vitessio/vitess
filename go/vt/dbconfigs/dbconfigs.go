@@ -312,6 +312,16 @@ func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
 	return params, nil
 }
 
+// Charset returns the collation that the connections of the connector ask
+// for, and collations.Unknown when they ask for none and so get the server's
+// default.
+func (c Connector) Charset() collations.ID {
+	if c.connParams == nil {
+		return collations.Unknown
+	}
+	return c.connParams.Charset
+}
+
 // DBName gets the dbname from mysql.ConnParams
 func (c Connector) DBName() string {
 	return c.connParams.DbName
