@@ -206,18 +206,24 @@ func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids [
 		vr.Arguments[0]: vars,
 	}
 
+	// The rows are matched to the ids by the value of their first column,
+	// which is compared with an id, in the connection character set, so it
+	// takes the fields of the lookup query to convert it.
+	convert := vcursor.ConvertResultCharset()
 	var result *sqltypes.Result
 	if vr.Vindex.AutoCommitEnabled() {
-		result, err = vcursor.ExecutePrimitiveStandalone(ctx, vr.Lookup, bindVars, false)
+		result, err = vcursor.ExecutePrimitiveStandalone(ctx, vr.Lookup, bindVars, convert)
 	} else {
-		result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, false)
+		result, err = vcursor.ExecutePrimitive(ctx, vr.Lookup, bindVars, convert)
 	}
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed while running the lookup query")
 	}
+	values := newStatementValues(vcursor, result.Fields)
 	resultMap := make(map[string][][]sqltypes.Value)
 	for _, row := range result.Rows {
-		resultMap[row[0].ToString()] = append(resultMap[row[0].ToString()], []sqltypes.Value{row[1]})
+		from := values.value(0, row[0]).ToString()
+		resultMap[from] = append(resultMap[from], []sqltypes.Value{row[1]})
 	}
 
 	for _, id := range ids {
