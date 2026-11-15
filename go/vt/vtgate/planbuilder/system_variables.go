@@ -91,6 +91,11 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		for _, name := range []string{"character_set_client", "character_set_connection", "character_set_results", "collation_connection"} {
 			pc.funcs[name] = validateConnectionCharsetPlan(pc.funcs[name])
 		}
+		// With --convert-result-charset, vtgate keeps character_set_results
+		// itself, and converts results to it.
+		for _, name := range []string{sysvars.Names.Name, sysvars.Charset.Name, "character_set_results"} {
+			pc.funcs[name] = resultCharsetPlan(pc.funcs[name])
+		}
 	})
 }
 

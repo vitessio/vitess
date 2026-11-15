@@ -1380,6 +1380,25 @@ func (cached *SysVarReservedConn) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *SysVarResultCharset) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	// field Expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Collation string
+	size += hack.RuntimeAllocSize(int64(len(cached.Collation)))
+	return size
+}
+
 func (cached *SysVarSetAware) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

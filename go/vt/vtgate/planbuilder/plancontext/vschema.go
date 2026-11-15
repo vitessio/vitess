@@ -55,6 +55,10 @@ type VSchema interface {
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
+	// ConvertResultCharset reports whether vtgate runs with
+	// --convert-result-charset, with which it keeps the character_set_results
+	// of a session and converts results to it.
+	ConvertResultCharset() bool
 	// IsSystemVariableDenied reports whether the given system variable name is
 	// in the VTGate-configured denylist. Names are compared case-insensitively.
 	IsSystemVariableDenied(name string) bool

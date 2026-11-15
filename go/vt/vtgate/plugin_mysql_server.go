@@ -35,6 +35,9 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -906,6 +909,22 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	// handshake packet reports correct status flags to the client.
 	c.StatusFlags |= mysql.ServerStatusAutocommit
 
+	if convertResultCharset {
+		// MySQL sends error messages in character_set_results too: with
+		// gbk, "Duplicate entry 'Müller'" has 4D A8 B9 6C 6C 65 72.
+		c.ErrorMessage = func(message string) string {
+			session, _ := c.ClientData.(*vtgatepb.Session)
+			if session == nil {
+				return message
+			}
+			results := collations.ID(session.CharacterSetResults)
+			if results == collations.Unknown {
+				results = vh.vtg.executor.env.CollationEnv().DefaultConnectionCharset()
+			}
+			return resultcharset.ToClientMessage(message, results, session.CharacterSetResultsNull)
+		}
+	}
+
 	vh.mu.Lock()
 	defer vh.mu.Unlock()
 	vh.connections[c.ConnectionID] = c
@@ -949,7 +968,12 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	// are cleared along the way.
 	target := session.TargetString
 	c.ClientData = nil
-	vh.session(c).TargetString = target
+	newSession := vh.session(c)
+	newSession.TargetString = target
+	// MySQL 8.0 and 8.4 go back to their default character_set_results on a
+	// reset, not to the one of the handshake: a client that connected with
+	// latin1 gets utf8mb4 after COM_RESET_CONNECTION.
+	newSession.CharacterSetResults = 0
 	c.StatusFlags = mysql.ServerStatusAutocommit
 }
 
@@ -1817,9 +1841,39 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
 		}
+		if convertResultCharset {
+			session.CharacterSetResults = uint32(handshakeResultCharset(vh.vtg.executor.env.CollationEnv(), c.CharacterSet))
+		}
 		c.ClientData = session
 	}
 	return session
+}
+
+// handshakeResultCharset returns the character_set_results that a client
+// asks for with the collation of its handshake. MySQL 8.0 and 8.4 take the
+// collation itself: a client of utf8mb4_bin gets result fields with 46. They
+// take their default for 0 and for an ID they do not have, and so does vtgate
+// for those and for a collation that Vitess does not implement.
+//
+// MySQL refuses a connection with ucs2, utf16, utf16le or utf32, which it
+// does not accept as a client character set. vtgate accepts it, as it did
+// before, and uses its default.
+func handshakeResultCharset(env *collations.Environment, collation collations.ID) collations.ID {
+	if collation == collations.CollationBinaryID {
+		return collation
+	}
+	if env.LookupName(collation) == "" {
+		return collations.Unknown
+	}
+	coll := colldata.Lookup(collation)
+	if coll == nil {
+		return collations.Unknown
+	}
+	var buf [4]byte
+	if coll.Charset().EncodeRune(buf[:], 'A') != 1 {
+		return collations.Unknown
+	}
+	return collation
 }
 
 type mysqlServer struct {

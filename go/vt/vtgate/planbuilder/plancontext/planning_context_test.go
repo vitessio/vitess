@@ -261,6 +261,10 @@ func (v *vschema) SysVarSetEnabled() bool {
 	panic("implement me")
 }
 
+func (v *vschema) ConvertResultCharset() bool {
+	return false
+}
+
 func (v *vschema) IsSystemVariableDenied(string) bool {
 	return false
 }
