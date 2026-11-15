@@ -27,6 +27,15 @@ func TestBuiltinBackup(t *testing.T) {
 	TestBackup(t, BuiltinBackup, "xbstream", 0, nil, nil)
 }
 
+// compressionVariantTests are the tests that the compression variants below
+// run. TestReplicaBackup takes a backup through the variant's compressor and
+// restores replica2 from it, and vtctlBackup checks the restore stats to
+// confirm that a decompressor processed the data. What TestPrimaryBackup adds
+// on top (allow-primary gating, restoring to a backup timestamp, init SQL
+// queries, PRS, tablet deletion) does not depend on compression and stays
+// covered by TestBuiltinBackup under the default engine.
+var compressionVariantTests = []string{"TestReplicaBackup"}
+
 func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	defer setDefaultCommonArgs()
@@ -37,7 +46,7 @@ func TestBuiltinBackupWithZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, compressionVariantTests)
 }
 
 func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
@@ -50,7 +59,7 @@ func TestBuiltinBackupWithExternalZstdCompression(t *testing.T) {
 		ExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, compressionVariantTests)
 }
 
 func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *testing.T) {
@@ -64,7 +73,7 @@ func TestBuiltinBackupWithExternalZstdCompressionAndManifestedDecompressor(t *te
 		ManifestExternalDecompressorCmd: "zstd -d",
 	}
 
-	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, []string{"TestReplicaBackup", "TestPrimaryBackup"})
+	TestBackup(t, BuiltinBackup, "xbstream", 0, cDetails, compressionVariantTests)
 }
 
 func setDefaultCompressionFlag() {
