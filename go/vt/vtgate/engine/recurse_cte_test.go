@@ -21,8 +21,10 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -203,4 +205,141 @@ func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
 	res, err := wrapStreamExecute(cte, &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, seedChunks)
+}
+
+// TestRecurseCTECharsets checks the rows of a recursion that reads a column
+// of another character set than the seed. For
+//
+//	create table a (id int primary key, l varchar(10) character set latin1 collate latin1_german2_ci);
+//	create table d (id int primary key, u varchar(10) character set utf8mb4, l varchar(10) character set latin1 collate latin1_german2_ci);
+//	insert into a values (2, 'é');
+//	insert into d values (1, 'é', 'x'), (2, 'ß', 'é');
+//
+// MySQL 8.0.46 returns, read with character_set_results = NULL,
+//
+//	with recursive r (id, l) as (select id, l from a where id = 2
+//	  union all select d.id, d.u from r join d on d.l = r.l) select id, hex(l) from r
+//	  2 E9, 2 DF, both latin1_german2_ci
+//	with recursive r as (select id, u as l from d where id = 1
+//	  union all select d2.id, d2.l from r join d as d2 on d2.id = r.id + 1) select id, hex(l) from r
+//	  1 C3A9, 2 C3A9, both utf8mb4_0900_ai_ci
+//
+// The rows of the result are in the character set of the column of the seed,
+// and the value that goes into the next recursion is in utf8mb4, as every
+// statement is.
+func TestRecurseCTECharsets(t *testing.T) {
+	latin1German2 := collations.MySQL8().LookupByName("latin1_german2_ci")
+	utf8mb4 := collations.MySQL8().DefaultConnectionCharset()
+	fields := func(collation collations.ID) []*querypb.Field {
+		return []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Charset: uint32(collations.CollationBinaryID)},
+			{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collation)},
+		}
+	}
+	result := func(collation collations.ID, id int32, text string) *sqltypes.Result {
+		return &sqltypes.Result{
+			Fields: fields(collation),
+			Rows:   []sqltypes.Row{{sqltypes.NewInt32(id), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(text))}},
+		}
+	}
+
+	tests := []struct {
+		name string
+		// seed and term are the collation and the text of the row of the
+		// seed and of the first recursion.
+		seed, term         collations.ID
+		seedText, termText string
+		convert            bool
+		// rows are the rows that are returned, and bindVars the text that
+		// goes into each recursion.
+		rows     []string
+		bindVars []string
+	}{{
+		name: "latin1 seed, utf8mb4 recursion",
+		seed: latin1German2, seedText: "\xe9",
+		term: utf8mb4, termText: "ß",
+		convert:  true,
+		rows:     []string{"\xe9", "\xdf"},
+		bindVars: []string{"é", "ß"},
+	}, {
+		name: "utf8mb4 seed, latin1 recursion",
+		seed: utf8mb4, seedText: "é",
+		term: latin1German2, termText: "\xe9",
+		convert:  true,
+		rows:     []string{"é", "é"},
+		bindVars: []string{"é", "é"},
+	}, {
+		// MySQL does this without STRICT_TRANS_TABLES.
+		name: "latin1 seed, a character that latin1 does not have",
+		seed: latin1German2, seedText: "\xe9",
+		term: utf8mb4, termText: "中",
+		convert:  true,
+		rows:     []string{"\xe9", "?"},
+		bindVars: []string{"é", "?"},
+	}, {
+		name: "the same character set",
+		seed: latin1German2, seedText: "\xe9",
+		term: latin1German2, termText: "\xdf",
+		convert:  true,
+		rows:     []string{"\xe9", "\xdf"},
+		bindVars: []string{"é", "ß"},
+	}, {
+		// Without the flag every result is in the connection character
+		// set, and nothing is converted.
+		name: "without the flag",
+		seed: utf8mb4, seedText: "é",
+		term: utf8mb4, termText: "ß",
+		rows:     []string{"é", "ß"},
+		bindVars: []string{"é", "ß"},
+	}}
+	for _, tc := range tests {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, stream %v", tc.name, stream), func(t *testing.T) {
+				term := &fakePrimitive{results: []*sqltypes.Result{
+					result(tc.term, 2, tc.termText),
+					{Fields: fields(tc.term)},
+				}}
+				cte := &RecurseCTE{
+					Seed: &fakePrimitive{results: []*sqltypes.Result{result(tc.seed, 1, tc.seedText)}},
+					Term: term,
+					Vars: map[string]int{"r_l": 1},
+				}
+				vcursor := &noopVCursor{convertResultCharset: tc.convert}
+
+				var rows []string
+				var sentFields [][]*querypb.Field
+				collect := func(qr *sqltypes.Result) error {
+					if len(qr.Fields) != 0 {
+						sentFields = append(sentFields, qr.Fields)
+					}
+					for _, row := range qr.Rows {
+						rows = append(rows, row[1].ToString())
+					}
+					return nil
+				}
+				if stream {
+					require.NoError(t, cte.TryStreamExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true, collect))
+				} else {
+					qr, err := cte.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true)
+					require.NoError(t, err)
+					require.NoError(t, collect(qr))
+				}
+				assert.Equal(t, tc.rows, rows)
+
+				// The result has the fields of the seed, once.
+				require.Len(t, sentFields, 1)
+				assert.Equal(t, uint32(tc.seed), sentFields[0][1].Charset)
+
+				call := "Execute"
+				if stream {
+					call = "StreamExecute"
+				}
+				var log []string
+				for _, text := range tc.bindVars {
+					log = append(log, fmt.Sprintf("%s r_l: %v %v", call, sqltypes.ValueBindVariable(sqltypes.NewVarChar(text)), tc.convert))
+				}
+				term.ExpectLog(t, log)
+			})
+		}
+	}
 }
