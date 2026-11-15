@@ -158,29 +158,14 @@ func rawLatin1Result() *sqltypes.Result {
 	}
 }
 
-// convertedLatin1Result is the same as MySQL sends it with
-// character_set_results = utf8mb4, which is what a tablet without the flag
-// returns: 4D C3 BC 6C 6C 65 72 with the collation 255 and the length 40.
-func convertedLatin1Result(collation uint32) *sqltypes.Result {
-	return &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Name: "l", Type: sqltypes.VarChar, Charset: collation, ColumnLength: 40},
-			{Name: "n", Type: sqltypes.Int32, Charset: 63, ColumnLength: 11},
-		},
-		Rows: []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xC3\xBCller")), sqltypes.NewInt32(1)}},
-	}
-}
-
 // TestTabletGatewayResultCharset checks the requests that vtgate sends to a
 // tablet through the TabletGateway and through QueryServiceByAlias.
 //
-// With --convert-result-charset, every request is marked with
-// queryservice.ContextWithRawResultCharset, and the result of every method
-// that returns rows arrives converted to utf8mb4 with the collation of the
-// column. A result that a tablet converted already does not change.
-//
-// Without it, no request is marked and every result arrives as the tablet
-// sent it.
+// With --convert-result-charset every request is marked with
+// queryservice.ContextWithRawResultCharset, and without it none is. The result
+// of every method that returns rows arrives as the tablet sent it with and
+// without the flag: the text of a row stays in the character set of its
+// column inside vtgate.
 func TestTabletGatewayResultCharset(t *testing.T) {
 	ctx := t.Context()
 	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
@@ -208,25 +193,13 @@ func TestTabletGatewayResultCharset(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			for _, convert := range []bool{false, true} {
 				convertResultCharset = convert
-				tablet.result = rawLatin1Result
 				tablet.marked = map[string]bool{}
-				want := rawLatin1Result()
-				if convert {
-					want = convertedLatin1Result(31)
-				}
 				results := callAll(t, ctx, qs, target)
 				for _, method := range methods {
-					assert.Equal(t, want, results[method], "%s with --convert-result-charset=%v", method, convert)
+					assert.Equal(t, rawLatin1Result(), results[method], "%s with --convert-result-charset=%v", method, convert)
 					assert.Equal(t, convert, tablet.marked[method], method)
 				}
 				assert.Equal(t, convert, tablet.marked["Begin"], "Begin")
-			}
-
-			// A tablet without the raw flag has converted the result itself.
-			tablet.result = func() *sqltypes.Result { return convertedLatin1Result(255) }
-			results := callAll(t, ctx, qs, target)
-			for _, method := range methods {
-				assert.Equal(t, convertedLatin1Result(255), results[method], method)
 			}
 		})
 	}

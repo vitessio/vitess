@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1231,85 +1230,6 @@ func TestNullsafeCompareEnumNumeric(t *testing.T) {
 func getCollationID(collation string) collations.ID {
 	id, _ := collationEnv.LookupID(collation)
 	return id
-}
-
-// TestNullsafeCompareRowCharset compares text of columns that are not
-// utf8mb4, for an environment whose rows are in utf8mb4, as the ones of a
-// vtgate with --convert-result-charset are. The comparison is in the collation
-// of the column: it has to convert the text first. The expected results are
-// STRCMP() of MySQL 8.4.13: 'é' is after 'd' in latin1_swedish_ci, where the
-// two utf8mb4 bytes of 'é' taken as latin1 are before it.
-//
-// For an environment with the row character set binary, which is the default,
-// the text is in the character set of its collation already, as VReplication
-// and VDiff hand it over, and is not converted: the latin1 bytes E9 and FC are
-// 'é' and 'ü', which differ, where a conversion from utf8mb4 would make both
-// of them "?". With the row character set latin1, text of a latin1 column is
-// not converted either, and text of a gbk column is converted from latin1.
-func TestNullsafeCompareRowCharset(t *testing.T) {
-	plain := collations.MySQL8()
-	require.Equal(t, collations.ID(collations.CollationBinaryID), plain.RowCharset())
-	require.Same(t, plain, plain.WithRowCharset(collations.CollationBinaryID))
-	conn := plain.WithRowCharset(collations.CollationUtf8mb4ID)
-	require.Equal(t, collations.ID(collations.CollationUtf8mb4ID), conn.RowCharset())
-
-	tcases := []struct {
-		v1, v2    string
-		collation string
-		out       int
-	}{
-		{"é", "d", "latin1_swedish_ci", 1},
-		{"é", "f", "latin1_swedish_ci", -1},
-		{"Müller", "MUELLER", "latin1_german2_ci", 0},
-		{"中", "波", "gbk_chinese_ci", 1},
-		{"啊", "波", "gbk_chinese_ci", -1},
-		// swe7 has 'Ä' at the byte of "[" and no "[", which becomes "?".
-		{"Ä", "[", "swe7_swedish_ci", 1},
-	}
-	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%v/%v/%v", tcase.v1, tcase.v2, tcase.collation), func(t *testing.T) {
-			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), conn, getCollationID(tcase.collation), nil)
-			require.NoError(t, err)
-			assert.Equal(t, tcase.out, got)
-		})
-	}
-
-	t.Run("text in the character set of the collation", func(t *testing.T) {
-		latin1 := getCollationID("latin1_swedish_ci")
-		e := sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xE9})
-		u := sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xFC})
-		got, err := NullsafeCompare(e, u, plain, latin1, nil)
-		require.NoError(t, err)
-		assert.Equal(t, -1, got)
-		got, err = NullsafeCompare(e, TestValue(sqltypes.VarChar, "d"), plain, latin1, nil)
-		require.NoError(t, err)
-		assert.Equal(t, 1, got)
-	})
-
-	t.Run("rows in latin1", func(t *testing.T) {
-		latin1 := plain.WithRowCharset(getCollationID("latin1_swedish_ci"))
-		e := sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xE9})
-		got, err := NullsafeCompare(e, TestValue(sqltypes.VarChar, "d"), latin1, getCollationID("latin1_german2_ci"), nil)
-		require.NoError(t, err)
-		assert.Equal(t, 1, got)
-		// 'é' is A8 A6 in gbk, where the byte E9 alone is no character.
-		got, err = NullsafeCompare(e, sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xE9}), latin1, getCollationID("gbk_chinese_ci"), nil)
-		require.NoError(t, err)
-		assert.Equal(t, 0, got)
-		var h1, h2 vthash.Hasher
-		require.NoError(t, NullsafeHashcode128(&h1, e, latin1, getCollationID("gbk_chinese_ci"), sqltypes.VarChar, 0, nil))
-		require.NoError(t, NullsafeHashcode128(&h2, sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xA8, 0xA6}), plain, getCollationID("gbk_chinese_ci"), sqltypes.VarChar, 0, nil))
-		assert.Equal(t, h2.Sum128(), h1.Sum128())
-	})
-
-	t.Run("no allocation", func(t *testing.T) {
-		latin1 := getCollationID("latin1_swedish_ci")
-		v1, v2 := TestValue(sqltypes.VarChar, "Müller"), TestValue(sqltypes.VarChar, "Möller")
-		allocs := testing.AllocsPerRun(100, func() {
-			_, _ = NullsafeCompare(v1, v2, conn, latin1, nil)
-		})
-		assert.Zero(t, allocs)
-	})
 }
 
 func TestNullsafeCompareCollate(t *testing.T) {

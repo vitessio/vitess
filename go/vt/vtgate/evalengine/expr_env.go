@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
@@ -57,13 +56,6 @@ type (
 		collationEnv *collations.Environment
 	}
 )
-
-// rowCharset returns the character set that the text of the rows and bind
-// variables of env is in, and nil when it is in the character set of its
-// collation, see collations.Environment.WithRowCharset.
-func (env *ExpressionEnv) rowCharset() charset.Charset {
-	return rowCharset(env.collationEnv)
-}
 
 func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 	if utc {

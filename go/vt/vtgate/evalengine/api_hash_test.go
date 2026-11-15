@@ -333,11 +333,11 @@ func TestHashCodes128(t *testing.T) {
 			require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
 
 			hasher1 := vthash.New()
-			err = NullsafeHashcode128(&hasher1, tc.static, collations.MySQL8(), collations.CollationUtf8mb4ID, tc.static.Type(), 0, nil)
+			err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type(), 0, nil)
 			require.NoError(t, err)
 
 			hasher2 := vthash.New()
-			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.MySQL8(), collations.CollationUtf8mb4ID, tc.static.Type(), 0, nil)
+			err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type(), 0, nil)
 			require.ErrorIs(t, err, tc.err)
 
 			h1 := hasher1.Sum128()
@@ -363,10 +363,10 @@ func TestHashCodesRandom128(t *testing.T) {
 		require.NoError(t, err)
 
 		hasher1 := vthash.New()
-		err = NullsafeHashcode128(&hasher1, v1, collations.MySQL8(), collation, typ, 0, nil)
+		err = NullsafeHashcode128(&hasher1, v1, collation, typ, 0, nil)
 		require.NoError(t, err)
 		hasher2 := vthash.New()
-		err = NullsafeHashcode128(&hasher2, v2, collations.MySQL8(), collation, typ, 0, nil)
+		err = NullsafeHashcode128(&hasher2, v2, collation, typ, 0, nil)
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++

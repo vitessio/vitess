@@ -81,10 +81,8 @@ func NewEngine(ts *topo.Server, tablet *topodata.Tablet, collationEnv *collation
 		ts:              ts,
 		thisTablet:      tablet,
 		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
-		// VDiff reads rows with SET NAMES binary, so their text is in the
-		// character set of its column.
-		collationEnv: collationEnv.WithRowCharset(collations.CollationBinaryID),
-		parser:       parser,
+		collationEnv:    collationEnv,
+		parser:          parser,
 	}
 	return vde
 }
