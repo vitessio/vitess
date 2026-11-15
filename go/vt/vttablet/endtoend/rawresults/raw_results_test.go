@@ -270,6 +270,60 @@ func TestSessionKeepsRawResults(t *testing.T) {
 	assert.NotEqual(t, id, qr.Rows[0][0].ToString(), "the connection was replaced")
 }
 
+// TestProcedureThatSetsNames calls a stored procedure whose body runs SET
+// NAMES latin1, which the tablet cannot see.
+//
+// Outside a transaction the tablet closes the connection that ran a CALL, so
+// the next query of the OLTP pool, which has one connection, runs on a new
+// one with character_set_results = NULL.
+//
+// In a transaction the connection stays, and MySQL sends its later results in
+// latin1 with the collation latin1_swedish_ci in every text field: 'Müller'
+// as 4D FC 6C 6C 65 72, and '中文', which latin1 does not have, as "??". The
+// tablet converts by the collation in the fields, so a caller without the mark
+// gets 4D C3 BC 6C 6C 65 72 with the connection collation, and a caller with
+// the mark gets what MySQL sent.
+func TestProcedureThatSetsNames(t *testing.T) {
+	admin, err := mysql.Connect(t.Context(), &connParams)
+	require.NoError(t, err)
+	t.Cleanup(admin.Close)
+	_, err = admin.ExecuteFetch("create procedure rawnames() begin set names latin1; end", 0, false)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = admin.ExecuteFetch("drop procedure rawnames", 0, false) })
+
+	client := newClient(false)
+	qr, err := client.Execute("select connection_id()", nil)
+	require.NoError(t, err)
+	id := qr.Rows[0][0].ToString()
+	_, err = client.Execute("call rawnames()", nil)
+	require.NoError(t, err)
+	qr, err = client.Execute("select connection_id(), @@character_set_results", nil)
+	require.NoError(t, err)
+	assert.NotEqual(t, id, qr.Rows[0][0].ToString(), "the connection was replaced")
+	assert.True(t, qr.Rows[0][1].IsNull())
+
+	want := map[bool]string{
+		false: `field "l1" "l1" "rawtext" "rawtext" "vttest" VARCHAR collation=255 length=40 flags=0 decimals=0
+field "gb2312" "gb2312" "rawtext" "rawtext" "vttest" VARCHAR collation=255 length=40 flags=0 decimals=0
+VARCHAR:4DC3BC6C6C6572 VARCHAR:3F3F 
+rows affected 0`,
+		true: `field "l1" "l1" "rawtext" "rawtext" "vttest" VARCHAR collation=8 length=10 flags=0 decimals=0
+field "gb2312" "gb2312" "rawtext" "rawtext" "vttest" VARCHAR collation=8 length=10 flags=0 decimals=0
+VARCHAR:4DFC6C6C6572 VARCHAR:3F3F 
+rows affected 0`,
+	}
+	for marked, want := range want {
+		tx := newClient(marked)
+		require.NoError(t, tx.Begin(false))
+		_, err = tx.Execute("call rawnames()", nil)
+		require.NoError(t, err)
+		qr, err = tx.Execute("select l1, gb2312 from rawtext where id = 1", nil)
+		require.NoError(t, err)
+		assert.Equal(t, want, describe(qr), "marked %v", marked)
+		require.NoError(t, tx.Rollback())
+	}
+}
+
 // TestUnimplementedCharsetIsRefused reads columns of the character sets that
 // Vitess does not implement, gbk, big5 and tis620. MySQL sends their text in
 // that character set with character_set_results = NULL, and the tablet
