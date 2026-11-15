@@ -165,6 +165,9 @@ type TinyWeightCollation interface {
 }
 
 func Lookup(id collations.ID) Collation {
+	if id&textCollationFlag != 0 {
+		return textCollations.lookup(id)
+	}
 	if int(id) >= len(collationsById) {
 		return nil
 	}
