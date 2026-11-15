@@ -34,8 +34,7 @@ func newEvalTuple(values []*querypb.Value, collation collations.ID) (*evalTuple,
 	for _, value := range values {
 		val := sqltypes.ProtoToValue(value)
 
-		// collation is the connection collation, which the text is in.
-		e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), collation)), nil, nil)
+		e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), collation)), nil)
 		if err != nil {
 			return nil, err
 		}

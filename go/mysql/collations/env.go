@@ -37,44 +37,6 @@ type Environment struct {
 	byCharsetName map[ID]string
 	unsupported   map[string]ID
 	byID          map[ID]string
-
-	// rowCharset is set by WithRowCharset, and Unknown when it was not.
-	rowCharset ID
-}
-
-// WithRowCharset returns an environment for a process that holds the text of
-// every row and bind variable in the character set of the collation
-// rowCharset, whatever the collation of its column is. It is the character
-// set of the connection that the rows were read on: MySQL converts the text
-// of results to character_set_results.
-//
-// The evaluation engine converts such text to the character set of the
-// collation it evaluates it in: with the row character set utf8mb4, a
-// latin1_swedish_ci column with 'é' holds C3 A9, and is compared as E9.
-//
-// The binary collation says that text is in the character set of its own
-// collation, as MySQL sends it with character_set_results = binary, and the
-// engine takes it as it is. That is the default. VReplication, VStream and
-// VDiff read rows with SET NAMES binary and from the binary log. vtgate has
-// utf8mb4 with --convert-result-charset, which makes it convert every result
-// of a tablet to utf8mb4.
-func (env *Environment) WithRowCharset(rowCharset ID) *Environment {
-	if env.RowCharset() == rowCharset {
-		return env
-	}
-	c := *env
-	c.rowCharset = rowCharset
-	return &c
-}
-
-// RowCharset returns the collation whose character set the text of rows is
-// in, see WithRowCharset. It is the binary collation for an environment
-// that was not given one, and for a nil env.
-func (env *Environment) RowCharset() ID {
-	if env == nil || env.rowCharset == Unknown {
-		return CollationBinaryID
-	}
-	return env.rowCharset
 }
 
 // LookupByName returns the collation with the given name.
