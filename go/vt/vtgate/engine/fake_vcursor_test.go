@@ -60,6 +60,13 @@ var (
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	inTx bool
+
+	// convertResultCharset is what ConvertResultCharset returns.
+	convertResultCharset bool
+}
+
+func (t *noopVCursor) ConvertResultCharset() bool {
+	return t.convertResultCharset
 }
 
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {

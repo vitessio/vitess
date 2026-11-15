@@ -90,6 +90,13 @@ type (
 		Session() SessionActions
 
 		ConnCollation() collations.ID
+
+		// ConvertResultCharset is --convert-result-charset: the text of a
+		// value of a row is in the character set of the collation in its
+		// field, and not in the connection character set, see
+		// newStatementValues.
+		ConvertResultCharset() bool
+
 		Environment() *vtenv.Environment
 		TimeZone() *time.Location
 		SQLMode() string
