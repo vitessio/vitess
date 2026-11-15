@@ -33,7 +33,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	gomysql "github.com/go-sql-driver/mysql"
@@ -369,7 +368,7 @@ func TestResultCharsetErrors(t *testing.T) {
 	exec(t, conn, "set character_set_results = null")
 	_, err = conn.ExecuteFetch(duplicate, 10, false)
 	require.Error(t, err)
-	assert.True(t, strings.Contains(err.(*sqlerror.SQLError).Message, "Duplicate entry 'Müller'"), err.Error())
+	assert.Contains(t, err.(*sqlerror.SQLError).Message, "Duplicate entry 'Müller'")
 }
 
 // TestPreparedStatement covers prepared statements over the binary protocol

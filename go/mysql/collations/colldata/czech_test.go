@@ -130,7 +130,7 @@ func TestLatin2CzechConversion(t *testing.T) {
 	general := testcollation(t, "latin2_general_ci").Charset()
 
 	got, err := charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x7F, 0x80, 0xC1}, czech)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, []byte{0x41, 0x7F, 0x3F, 0xC3, 0x81}, got)
 
 	got, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x7F, 0x80, 0xC1}, general)

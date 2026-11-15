@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,21 +108,21 @@ var queries = []string{
 
 // describe writes every part of the fields and the bytes of the values.
 func describe(qr *sqltypes.Result) string {
-	s := ""
+	var s strings.Builder
 	for _, f := range qr.Fields {
-		s += fmt.Sprintf("field %q %q %q %q %q %v collation=%d length=%d flags=%d decimals=%d\n", f.Name, f.OrgName, f.Table, f.OrgTable, f.Database, f.Type, f.Charset, f.ColumnLength, f.Flags, f.Decimals)
+		fmt.Fprintf(&s, "field %q %q %q %q %q %v collation=%d length=%d flags=%d decimals=%d\n", f.Name, f.OrgName, f.Table, f.OrgTable, f.Database, f.Type, f.Charset, f.ColumnLength, f.Flags, f.Decimals)
 	}
 	for _, row := range qr.Rows {
 		for _, v := range row {
 			if v.IsNull() {
-				s += "NULL "
+				s.WriteString("NULL ")
 				continue
 			}
-			s += fmt.Sprintf("%v:%X ", v.Type(), v.Raw())
+			fmt.Fprintf(&s, "%v:%X ", v.Type(), v.Raw())
 		}
-		s += "\n"
+		s.WriteString("\n")
 	}
-	return s
+	return s.String()
 }
 
 // results starts vtcombo, with --queryserver-config-raw-result-charset when

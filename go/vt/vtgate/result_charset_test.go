@@ -161,7 +161,7 @@ func TestSetResultCharsetErrors(t *testing.T) {
 			session.CharacterSetResults = 11
 			session, _, err := vtg.Execute(ctx, nil, session, tc.set, nil, false)
 			require.Error(t, err)
-			assert.ErrorContains(t, err, tc.message)
+			require.ErrorContains(t, err, tc.message)
 			sqlErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			assert.Equal(t, tc.num, sqlErr.Num)
 			// The session is as it was.
@@ -311,7 +311,7 @@ func TestResultCharsetWithoutFlag(t *testing.T) {
 	assert.Zero(t, session.CharacterSetResults)
 
 	_, _, err = vtg.Execute(ctx, nil, errorSession(), "set character_set_results = gbk", nil, false)
-	assert.ErrorContains(t, err, "unsupported connection character set gbk for character_set_results: use utf8mb4")
+	require.ErrorContains(t, err, "unsupported connection character set gbk for character_set_results: use utf8mb4")
 
 	// A gRPC client can put any value in the session, and it is ignored.
 	session.CharacterSetResults = 28
@@ -401,7 +401,7 @@ func TestHandshakeRefused(t *testing.T) {
 		vh := newVtgateHandler(vtg)
 		for _, tc := range tests {
 			c := &mysql.Conn{CharacterSet: tc.handshake}
-			assert.NoError(t, vh.CheckHandshake(c), "handshake %d", tc.handshake)
+			require.NoError(t, vh.CheckHandshake(c), "handshake %d", tc.handshake)
 			assert.Zero(t, vh.session(c).CharacterSetResults, "handshake %d", tc.handshake)
 		}
 	})
