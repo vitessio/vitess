@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"encoding/binary"
+	"sync"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
@@ -66,13 +67,13 @@ func newEvalText(raw []byte, col collations.TypedCollation) *evalBytes {
 // connectionText returns the text of a row or of a bind variable in the
 // character set of the collation that the evaluation gives it.
 //
-// The text of rows and bind variables is in the connection character set,
-// utf8mb4, whatever the collation of the column is: MySQL converts the results
-// it sends to a tablet, and so does vtgate for results that a tablet sends
-// unconverted. A latin1 column with "é" arrives as C3 A9, and a comparison in
-// latin1_swedish_ci needs E9. Without the conversion the two bytes compare as
-// the two latin1 characters "Ã©", and 'é' < 'd' is true where MySQL has it
-// false.
+// It is for an environment made by
+// collations.Environment.WithRowsInConnectionCharset, where the text of rows
+// and bind variables is in the connection character set, utf8mb4, whatever the
+// collation of the column is. A latin1 column with "é" arrives as C3 A9, and a
+// comparison in latin1_swedish_ci needs E9. Without the conversion the two
+// bytes compare as the two latin1 characters "Ã©", and 'é' < 'd' is true where
+// MySQL has it false.
 //
 // A character that the character set of the collation does not have becomes
 // "?", as in a conversion in MySQL. Text for a utf8mb3 collation is not
@@ -85,14 +86,22 @@ func connectionText(raw []byte, col collations.ID) []byte {
 	if coll == nil {
 		return raw
 	}
-	cs := coll.Charset()
+	converted, _ := appendConnectionText(nil, raw, coll.Charset())
+	return converted
+}
+
+// appendConnectionText is connectionText for the character set cs. When the
+// text has to be converted, it appends the converted text to dst and returns
+// it with true; dst can be nil. Otherwise it returns raw itself and false.
+func appendConnectionText(dst, raw []byte, cs charset.Charset) ([]byte, bool) {
 	switch cs.(type) {
 	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
-		return raw
+		return raw, false
 	}
 
 	// ASCII has the same bytes in every character set but the ones with two
-	// or four bytes for each character.
+	// or four bytes for each character, and swe7, which has Ä at the byte of
+	// "[" and eight more letters in place of ASCII punctuation.
 	ascii := true
 	for _, b := range raw {
 		if b >= 0x80 {
@@ -104,13 +113,49 @@ func connectionText(raw []byte, col collations.ID) []byte {
 		switch cs.(type) {
 		case charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_utf32:
 		default:
-			return raw
+			if cs.Name() != "swe7" {
+				return raw, false
+			}
 		}
 	}
 
 	// The error says that a character became "?".
-	converted, _ := charset.Convert(nil, cs, raw, charset.Charset_utf8mb4{})
-	return converted
+	converted, _ := charset.Convert(dst, cs, raw, charset.Charset_utf8mb4{})
+	return converted, true
+}
+
+// collateBuffers are the buffers that collateConnectionText converts the two
+// sides of a comparison into.
+type collateBuffers struct {
+	left, right []byte
+}
+
+var collateBufferPool = sync.Pool{New: func() any {
+	return &collateBuffers{left: make([]byte, 0, 64), right: make([]byte, 0, 64)}
+}}
+
+// maxCollateBuffer is the largest buffer that goes back to collateBufferPool.
+const maxCollateBuffer = 64 * 1024
+
+// collateConnectionText compares two texts that are in the connection
+// character set in the collation coll, see connectionText. A merge sort
+// compares the same values many times, so the converted text goes into
+// buffers that are used again: comparing 'Müller' with 'Möller' in
+// latin1_swedish_ci allocates nothing.
+func collateConnectionText(coll colldata.Collation, left, right []byte) int {
+	cs := coll.Charset()
+	bufs := collateBufferPool.Get().(*collateBuffers)
+	l, converted := appendConnectionText(bufs.left[:0], left, cs)
+	if converted && cap(l) <= maxCollateBuffer {
+		bufs.left = l
+	}
+	r, converted := appendConnectionText(bufs.right[:0], right, cs)
+	if converted && cap(r) <= maxCollateBuffer {
+		bufs.right = r
+	}
+	result := coll.Collate(l, r, false)
+	collateBufferPool.Put(bufs)
+	return result
 }
 
 func newEvalVector(raw []byte) *evalBytes {

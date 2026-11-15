@@ -60,7 +60,12 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 			if coll == nil {
 				return 0, UnsupportedCollationError{ID: collationID}
 			}
-			result := coll.Collate(connectionText(v1.Raw(), collationID), connectionText(v2.Raw(), collationID), false)
+			var result int
+			if collationEnv.RowsInConnectionCharset() {
+				result = collateConnectionText(coll, v1.Raw(), v2.Raw())
+			} else {
+				result = coll.Collate(v1.Raw(), v2.Raw(), false)
+			}
 			switch {
 			case result < 0:
 				return -1, nil
@@ -116,7 +121,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 		Collation:    collationID,
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireUnicode,
-	}, values)
+	}, values, collationEnv.RowsInConnectionCharset())
 	if err != nil {
 		return 0, err
 	}
@@ -125,7 +130,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 		Collation:    collationID,
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireUnicode,
-	}, values)
+	}, values, collationEnv.RowsInConnectionCharset())
 	if err != nil {
 		return 0, err
 	}
@@ -239,7 +244,7 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
 	weights := make([]tinyWeighter, 0, len(cmp))
 	for _, c := range cmp {
-		if apply := TinyWeighter(fields[c.Col], c.Type.Collation()); apply != nil {
+		if apply := TinyWeighter(fields[c.Col], c.CollationEnv, c.Type.Collation()); apply != nil {
 			weights = append(weights, tinyWeighter{c.Col, apply})
 		}
 	}

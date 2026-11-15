@@ -1233,12 +1233,21 @@ func getCollationID(collation string) collations.ID {
 }
 
 // TestNullsafeCompareConnectionText compares text of columns that are not
-// utf8mb4. The values are in utf8mb4, as rows are, and the comparison is in
-// the collation of the column: it has to convert the text first. The expected
-// results are STRCMP() of MySQL 8.4.13: 'é' is after 'd' in
-// latin1_swedish_ci, where the two utf8mb4 bytes of 'é' taken as latin1 are
-// before it.
+// utf8mb4, for an environment that holds the text of rows in the connection
+// character set, as vtgate does with --convert-result-charset. The values are
+// in utf8mb4 and the comparison is in the collation of the column: it has to
+// convert the text first. The expected results are STRCMP() of MySQL 8.4.13:
+// 'é' is after 'd' in latin1_swedish_ci, where the two utf8mb4 bytes of 'é'
+// taken as latin1 are before it.
+//
+// For any other environment the text is in the character set of its collation
+// already, as VReplication and VDiff hand it over, and is not converted: the
+// latin1 bytes E9 and FC are 'é' and 'ü', which differ, where a conversion
+// from utf8mb4 would make both of them "?".
 func TestNullsafeCompareConnectionText(t *testing.T) {
+	plain := collations.MySQL8()
+	conn := plain.WithRowsInConnectionCharset()
+
 	tcases := []struct {
 		v1, v2    string
 		collation string
@@ -1249,14 +1258,37 @@ func TestNullsafeCompareConnectionText(t *testing.T) {
 		{"Müller", "MYLLER", "latin1_swedish_ci", 0},
 		{"中", "波", "gb2312_chinese_ci", 1},
 		{"啊", "波", "gb2312_chinese_ci", -1},
+		// swe7 has 'Ä' at the byte of "[" and no "[", which becomes "?".
+		{"Ä", "[", "swe7_swedish_ci", 1},
 	}
 	for _, tcase := range tcases {
 		t.Run(fmt.Sprintf("%v/%v/%v", tcase.v1, tcase.v2, tcase.collation), func(t *testing.T) {
-			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), collations.MySQL8(), getCollationID(tcase.collation), nil)
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), conn, getCollationID(tcase.collation), nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.out, got)
 		})
 	}
+
+	t.Run("text in the character set of the collation", func(t *testing.T) {
+		latin1 := getCollationID("latin1_swedish_ci")
+		e := sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xE9})
+		u := sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xFC})
+		got, err := NullsafeCompare(e, u, plain, latin1, nil)
+		require.NoError(t, err)
+		assert.Equal(t, -1, got)
+		got, err = NullsafeCompare(e, TestValue(sqltypes.VarChar, "d"), plain, latin1, nil)
+		require.NoError(t, err)
+		assert.Equal(t, 1, got)
+	})
+
+	t.Run("no allocation", func(t *testing.T) {
+		latin1 := getCollationID("latin1_swedish_ci")
+		v1, v2 := TestValue(sqltypes.VarChar, "Müller"), TestValue(sqltypes.VarChar, "Möller")
+		allocs := testing.AllocsPerRun(100, func() {
+			_, _ = NullsafeCompare(v1, v2, conn, latin1, nil)
+		})
+		assert.Zero(t, allocs)
+	})
 }
 
 func TestNullsafeCompareCollate(t *testing.T) {
