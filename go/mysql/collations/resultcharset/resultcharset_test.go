@@ -664,3 +664,75 @@ func TestToClient(t *testing.T) {
 		assert.True(t, ToClient(in.Fields, utf8mb40900AICI, utf8mb40900AICI, false).IsNoOp())
 	})
 }
+
+// TestRowsLossy checks the values that RowsLossy reports: the ones with a
+// character that the character set they are converted to does not have, with
+// the text that MySQL 8.0.46 writes in the message of error 1366 when a
+// recursive CTE with a latin1 column reads them:
+//
+//	'ab中cd' in utf8mb4        \xE4\xB8\xADcd
+//	'x中文中文中文中文yz'      \xE4\xB8\xAD\xE6\x96\x87...
+//	'é😀é'                     \xF0\x9F\x98\x80\xC3\xA9
+//	'😀éa'                     \xF0\x9F\x98\x80\xC3\xA9...
+//	'中', a tab, '中'          \xE4\xB8\xAD\x09\xE4\xB8...
+//	"tab	中'q\"            \xE4\xB8\xAD'q\
+//	'a中~b' in gbk             \xD6\xD0~b
+//	'a中b' in ucs2             \x4E\x2D\x00\x62
+func TestRowsLossy(t *testing.T) {
+	const (
+		latin1German2 = 31
+		gbkChinese    = 28
+		ucs2General   = 35
+		utf8mb40900   = 255
+	)
+	field := func(collation uint32) []*querypb.Field {
+		return []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Charset: 63},
+			{Name: "l", Type: sqltypes.VarChar, Charset: collation},
+		}
+	}
+	tests := []struct {
+		name      string
+		from      uint32
+		text      string
+		converted string
+		printable string
+	}{
+		{"a character in the middle", utf8mb40900, "ab中cd", "ab?cd", `\xE4\xB8\xADcd`},
+		{"more than six bytes", utf8mb40900, "x中文中文中文中文yz", "x????????yz", `\xE4\xB8\xAD\xE6\x96\x87...`},
+		{"six bytes", utf8mb40900, "é😀é", "\xe9?\xe9", `\xF0\x9F\x98\x80\xC3\xA9`},
+		{"seven bytes", utf8mb40900, "😀éa", "?\xe9a", `\xF0\x9F\x98\x80\xC3\xA9...`},
+		{"a control character", utf8mb40900, "中\t中", "?\t?", `\xE4\xB8\xAD\x09\xE4\xB8...`},
+		{"a quote and a backslash", utf8mb40900, "tab\t中'q\\", "tab\t?'q\\", `\xE4\xB8\xAD'q\`},
+		{"gbk", gbkChinese, "a\xd6\xd0~b", "a?~b", `\xD6\xD0~b`},
+		{"ucs2", ucs2General, "\x00a\x4e\x2d\x00b", "a?b", `\x4E\x2D\x00\x62`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			conv := ToFields(field(tc.from), field(latin1German2))
+			rows := []sqltypes.Row{
+				{sqltypes.NewInt32(1), sqltypes.MakeTrusted(sqltypes.VarChar, []byte("fine"))},
+				{sqltypes.NewInt32(2), sqltypes.NULL},
+				{sqltypes.NewInt32(3), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tc.text))},
+			}
+			if tc.from == ucs2General {
+				rows[0][1] = sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\x00f"))
+			}
+			var lost []Lost
+			out := conv.RowsLossy(rows, func(l Lost) { lost = append(lost, l) })
+			require.Len(t, lost, 1)
+			assert.Equal(t, 2, lost[0].Row)
+			assert.Equal(t, 1, lost[0].Column)
+			assert.Equal(t, tc.printable, lost[0].Printable())
+			assert.Equal(t, tc.converted, out[2][1].ToString())
+			// Rows converts the same way, and says nothing.
+			assert.Equal(t, out, conv.Rows(rows))
+		})
+	}
+
+	// A conversion that loses nothing reports nothing.
+	conv := ToFields(field(latin1German2), field(utf8mb40900))
+	conv.RowsLossy([]sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xfcller"))}}, func(l Lost) {
+		assert.Fail(t, "a value that is converted in full was reported", "%v", l)
+	})
+}

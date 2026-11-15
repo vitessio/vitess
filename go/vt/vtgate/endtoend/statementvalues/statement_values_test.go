@@ -37,6 +37,7 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -107,7 +108,7 @@ var unshardedVSchema = &vschemapb.Keyspace{
 var inserts = []string{
 	"insert into a (id, l, g) values (1, 'Müller', '中文'), (2, 'é', '汉字'), (3, 'abc', 'abc'), (4, 'MUELLER', '中文'), (5, 'ß', '字'), (6, 'z', 'ABC')",
 	"insert into b (id, l, g, n) values (1, 'é', '中文', 'ß'), (2, 'Müller', '汉字', 'é'), (4, 'zz', '中文', NULL), (5, 'SS', 'abc', NULL), (6, 'MUELLER', '字', NULL)",
-	"insert into d (id, u, l) values (1, 'é', 'x'), (2, 'ß', 'é')",
+	"insert into d (id, u, l) values (1, 'é', 'x'), (2, 'ß', 'é'), (3, 'ab中cd', 'abc')",
 	"insert into uks.u (id, l, g) values (1, 'é', '字'), (2, 'Müller', '中文')",
 	"insert into uks.fkp (id, l) values (1, 'Müller'), (2, 'é'), (3, 'ß')",
 	"insert into uks.fkc (id, l) values (1, 'Müller'), (2, 'é'), (3, 'ß')",
@@ -132,6 +133,8 @@ func TestStatementValues(t *testing.T) {
 				{Name: "uks", Shards: []*vttestpb.Shard{{Name: "0"}}},
 			},
 		},
+		// A session has to be able to set its sql_mode.
+		EnableSystemSettings: true,
 	}
 	require.NoError(t, cfg.InitSchemas("ks", shardedSchema, shardedVSchema))
 	require.NoError(t, cfg.InitSchemas("uks", unshardedSchema, unshardedVSchema))
@@ -344,6 +347,35 @@ func TestStatementValues(t *testing.T) {
 			})
 		}
 	}
+
+	// A recursion that reads 'ab中cd' from the utf8mb4 column d.u for a CTE
+	// whose column is the latin1 column a.l: MySQL fails with error 1366
+	// with its default sql_mode, which is strict, and returns 'ab?cd' and a
+	// warning with the sql_mode ''.
+	t.Run("recursive CTE, a character that the seed does not have", func(t *testing.T) {
+		const query = "with recursive r (id, l) as (select id, l from a where id = 3 union all select d.id, d.u from r join d on d.l = r.l) select id, l from r"
+		const message = `Incorrect string value: '\xE4\xB8\xADcd' for column 'l' at row 1`
+		for _, workload := range []string{"oltp", "olap"} {
+			conn, err := mysql.Connect(t.Context(), &params)
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+			exec(t, conn, "set workload = "+workload)
+
+			_, err = conn.ExecuteFetch(query, 1000, false)
+			require.Error(t, err, workload)
+			sqlErr, ok := err.(*sqlerror.SQLError)
+			require.True(t, ok, "%s: %v", workload, err)
+			assert.Equal(t, sqlerror.ERTruncatedWrongValueForField, sqlErr.Num, workload)
+			assert.Equal(t, "HY000", sqlErr.State, workload)
+			assert.Contains(t, sqlErr.Message, message, workload)
+
+			exec(t, conn, "set sql_mode = ''")
+			got := rows(t, conn, query)
+			slices.Sort(got)
+			assert.Equal(t, []string{"3|ab?cd", "3|abc"}, got, workload)
+			assert.Equal(t, []string{"Warning|1366|" + message}, rows(t, conn, "show warnings"), workload)
+		}
+	})
 
 	// The INSERT ... SELECT runs once buffered and once streamed.
 	t.Run("insert select", func(t *testing.T) {

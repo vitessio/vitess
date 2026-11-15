@@ -18,11 +18,16 @@ package engine
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/mysql/collations/resultcharset"
+	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -61,9 +66,9 @@ const maxRecurseDepth = 1000
 // the 'ß' of d.u as DF, in latin1. vtgate returned its utf8mb4 bytes, C3 9F,
 // with the field of a.l, and a utf8mb4 client got 'ÃŸ'.
 //
-// A character that the character set of the seed does not have becomes "?".
-// MySQL does that without STRICT_TRANS_TABLES, and fails with error 1366
-// with it. Without the flag every result is in the connection character set.
+// What becomes of a character that the character set of the seed does not
+// have is in recursionRows. Without the flag every result is in the
+// connection character set.
 func (r *RecurseCTE) recursionText(vcursor VCursor, from, seed []*querypb.Field) *resultcharset.Conversion {
 	if !vcursor.ConvertResultCharset() || len(from) == 0 || len(seed) == 0 {
 		return nil
@@ -73,6 +78,95 @@ func (r *RecurseCTE) recursionText(vcursor VCursor, from, seed []*querypb.Field)
 		return nil
 	}
 	return conv
+}
+
+// maxRecursionWarnings is the number of warnings that one execution records
+// for the values of its recursions, which is the max_error_count of MySQL.
+const maxRecursionWarnings = 1024
+
+// recursionRows returns the rows of a recursion in the character sets of the
+// fields of the seed, converted by text, which is nil when there is nothing
+// to convert.
+//
+// A value can have a character that the character set of the column of the
+// seed does not have. For a latin1 column of the seed and 'ab中cd' in the
+// utf8mb4 column that the recursion reads, MySQL 8.0.46 fails with
+//
+//	ERROR 1366 (HY000): Incorrect string value: '\xE4\xB8\xADcd' for column 'l' at row 1
+//
+// when the sql_mode has STRICT_TRANS_TABLES or STRICT_ALL_TABLES. Without
+// them it returns 'ab?cd', with that message as a warning for each such
+// value. It says "at row 1" for every row. This does the same, by the
+// sql_mode of the session, see strictSQLMode. warned counts the warnings of
+// the execution.
+func (r *RecurseCTE) recursionRows(vcursor VCursor, text *resultcharset.Conversion, rows []sqltypes.Row, seed []*querypb.Field, warned *int) ([]sqltypes.Row, error) {
+	if text == nil {
+		return rows, nil
+	}
+	var lost []resultcharset.Lost
+	rows = text.RowsLossy(rows, func(l resultcharset.Lost) {
+		if len(lost) < maxRecursionWarnings {
+			lost = append(lost, l)
+		}
+	})
+	if len(lost) == 0 {
+		return rows, nil
+	}
+	strict := strictSQLMode(vcursor)
+	for _, l := range lost {
+		var column string
+		if l.Column < len(seed) {
+			column = seed[l.Column].Name
+		}
+		message := "Incorrect string value: '" + l.Printable() + "' for column '" + column + "' at row 1"
+		if strict {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.TruncatedWrongValueForField, "%s", message)
+		}
+		if *warned >= maxRecursionWarnings {
+			break
+		}
+		*warned++
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sqlerror.ERTruncatedWrongValueForField), Message: message})
+	}
+	return rows, nil
+}
+
+// strictSQLMode reports whether the sql_mode of the session has
+// STRICT_TRANS_TABLES or STRICT_ALL_TABLES, which TRADITIONAL has too.
+//
+// vtgate has the sql_mode of a session that set it to another value than the
+// one of MySQL. For a session that did not, it takes the default of MySQL 8,
+// which is strict: it does not know the global sql_mode of the MySQL servers
+// behind it. A SET sql_mode that vtgate ignores, without
+// --enable-system-settings, is not the sql_mode of the session.
+func strictSQLMode(vcursor VCursor) bool {
+	const strict = sqlmode.StrictTransTables | sqlmode.StrictAllTables
+
+	value, set := "", false
+	vcursor.Session().GetSystemVariables(func(k, v string) {
+		if strings.EqualFold(k, "sql_mode") {
+			value, set = v, true
+		}
+	})
+	if !set {
+		value = vcursor.SQLMode()
+	}
+
+	// The session has the value as it stands in a SET statement: a list of
+	// names in quotes, or a number.
+	var mode sqlmode.Mode
+	var err error
+	if unquoted, ok := strings.CutPrefix(value, "'"); ok && set {
+		mode, err = sqlmode.Parse(strings.TrimSuffix(unquoted, "'"))
+	} else if bits, numErr := strconv.ParseUint(value, 10, 64); numErr == nil && set {
+		mode, err = sqlmode.FromBits(bits)
+	} else {
+		mode, err = sqlmode.Parse(value)
+	}
+	if err != nil {
+		return true
+	}
+	return mode.Expand()&strict != 0
 }
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -92,6 +186,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	recurseRows := values.rows(res.Rows)
 	joinVars := make(map[string]*querypb.BindVariable)
 	loops := 0
+	warned := 0
 	for len(recurseRows) > 0 {
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
@@ -112,9 +207,9 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err != nil {
 				return nil, err
 			}
-			rows := rresult.Rows
-			if text := r.recursionText(vcursor, rresult.Fields, res.Fields); text != nil {
-				rows = text.Rows(rows)
+			rows, err := r.recursionRows(vcursor, r.recursionText(vcursor, rresult.Fields, res.Fields), rresult.Rows, res.Fields, &warned)
+			if err != nil {
+				return nil, err
 			}
 			recurseRows = append(recurseRows, values.rows(rows)...)
 			res.Rows = append(res.Rows, rows...)
@@ -166,6 +261,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
 	loops := 0
+	warned := 0
 	for len(recurseRows) > 0 {
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
@@ -184,6 +280,11 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			}
 			var text *resultcharset.Conversion
 			var haveFields bool
+			// rowsErr is the error of recursionRows. The stream below it
+			// would return it as the error of a shard, without its MySQL
+			// error number, so it is kept, the rest of the stream is
+			// read and left out, and it is returned after the stream.
+			var rowsErr error
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), convert, func(result *sqltypes.Result) error {
 				mu.Lock()
 				defer mu.Unlock()
@@ -191,13 +292,17 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 					recurseRows = append(recurseRows, result.Rows...)
 					return callback(result)
 				}
+				if rowsErr != nil {
+					return nil
+				}
 				if !haveFields && len(result.Fields) != 0 {
 					haveFields = true
 					text = r.recursionText(vcursor, result.Fields, seedFields)
 				}
-				rows := result.Rows
-				if text != nil {
-					rows = text.Rows(rows)
+				rows, err := r.recursionRows(vcursor, text, result.Rows, seedFields, &warned)
+				if err != nil {
+					rowsErr = err
+					return nil
 				}
 				recurseRows = append(recurseRows, seedValues.values.rows(rows)...)
 				// The fields of the recursion were asked for here. The result
@@ -209,6 +314,9 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			})
 			if err != nil {
 				return err
+			}
+			if rowsErr != nil {
+				return rowsErr
 			}
 		}
 	}
