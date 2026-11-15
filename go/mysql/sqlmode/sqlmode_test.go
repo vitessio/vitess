@@ -256,4 +256,17 @@ func TestNeutralizeSessionQuery(t *testing.T) {
 	assert.True(t, IsSessionSetupQuery(charsetOnly))
 	assert.True(t, IsSessionSetupQuery(strings.ToUpper(NeutralizeSessionQuery)))
 	assert.False(t, IsSessionSetupQuery("set names 'utf8mb4'"))
+
+	// the raw variant sets character_set_results to NULL after SET NAMES, which
+	// sets it to the connection character set
+	raw := SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci")
+	assert.Equal(t, "set names 'utf8mb4' collate 'utf8mb4_0900_ai_ci', @@session.character_set_results = NULL, "+neutralizeSessionAssignment, raw)
+	assert.True(t, IsSessionSetupQuery(raw))
+	rawCharsetOnly := SessionSetupQueryWithRawResults("utf8mb4", "")
+	assert.Equal(t, "set names 'utf8mb4', @@session.character_set_results = NULL, "+neutralizeSessionAssignment, rawCharsetOnly)
+	assert.True(t, IsSessionSetupQuery(rawCharsetOnly))
+	rawNoCharset := SessionSetupQueryWithRawResults("", "")
+	assert.Equal(t, "set @@session.character_set_results = NULL, "+neutralizeSessionAssignment, rawNoCharset)
+	assert.True(t, IsSessionSetupQuery(rawNoCharset))
+	assert.False(t, IsSessionSetupQuery("set @@session.character_set_results = NULL"))
 }

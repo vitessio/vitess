@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // SessionSetupQuery — the statement the dbconfigs Connector runs on every connection
@@ -97,4 +98,56 @@ func TestNeutralizeSessionQueryPreservesInitConnect(t *testing.T) {
 	assert.NotContains(t, neutralized, "ANSI_QUOTES", "lexer modes must be stripped")
 	assert.Equal(t, strings.Contains(rawMode, "STRICT_TRANS_TABLES"), strings.Contains(neutralized, "STRICT_TRANS_TABLES"),
 		"neutralization must not change unrelated runtime modes")
+}
+
+// TestSessionSetupQueryWithRawResults runs the raw variant of the session setup
+// on a connection that was switched to latin1. The character set the
+// connection negotiated is restored and character_set_results is NULL, so
+// MySQL sends a latin1_german2_ci VARCHAR(10) with 'Müller' as 4D FC 6C 6C 65
+// 72 with the collation 31 and the length 10, and the plain setup gets it as
+// 4D C3 BC 6C 6C 65 72 with the collation 255 and the length 40.
+func TestSessionSetupQueryWithRawResults(t *testing.T) {
+	ctx := t.Context()
+	conn, err := mysql.Connect(ctx, &connParams)
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	_, err = conn.ExecuteFetch("set names latin1", 0, false)
+	require.NoError(t, err)
+	_, err = conn.ExecuteFetch("create table if not exists raw_results (v varchar(10) character set latin1 collate latin1_german2_ci)", 0, false)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := conn.ExecuteFetch("drop table if exists raw_results", 0, false)
+		assert.NoError(t, err)
+	})
+
+	read := func(setup string) (*sqltypes.Result, []string) {
+		_, err := conn.ExecuteFetch(setup, 0, false)
+		require.NoError(t, err)
+		qr, err := conn.ExecuteFetch("select @@character_set_client, @@character_set_connection, @@collation_connection, ifnull(@@character_set_results, 'NULL')", 1, false)
+		require.NoError(t, err)
+		var vars []string
+		for _, v := range qr.Rows[0] {
+			vars = append(vars, v.ToString())
+		}
+		_, err = conn.ExecuteFetch("delete from raw_results", 0, false)
+		require.NoError(t, err)
+		_, err = conn.ExecuteFetch("insert into raw_results values (_utf8mb4 x'4DC3BC6C6C6572')", 0, false)
+		require.NoError(t, err)
+		qr, err = conn.ExecuteFetch("select v from raw_results", 1, true)
+		require.NoError(t, err)
+		return qr, vars
+	}
+
+	qr, vars := read(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci"))
+	assert.Equal(t, []string{"utf8mb4", "utf8mb4", "utf8mb4_0900_ai_ci", "NULL"}, vars)
+	assert.Equal(t, "M\xFCller", qr.Rows[0][0].ToString())
+	assert.Equal(t, uint32(31), qr.Fields[0].Charset)
+	assert.Equal(t, uint32(10), qr.Fields[0].ColumnLength)
+
+	qr, vars = read(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"))
+	assert.Equal(t, []string{"utf8mb4", "utf8mb4", "utf8mb4_0900_ai_ci", "utf8mb4"}, vars)
+	assert.Equal(t, "M\xC3\xBCller", qr.Rows[0][0].ToString())
+	assert.Equal(t, uint32(255), qr.Fields[0].Charset)
+	assert.Equal(t, uint32(40), qr.Fields[0].ColumnLength)
 }
