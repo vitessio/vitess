@@ -280,3 +280,146 @@ func TestStream(t *testing.T) {
 	assert.Nil(t, second.Fields)
 	assert.Equal(t, "Müller", second.Rows[0][0].ToString())
 }
+
+// TestToClientColumns covers the columns whose conversion depends on more
+// than their type. The fields are what vtgate holds, with the text in utf8mb4
+// and the length that MySQL reports for utf8mb4, and the expected values are
+// what MySQL 8.4.13 and 8.0.46 send with character_set_results = latin1.
+func TestToClientColumns(t *testing.T) {
+	const decimalFlags = uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)
+	qr := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			// u4 COLLATE utf8mb4_bin is VARBINARY in Vitess, and text in MySQL.
+			{Name: "b", Type: sqltypes.VarBinary, Charset: uint32(utf8mb4Bin), ColumnLength: 40, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			// CAST(u4 AS BINARY)
+			{Name: "cb", Type: sqltypes.VarBinary, Charset: uint32(binaryCollation), ColumnLength: 40, Flags: uint32(querypb.MySqlFlag_BINARY_FLAG)},
+			// JSON_OBJECT('k', u4) has a text collation.
+			{Name: "jo", Type: sqltypes.TypeJSON, Charset: uint32(utf8mb40900AICI), ColumnLength: 4294967292},
+			// A utf8mb4 TEXT column.
+			field("tx", sqltypes.Text, utf8mb40900AICI, 262140),
+			// A LONGTEXT column.
+			field("lt", sqltypes.Text, utf8mb40900AICI, 4294967295),
+			// 1.5
+			{Name: "d", Type: sqltypes.Decimal, Charset: uint32(binaryCollation), ColumnLength: 4, Flags: decimalFlags},
+		},
+		Rows: []sqltypes.Row{{
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("é€😀")),
+			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("é")),
+			sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"k": "é€😀"}`)),
+			sqltypes.MakeTrusted(sqltypes.Text, []byte("Grüße")),
+			sqltypes.MakeTrusted(sqltypes.Text, []byte("x")),
+			sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1.5")),
+		}},
+	}
+
+	type meta struct {
+		collation collations.ID
+		length    uint32
+	}
+	fieldsOf := func(got *sqltypes.Result) []meta {
+		var out []meta
+		for _, f := range got.Fields {
+			out = append(out, meta{collations.ID(f.Charset), f.ColumnLength})
+		}
+		return out
+	}
+
+	t.Run("latin1", func(t *testing.T) {
+		got := ToClient(qr.Fields, utf8mb40900AICI, latin1SwedishCI, false).Result(qr)
+		assert.Equal(t, []meta{
+			{latin1SwedishCI, 10},
+			{binaryCollation, 40},
+			{latin1SwedishCI, 1073741823},
+			{latin1SwedishCI, 65535},
+			{latin1SwedishCI, 4294967295},
+			{binaryCollation, 4},
+		}, fieldsOf(got))
+		assert.Equal(t, "\xE9\x80?", got.Rows[0][0].ToString())
+		assert.Equal(t, "é", got.Rows[0][1].ToString())
+		assert.Equal(t, "{\"k\": \"\xE9\x80?\"}", got.Rows[0][2].ToString())
+		assert.Equal(t, "Gr\xFC\xDFe", got.Rows[0][3].ToString())
+		assert.Equal(t, "1.5", got.Rows[0][5].ToString())
+	})
+
+	t.Run("ucs2", func(t *testing.T) {
+		got := ToClient(qr.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(qr)
+		// MySQL converts the text of a DECIMAL expression.
+		assert.Equal(t, "\x001\x00.\x005", got.Rows[0][5].ToString())
+		assert.Equal(t, uint32(binaryCollation), got.Fields[5].Charset)
+
+		// A DECIMAL column has no binary flag, and MySQL does not convert it.
+		column := &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "dc", Type: sqltypes.Decimal, Charset: uint32(binaryCollation), ColumnLength: 8, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)}},
+			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1234.56"))}},
+		}
+		assert.Equal(t, "1234.56", ToClient(column.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(column).Rows[0][0].ToString())
+	})
+
+	t.Run("binary", func(t *testing.T) {
+		// MySQL sends the text of every column in the character set of
+		// the column, as for NULL, and gives the fields the binary
+		// collation and one byte per character.
+		raw := connectionResult()
+		raw.Fields = append(raw.Fields, qr.Fields[2], qr.Fields[3])
+		raw.Rows[0] = append(raw.Rows[0], qr.Rows[0][2], qr.Rows[0][3])
+		got := ToClient(raw.Fields, utf8mb40900AICI, binaryCollation, false).Result(raw)
+		assert.Equal(t, []meta{
+			{binaryCollation, 10},
+			{binaryCollation, 10},
+			{binaryCollation, 4294967295},
+			{binaryCollation, 11},
+			{binaryCollation, 4},
+			{binaryCollation, 1073741823},
+			{binaryCollation, 65535},
+		}, fieldsOf(got))
+		assert.Equal(t, "M\xFCller", got.Rows[0][0].ToString())
+		assert.Equal(t, "é€中", got.Rows[0][1].ToString())
+		assert.Equal(t, `{"a": "é"}`, got.Rows[0][2].ToString())
+		assert.Equal(t, "né", got.Fields[0].Name)
+	})
+
+	t.Run("NULL", func(t *testing.T) {
+		// The fields have the length of the column in its own character
+		// set: 10 for a latin1 VARCHAR(10), 65535 for a utf8mb4 TEXT, and
+		// 4294967295 for JSON_OBJECT().
+		raw := connectionResult()
+		raw.Fields = append(raw.Fields, qr.Fields[2], qr.Fields[3])
+		raw.Rows[0] = append(raw.Rows[0], qr.Rows[0][2], qr.Rows[0][3])
+		got := ToClient(raw.Fields, utf8mb40900AICI, collations.Unknown, true).Result(raw)
+		assert.Equal(t, []meta{
+			{latin1German2CI, 10},
+			{utf8mb40900AICI, 40},
+			{binaryCollation, 4294967295},
+			{binaryCollation, 11},
+			{binaryCollation, 4},
+			{utf8mb40900AICI, 4294967295},
+			{utf8mb40900AICI, 65535},
+		}, fieldsOf(got))
+	})
+}
+
+// TestToClientMessage converts error messages as MySQL 8.4.13 and 8.0.46 send
+// them.
+func TestToClientMessage(t *testing.T) {
+	const sjisJapaneseCI = collations.ID(13)
+	tests := []struct {
+		message string
+		results collations.ID
+		null    bool
+		want    string
+	}{
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", gbkChineseCI, false, "Duplicate entry 'M\xA8\xB9ller' for key 'gate_m.uk_l'"},
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", latin1SwedishCI, false, "Duplicate entry 'M\xFCller' for key 'gate_m.uk_l'"},
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", sjisJapaneseCI, false, "Duplicate entry 'M\\00FCller' for key 'gate_m.uk_l'"},
+		{"Table 't.nosuch_中€?' doesn't exist", latin1SwedishCI, false, "Table 't.nosuch_\\4E2D\x80?' doesn't exist"},
+		{"Table 't.nosuch_中€?' doesn't exist", gbkChineseCI, false, "Table 't.nosuch_\xD6\xD0\\20AC?' doesn't exist"},
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", collations.Unknown, true, "Duplicate entry 'Müller' for key 'gate_m.uk_l'"},
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", binaryCollation, false, "Duplicate entry 'Müller' for key 'gate_m.uk_l'"},
+		{"Duplicate entry 'Müller' for key 'gate_m.uk_l'", utf8mb3GeneralCI, false, "Duplicate entry 'Müller' for key 'gate_m.uk_l'"},
+		// MySQL sends an empty message with ucs2.
+		{"Table 't.nosuch' doesn't exist", ucs2GeneralCI, false, ""},
+	}
+	for _, tc := range tests {
+		assert.Equal(t, tc.want, ToClientMessage(tc.message, tc.results, tc.null), "%q in %d", tc.message, tc.results)
+	}
+}
