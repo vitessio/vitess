@@ -462,7 +462,7 @@ func (asm *assembler) PushBVar_time(key string) {
 }
 
 func push_text(env *ExpressionEnv, raw []byte, col collations.TypedCollation) int {
-	env.vm.stack[env.vm.sp] = newEvalText(raw, col)
+	env.vm.stack[env.vm.sp] = newEvalText(connectionText(raw, col.Collation), col)
 	env.vm.sp++
 	return 1
 }

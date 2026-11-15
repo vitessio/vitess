@@ -202,7 +202,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			return UnsupportedCollationHashError
 		}
 		hash.Write16(hashPrefixBytes)
-		coll.Hash(hash, v.Raw(), 0)
+		coll.Hash(hash, connectionText(v.Raw(), collation), 0)
 
 	case sqltypes.IsDecimal(coerceTo):
 		var dec decimal.Decimal

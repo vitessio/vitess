@@ -98,7 +98,7 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 		if coll == nil {
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
-		b := v.Raw()
+		b := connectionText(v.Raw(), col)
 		if length != 0 {
 			b = charset.Slice(coll.Charset(), b, 0, length)
 		}
@@ -271,7 +271,7 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 					if v.IsNull() {
 						return
 					}
-					v.SetTinyWeight(twcoll.TinyWeightString(v.Raw()))
+					v.SetTinyWeight(twcoll.TinyWeightString(connectionText(v.Raw(), collation)))
 				}
 			}
 		}

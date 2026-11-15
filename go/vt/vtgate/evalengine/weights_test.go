@@ -21,11 +21,13 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func TestTinyWeightStrings(t *testing.T) {
@@ -177,5 +179,46 @@ func TestWeightStrings(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// TestWeightStringsConnectionText takes the weight and the hash of text of
+// columns that are not utf8mb4. The values are in utf8mb4, as rows are, and
+// have to be converted to the character set of the collation first. The
+// expected weights are WEIGHT_STRING() of MySQL 8.0.46 and 8.4.13: 'é' in
+// latin1_swedish_ci has the weight of 'E', 45, where its two utf8mb4 bytes
+// taken as latin1 have the weights 41 A9.
+func TestWeightStringsConnectionText(t *testing.T) {
+	tcases := []struct {
+		value     string
+		collation string
+		weight    string
+		sameAs    string
+	}{
+		{"é", "latin1_swedish_ci", "\x45", "E"},
+		{"Müller", "latin1_swedish_ci", "MYLLER", "MYLLER"},
+		{"中", "gb2312_chinese_ci", "\xd6\xd0", "中"},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.value+"/"+tcase.collation, func(t *testing.T) {
+			collation := collations.MySQL8().LookupByName(tcase.collation)
+			value := sqltypes.NewVarChar(tcase.value)
+			sameAs := sqltypes.NewVarChar(tcase.sameAs)
+
+			weight, _, err := WeightString(nil, value, sqltypes.VarChar, collation, 0, 0, nil, 0)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.weight, string(weight))
+
+			if tiny := TinyWeighter(&querypb.Field{Type: sqltypes.VarChar}, collation); tiny != nil {
+				tiny(&value)
+				tiny(&sameAs)
+				assert.Equal(t, sameAs.TinyWeight(), value.TinyWeight())
+			}
+
+			var h1, h2 vthash.Hasher
+			require.NoError(t, NullsafeHashcode128(&h1, value, collation, sqltypes.VarChar, 0, nil))
+			require.NoError(t, NullsafeHashcode128(&h2, sameAs, collation, sqltypes.VarChar, 0, nil))
+			assert.Equal(t, h2.Sum128(), h1.Sum128())
+		})
 	}
 }
