@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -34,6 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vtenv "vitess.io/vitess/go/vt/env"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -269,6 +271,27 @@ func TestExecuteContextWaitsForChildOutput(t *testing.T) {
 	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 	assert.Equal(t, "late\n", hr.Stdout)
 	assert.Empty(t, hr.Stderr)
+}
+
+// TestExecuteLogsHookStatus checks that the result line logs the status text
+// that HookResult.String renders, which "hook: result is ..." used to include
+// before its message became constant.
+func TestExecuteLogsHookStatus(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	for name, tc := range map[string]struct {
+		script   string
+		expected string
+	}{
+		"succeeds": {"exit 0\n", "HOOK_SUCCESS"},
+		"fails":    {"exit 3\n", "exit(3)"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			logs.Reset()
+			installHook(t, "status", tc.script)
+			NewSimpleHook("status").Execute()
+			assert.Equal(t, tc.expected, logs.Record(t, "hook: result")["hook_status"])
+		})
+	}
 }
 
 func TestExecuteOptional(t *testing.T) {

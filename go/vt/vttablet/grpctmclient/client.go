@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -1336,7 +1337,12 @@ func (client *Client) UpdateSequenceTables(ctx context.Context, tablet *topodata
 
 // VDiff is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
-	log.Info(fmt.Sprintf("VDiff for tablet %s, request %+v", tablet.Alias.String(), req))
+	log.Info("VDiff for tablet",
+		slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+		slog.String("keyspace", req.GetKeyspace()),
+		slog.String("workflow", req.GetWorkflow()),
+		slog.String("request", fmt.Sprintf("%+v", req)),
+	)
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -1525,19 +1531,6 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 		Before: response.Status.Before,
 		After:  response.Status.After,
 	}, nil
-}
-
-func (client *Client) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer closer.Close()
-	response, err := c.PrepareEmergencyReparent(ctx, request)
-	if err != nil {
-		return nil, vterrors.FromGRPC(err)
-	}
-	return response, nil
 }
 
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.

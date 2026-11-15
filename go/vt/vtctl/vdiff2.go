@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"sort"
@@ -169,7 +170,11 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 
 	output, err := wr.VDiff2(ctx, keyspace, workflowName, action, actionArg, vdiffUUID.String(), options)
 	if err != nil {
-		log.Error(fmt.Sprintf("vdiff2 returning with error: %v", err))
+		log.Error("vdiff2 returning with error",
+			slog.String("keyspace", keyspace),
+			slog.String("workflow", workflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 

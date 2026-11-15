@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -30,8 +31,10 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vterrors"
 	vdiff2 "vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -124,13 +127,16 @@ func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VR
 	params *VReplicationWorkflowParams,
 ) (*VReplicationWorkflow, error) {
 	wr.WorkflowParams = params
-	log.Info(fmt.Sprintf("NewVReplicationWorkflow with params %+v", params))
+	log.Info("NewVReplicationWorkflow with params",
+		slog.String("keyspace", params.TargetKeyspace),
+		slog.String("workflow", params.Workflow),
+		slog.String("workflow_params", fmt.Sprintf("%+v", params)))
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}
 	ts, ws, err := wr.getWorkflowState(ctx, params.TargetKeyspace, params.Workflow)
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Workflow state is %+v", ws))
+	logWorkflowState(params.Workflow, ws)
 	if ts != nil { // Other than on create we need to get SourceKeyspace from the workflow
 		vrw.params.TargetKeyspace = ts.targetKeyspace
 		vrw.params.Workflow = ts.workflow
@@ -170,8 +176,17 @@ func (vrw *VReplicationWorkflow) Exists() bool {
 	return vrw.ws != nil
 }
 
+// logWorkflowState logs ws, which is nil when the workflow doesn't exist yet.
+func logWorkflowState(workflowName string, ws *workflow.State) {
+	attrs := []slog.Attr{slog.String("workflow", workflowName)}
+	if ws != nil {
+		attrs = append(attrs, slog.String("workflow_state", ws.String()))
+	}
+	log.Info("Workflow state", attrs...)
+}
+
 func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
-	log.Info(fmt.Sprintf("Workflow state is %+v", ws))
+	logWorkflowState(vrw.params.Workflow, ws)
 	var stateInfo []string
 	s := ""
 	if !vrw.Exists() {
@@ -466,7 +481,10 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasP
 // region Core Actions
 
 func (vrw *VReplicationWorkflow) initMoveTables() error {
-	log.Info(fmt.Sprintf("In VReplicationWorkflow.initMoveTables() for %+v", vrw))
+	log.Info("In VReplicationWorkflow.initMoveTables()",
+		slog.String("keyspace", vrw.params.TargetKeyspace),
+		slog.String("workflow", vrw.params.Workflow),
+		slog.String("workflow_details", vrw.String()))
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
@@ -475,14 +493,20 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
-	log.Info(fmt.Sprintf("In VReplicationWorkflow.initReshard() for %+v", vrw))
+	log.Info("In VReplicationWorkflow.initReshard()",
+		slog.String("keyspace", vrw.params.TargetKeyspace),
+		slog.String("workflow", vrw.params.Workflow),
+		slog.String("workflow_details", vrw.String()))
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
 		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes,
 		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.DeferSecondaryKeys)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
-	log.Info(fmt.Sprintf("In VReplicationWorkflow.switchReads() for %+v", vrw))
+	log.Info("In VReplicationWorkflow.switchReads()",
+		slog.String("keyspace", vrw.params.TargetKeyspace),
+		slog.String("workflow", vrw.params.Workflow),
+		slog.String("workflow_details", vrw.String()))
 	fullTabletTypes, _, err := discovery.ParseTabletTypesAndOrder(vrw.params.TabletTypes)
 	if err != nil {
 		return nil, err
@@ -506,13 +530,19 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 	var journalID int64
 	var dryRunResults *[]string
 	var err error
-	log.Info(fmt.Sprintf("In VReplicationWorkflow.switchWrites() for %+v", vrw))
+	log.Info("In VReplicationWorkflow.switchWrites()",
+		slog.String("keyspace", vrw.params.TargetKeyspace),
+		slog.String("workflow", vrw.params.Workflow),
+		slog.String("workflow_details", vrw.String()))
 	if vrw.params.Direction == workflow.DirectionBackward {
 		keyspace := vrw.params.SourceKeyspace
 		vrw.params.SourceKeyspace = vrw.params.TargetKeyspace
 		vrw.params.TargetKeyspace = keyspace
 		vrw.params.Workflow = workflow.ReverseWorkflowName(vrw.params.Workflow)
-		log.Info(fmt.Sprintf("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw))
+		log.Info("In VReplicationWorkflow.switchWrites(reverse)",
+			slog.String("keyspace", vrw.params.TargetKeyspace),
+			slog.String("workflow", vrw.params.Workflow),
+			slog.String("workflow_details", vrw.String()))
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,
 		false, vrw.params.Direction == workflow.DirectionBackward, vrw.params.EnableReverseReplication, vrw.params.DryRun,
@@ -520,7 +550,7 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("switchWrites succeeded with journal id %d", journalID))
+	log.Info("switchWrites succeeded", slog.String("workflow", vrw.params.Workflow), slog.Int64("journal_id", journalID))
 	return dryRunResults, nil
 }
 
@@ -555,7 +585,11 @@ func (vrw *VReplicationWorkflow) canSwitch(keyspace, workflowName string) (reaso
 		log.Info("writes already switched no need to check lag")
 		return "", nil
 	}
-	log.Info(fmt.Sprintf("state:%s, direction %d, switched %t", vrw.CachedState(), vrw.params.Direction, ws.WritesSwitched))
+	log.Info("Checking whether the workflow can switch",
+		slog.String("workflow", workflowName),
+		slog.String("workflow_state", vrw.CachedState()),
+		slog.String("direction", vrw.params.Direction.String()),
+		slog.Bool("writes_switched", ws.WritesSwitched))
 	result, err := vrw.wr.getStreams(vrw.ctx, workflowName, keyspace, vrw.params.ShardSubset)
 	if err != nil {
 		return "", err
@@ -751,7 +785,11 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 		Action:    string(vdiff2.DeleteAction),
 		ActionArg: vdiff2.AllActionArg,
 	}); err != nil {
-		log.Error(fmt.Sprintf("Error deleting vdiff data for %s.%s workflow: %v", tablet.Keyspace, workflow, err))
+		log.Error("Error deleting vdiff data for workflow",
+			slog.String("keyspace", tablet.Keyspace),
+			slog.String("workflow", workflow),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 
@@ -771,7 +809,7 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	if wr.sem != nil {
 		if !wr.sem.TryAcquire(1) {
-			log.Warn(fmt.Sprintf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.", tablet.Alias.String()))
+			log.Warn("Deferring work to optimize the copy_state table due to hitting the maximum concurrent background job limit.", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 			return
 		}
 	}
@@ -791,7 +829,10 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Num == sqlerror.ERNoSuchTable { // the table may not exist
 				return
 			}
-			log.Warn(fmt.Sprintf("Failed to optimize the copy_state table on %q: %v", tablet.Alias.String(), err))
+			log.Warn("Failed to optimize the copy_state table",
+				slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 		// This will automatically set the value to 1 or the current max value in the table, whichever is greater
 		sqlResetAutoInc := "alter table _vt.copy_state auto_increment = 1"
@@ -799,7 +840,10 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 			Query:   []byte(sqlResetAutoInc),
 			MaxRows: uint64(0),
 		}); err != nil {
-			log.Warn(fmt.Sprintf("Failed to reset the auto_increment value for the copy_state table on %q: %v", tablet.Alias.String(), err))
+			log.Warn("Failed to reset the auto_increment value for the copy_state table",
+				slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}()
 }

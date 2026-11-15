@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -111,7 +111,7 @@ func (e *BinlogDumpEngine) Register(ctx context.Context) (context.Context, int, 
 	e.streams[idx] = &binlogDumpStream{cancel: cancel}
 	e.wg.Add(1)
 
-	log.Info(fmt.Sprintf("BinlogDumpEngine: registered stream %d", idx))
+	log.Info("BinlogDumpEngine: registered stream", slog.Int("binlog_dump_stream_id", idx))
 	return ctx, idx, nil
 }
 
@@ -126,5 +126,5 @@ func (e *BinlogDumpEngine) Unregister(idx int) {
 	delete(e.streams, idx)
 	e.wg.Done()
 
-	log.Info(fmt.Sprintf("BinlogDumpEngine: unregistered stream %d", idx))
+	log.Info("BinlogDumpEngine: unregistered stream", slog.Int("binlog_dump_stream_id", idx))
 }

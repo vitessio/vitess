@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"sync"
@@ -147,13 +148,15 @@ func setTMClientProtocol(protocol string) (reset func()) {
 	case nil:
 		reset = func() { setTMClientProtocol(oldVal) }
 	default:
-		log.Error(fmt.Sprintf("failed to get string value for flag %q: %v", tmclientProtocolFlagName, err))
+		log.Error("failed to get string value for flag", slog.String("flag", tmclientProtocolFlagName), slog.Any("error", err))
 		reset = func() {}
 	}
 
 	if err := fs.Set(tmclientProtocolFlagName, protocol); err != nil {
-		msg := "failed to set flag %q to %q: %v"
-		log.Error(fmt.Sprintf(msg, tmclientProtocolFlagName, protocol, err))
+		log.Error("failed to set flag",
+			slog.String("flag", tmclientProtocolFlagName),
+			slog.String("protocol", protocol),
+			slog.Any("error", err))
 		reset = func() {}
 	}
 
@@ -303,11 +306,6 @@ type TabletManagerClient struct {
 	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
-	// keyed by tablet alias.
-	PrepareEmergencyReparentResults map[string]struct {
-		Response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
-		Error    error
-	}
 	// keyed by tablet alias
 	ReadReparentJournalInfoResults map[string]int32
 	// keyed by tablet alias; takes precedence over ReadReparentJournalInfoResults
@@ -483,12 +481,12 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
+			log.Warn("testutil.TabletManagerClient.Backup faked with no event interval, defaulting", slog.String("tablet", key), slog.Duration("event_interval", testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
+			log.Warn("testutil.TabletManagerClient.Backup faked with no event jitter, defaulting", slog.String("tablet", key), slog.Duration("event_jitter", testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())
@@ -1044,19 +1042,6 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 	return 0, assert.AnError
 }
 
-func (fake *TabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
-	if fake.PrepareEmergencyReparentResults == nil {
-		return nil, assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-	if result, ok := fake.PrepareEmergencyReparentResults[key]; ok {
-		return result.Response, result.Error
-	}
-
-	return nil, assert.AnError
-}
-
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	if fake.PromoteReplicaResults == nil {
@@ -1257,12 +1242,12 @@ func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *
 	go func() {
 		if testdata.EventInterval == 0 {
 			testdata.EventInterval = 10 * time.Millisecond
-			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval for %s, defaulting to %s", key, testdata.EventInterval))
+			log.Warn("testutil.TabletManagerClient.RestoreFromBackup faked with no event interval, defaulting", slog.String("tablet", key), slog.Duration("event_interval", testdata.EventInterval))
 		}
 
 		if testdata.EventJitter == 0 {
 			testdata.EventJitter = time.Millisecond
-			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
+			log.Warn("testutil.TabletManagerClient.RestoreFromBackup faked with no event jitter, defaulting", slog.String("tablet", key), slog.Duration("event_jitter", testdata.EventJitter))
 		}
 
 		errCtx, errCancel := context.WithCancel(context.Background())

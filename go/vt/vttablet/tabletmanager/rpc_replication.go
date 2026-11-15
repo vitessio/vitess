@@ -234,7 +234,7 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
-	log.Info(fmt.Sprintf("WaitForPosition: %v", pos))
+	log.Info("WaitForPosition", slog.String("position", pos))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
-	log.Info(fmt.Sprintf("StopReplicationMinimum: position: %v waitTime: %v", position, waitTime))
+	log.Info("StopReplicationMinimum", slog.String("position", position), slog.Duration("wait_timeout", waitTime))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -366,7 +366,7 @@ func (tm *TabletManager) RestartReplication(ctx context.Context, semiSync bool) 
 // StartReplicationUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
 func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
-	log.Info(fmt.Sprintf("StartReplicationUntilAfter: position: %v waitTime: %v", position, waitTime))
+	log.Info("StartReplicationUntilAfter", slog.String("position", position), slog.Duration("wait_timeout", waitTime))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string, error) {
-	log.Info(fmt.Sprintf("InitPrimary with semiSync as %t", semiSync))
+	log.Info("InitPrimary", slog.Bool("semi_sync", semiSync))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return "", err
 	}
@@ -468,7 +468,12 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
-	log.Info(fmt.Sprintf("PopulateReparentJournal: action: %v parent: %v  position: %v timeCreatedNS: %d actionName: %s primaryAlias: %s", actionName, primaryAlias, position, timeCreatedNS, actionName, primaryAlias))
+	log.Info("PopulateReparentJournal",
+		slog.String("action", actionName),
+		slog.String("primary_tablet", topoproto.TabletAliasString(primaryAlias)),
+		slog.String("position", position),
+		slog.Int64("time_created_ns", timeCreatedNS),
+	)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -503,7 +508,12 @@ func (tm *TabletManager) ReadReparentJournalInfo(ctx context.Context) (int32, er
 // InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64, semiSync bool) error {
-	log.Info(fmt.Sprintf("InitReplica: parent: %v  position: %v  timeCreatedNS: %d  semisync: %t", parent, position, timeCreatedNS, semiSync))
+	log.Info("InitReplica",
+		slog.String("parent_tablet", topoproto.TabletAliasString(parent)),
+		slog.String("position", position),
+		slog.Int64("time_created_ns", timeCreatedNS),
+		slog.Bool("semi_sync", semiSync),
+	)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -627,7 +637,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 			tm.QueryServiceControl.SetDemotePrimaryStalled(true)
 			buf := make([]byte, 1<<16) // 64 KB buffer size
 			stackSize := runtime.Stack(buf, true)
-			log.Error("Stack trace:\n" + string(buf[:stackSize]))
+			log.Error("Stack trace", slog.String("stack", string(buf[:stackSize])))
 			// This condition check is only to handle the race, where we start to set the demote primary stalled
 			// but then the function finishes. So, after we set demote primary stalled, we check if the
 			// function has finished and if it has, we clear the demote primary stalled.
@@ -676,7 +686,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 			if finalErr != nil && revertPartialFailure && wasServing {
 				log.Info("reverting query service to serving")
 				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
-					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
+					log.Warn("SetServingType(serving=true) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				}
 			}
 		}()
@@ -723,7 +733,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 				if finalErr != nil && revertPartialFailure && wasPrimary {
 					log.Info("reverting primary-side semi-sync to enabled")
 					if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-						log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
+						log.Warn("fixSemiSync(PRIMARY) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 					}
 				}
 			}()
@@ -773,7 +783,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 			// setting read_only OFF will also set super_read_only OFF if it was set
 			log.Info("reverting read-only by redoing prepared transactions")
 			if err = tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
-				log.Warn(fmt.Sprintf("RedoPreparedTransactionsAndSetReadWrite failed during revert: %v", err))
+				log.Warn("RedoPreparedTransactionsAndSetReadWrite failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 	}()
@@ -790,7 +800,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 			if finalErr != nil && revertPartialFailure && wasPrimary {
 				log.Info("reverting primary-side semi-sync to enabled")
 				if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, SemiSyncActionSet); err != nil {
-					log.Warn(fmt.Sprintf("fixSemiSync(PRIMARY) failed during revert: %v", err))
+					log.Warn("fixSemiSync(PRIMARY) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				}
 			}
 		}()
@@ -904,7 +914,13 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
-	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %s force: %v semiSync: %v timeCreatedNS: %d", parentAlias, waitPosition, forceStartReplication, semiSync, timeCreatedNS))
+	log.Info("SetReplicationSource",
+		slog.String("parent_tablet", topoproto.TabletAliasString(parentAlias)),
+		slog.String("position", waitPosition),
+		slog.Bool("force_start_replication", forceStartReplication),
+		slog.Bool("semi_sync", semiSync),
+		slog.Int64("time_created_ns", timeCreatedNS),
+	)
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -924,7 +940,11 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 }
 
 func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	log.Info(fmt.Sprintf("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication))
+	log.Info("SetReplicationSource",
+		slog.String("parent_tablet", topoproto.TabletAliasString(parentAlias)),
+		slog.String("position", waitPosition),
+		slog.Bool("force_start_replication", forceStartReplication),
+	)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -1061,7 +1081,10 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 	// GTID-based replication position or a Vitess reparent journal entry,
 	// or both.
 	if shouldbeReplicating {
-		log.Info(fmt.Sprintf("Set up MySQL replication; should now be replicating from %s at %s", parentAlias, waitPosition))
+		log.Info("Set up MySQL replication; should now be replicating",
+			slog.String("parent_tablet", topoproto.TabletAliasString(parentAlias)),
+			slog.String("position", waitPosition),
+		)
 		if waitPosition != "" {
 			pos, err := replication.DecodePosition(waitPosition)
 			if err != nil {
@@ -1083,7 +1106,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 
 // ReplicaWasRestarted updates the parent record for a tablet.
 func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
-	log.Info(fmt.Sprintf("ReplicaWasRestarted: parent: %v", parent))
+	log.Info("ReplicaWasRestarted", slog.String("parent_tablet", topoproto.TabletAliasString(parent)))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return err
 	}
@@ -1104,7 +1127,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
 func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
-	log.Info(fmt.Sprintf("StopReplicationAndGetStatus: mode: %v", stopReplicationMode))
+	log.Info("StopReplicationAndGetStatus", slog.String("stop_replication_mode", stopReplicationMode.String()))
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return StopReplicationAndGetStatusResponse{}, err
 	}
@@ -1220,56 +1243,6 @@ func reparentPhaseError(err error) *vtrpc.RPCError {
 	return vterrors.ToVTRPC(err)
 }
 
-// PrepareEmergencyReparent applies the relay logs up to wait_position and then
-// reads the reparent journal, so an emergency reparent needs one round trip per
-// candidate instead of two. It leaves replication as it found it: stopping the I/O
-// thread beforehand, and restarting it if the reparent is abandoned, stay with the
-// caller, which holds the shard lock and knows which of the two happened.
-func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
-	if request == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
-	}
-	waitTimeout, err := reparentPhaseTimeout(request.WaitForPositionTimeout)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "invalid wait_for_position_timeout")
-	}
-	if request.WaitPosition != "" {
-		if _, err := replication.DecodePosition(request.WaitPosition); err != nil {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid wait_position: %v", err)
-		}
-	}
-
-	tabletAlias := slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias))
-	log.Info("PrepareEmergencyReparent", tabletAlias)
-	response := &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}
-	if request.WaitPosition != "" {
-		waitCtx, waitCancel := context.WithTimeout(ctx, waitTimeout)
-		err = tm.WaitForPosition(waitCtx, request.WaitPosition)
-		waitCancel()
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
-			log.Warn("PrepareEmergencyReparent failed to apply relay logs", tabletAlias, slog.Any("error", err))
-			response.WaitForPositionError = reparentPhaseError(err)
-		}
-	}
-
-	// The journal is read even when the wait fails, because the caller can still
-	// use the count as evidence in errant GTID detection.
-	journalCtx, journalCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	response.ReparentJournalLength, err = tm.ReadReparentJournalInfo(journalCtx)
-	journalCancel()
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		log.Warn("PrepareEmergencyReparent failed to read the reparent journal", tabletAlias, slog.Any("error", err))
-		response.ReadReparentJournalError = reparentPhaseError(err)
-	}
-	return response, nil
-}
-
 // PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	log.Info("PromoteReplica")
@@ -1312,9 +1285,10 @@ func (tm *TabletManager) promoteReplicaLocked(ctx context.Context, semiSync bool
 }
 
 // PromoteReplicaAndJournal promotes the tablet and then writes its reparent
-// journal row, so a reparent needs one round trip instead of two. Promotion
-// stops when the caller gives up, but once the tablet is writable the journal
-// write runs to completion or to populate_reparent_journal_timeout.
+// journal row, so a reparent needs one round trip instead of two. Like
+// PromoteReplica, promotion is bounded by the caller's deadline and stops when
+// the caller gives up, but once the tablet is writable the journal write runs
+// to completion or to populate_reparent_journal_timeout.
 func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
 	if request == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
@@ -1343,12 +1317,10 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	log.Info("PromoteReplicaAndJournal", tabletAlias)
 	response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}
 
-	prePromotionCtx, prePromotionCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	err = tm.waitForGrantsToHaveApplied(prePromotionCtx)
+	err = tm.waitForGrantsToHaveApplied(ctx)
 	if err == nil {
-		err = tm.lock(prePromotionCtx)
+		err = tm.lock(ctx)
 	}
-	prePromotionCancel()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -1361,9 +1333,7 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	// release the shard lock) never leaves this tablet going read-write later.
 	response.Position, err = func() (string, error) {
 		defer tm.unlock()
-		promoteCtx, promoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer promoteCancel()
-		return tm.promoteReplicaLocked(promoteCtx, request.SemiSync)
+		return tm.promoteReplicaLocked(ctx, request.SemiSync)
 	}()
 	if err != nil {
 		log.Warn("PromoteReplicaAndJournal failed to promote the replica", tabletAlias, slog.String("position", response.Position), slog.Any("error", err))
@@ -1477,7 +1447,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 
 	// Only the receiver registers with the source as a semi-sync replica, so
 	// restarting it applies the change without waiting for the applier.
-	log.Info(fmt.Sprintf("Restarting the replication receiver for semi-sync flag change to take effect from %v to %v", acking, shouldAck))
+	log.Info("Restarting the replication receiver for semi-sync flag change to take effect", slog.Bool("acking", acking), slog.Bool("should_ack", shouldAck))
 	err = tm.MysqlDaemon.RestartReplicationReceiver(ctx, tm.hookExtraEnv())
 	if !errors.Is(err, mysqlctl.ErrReceiverRestartUnsupported) {
 		return vterrors.Wrap(err, "failed to restart the replication receiver")

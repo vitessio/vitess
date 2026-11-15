@@ -97,7 +97,7 @@ var (
 		"--db-dba-password", mysqlPassword,
 	}
 	vttabletLogFileNameSuffix = "-vttablet-stderr.txt"
-	tokenRenewalString        = "Vault client status: token renewed"
+	tokenRenewalString        = `Vault client status vault_status="token renewed"`
 )
 
 func TestVaultAuth(t *testing.T) {

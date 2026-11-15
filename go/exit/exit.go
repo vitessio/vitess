@@ -48,7 +48,7 @@ called from main(). See Recover() and Return() for more details.
 package exit
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/tb"
@@ -85,7 +85,7 @@ func doRecover(err any, recoverAll bool) {
 		exitFunc(int(code))
 	default:
 		if recoverAll {
-			log.Error(fmt.Sprintf("panic: %v", tb.Errorf("%v", err)))
+			log.Error("panic", slog.Any("panic", err), slog.String("stack", string(tb.Stack(4))))
 			exitFunc(255)
 		} else {
 			panic(err)

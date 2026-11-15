@@ -17,12 +17,13 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/cmd/zkctl/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 
 	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := command.Root.Execute(); err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("command failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		exit.Return(1)
 	}
 }

@@ -20,7 +20,7 @@ limitations under the License.
 package sysloglogger
 
 import (
-	"fmt"
+	"log/slog"
 	"log/syslog"
 	"strings"
 
@@ -60,7 +60,7 @@ func init() {
 			var err error
 			writer, err = syslog.New(syslog.LOG_INFO, "vtquerylogger")
 			if err != nil {
-				log.Error(fmt.Sprintf("Query logger is unable to connect to syslog: %v", err))
+				log.Error("Query logger is unable to connect to syslog", slog.Any("error", err))
 				return
 			}
 			go run()
@@ -85,11 +85,11 @@ func run() {
 	for stats := range ch {
 		b.Reset()
 		if err := stats.Logf(&b, formatParams); err != nil {
-			log.Error(fmt.Sprintf("Error formatting logStats: %v", err))
+			log.Error("Error formatting logStats", slog.Any("error", err))
 			continue
 		}
 		if err := writer.Info(b.String()); err != nil {
-			log.Error(fmt.Sprintf("Error writing to syslog: %v", err))
+			log.Error("Error writing to syslog", slog.Any("error", err))
 			continue
 		}
 	}

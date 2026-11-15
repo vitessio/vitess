@@ -667,12 +667,6 @@ func (s *server) StopReplicationAndGetStatus(ctx context.Context, request *table
 	return response, err
 }
 
-func (s *server) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (response *tabletmanagerdatapb.PrepareEmergencyReparentResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "PrepareEmergencyReparent", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	return s.tm.PrepareEmergencyReparent(ctx, request)
-}
-
 func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaRequest) (response *tabletmanagerdatapb.PromoteReplicaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PromoteReplica", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

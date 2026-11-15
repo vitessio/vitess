@@ -21,6 +21,7 @@ package txserializer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -174,7 +175,10 @@ func (txs *TxSerializer) lockLocked(ctx context.Context, key, table string) (boo
 	if txs.globalSize >= txs.maxGlobalQueueSize {
 		if txs.dryRun {
 			txs.globalQueueExceededDryRun.Add(1)
-			txs.logGlobalQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d)", txs.globalSize, txs.maxGlobalQueueSize)
+			txs.logGlobalQueueExceededDryRun.Warn("Would have rejected BeginExecute RPC because there are too many queued transactions",
+				slog.Int("global_queue_size", txs.globalSize),
+				slog.Int("max_global_queue_size", txs.maxGlobalQueueSize),
+			)
 		} else {
 			txs.globalQueueExceeded.Add(1)
 			return false, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED,
@@ -185,11 +189,12 @@ func (txs *TxSerializer) lockLocked(ctx context.Context, key, table string) (boo
 	if q.size >= txs.maxQueueSize {
 		if txs.dryRun {
 			txs.queueExceededDryRun.Add(table, 1)
-			if txs.env.Config().SanitizeLogMessages {
-				txs.logQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, txs.sanitizeKey(key))
-			} else {
-				txs.logQueueExceededDryRun.Warningf("Would have rejected BeginExecute RPC because there are too many queued transactions (%d >= %d) for the same row (table + WHERE clause: '%v')", q.size, txs.maxQueueSize, key)
-			}
+			txs.logQueueExceededDryRun.Warn("Would have rejected BeginExecute RPC because there are too many queued transactions for the same row (table + WHERE clause)",
+				slog.Int("queue_size", q.size),
+				slog.Int("max_queue_size", txs.maxQueueSize),
+				slog.String("table", table),
+				slog.String("row_range", txs.logKey(key)),
+			)
 		} else {
 			txs.queueExceeded.Add(table, 1)
 			if txs.env.Config().TerseErrors {
@@ -225,11 +230,10 @@ func (txs *TxSerializer) lockLocked(ctx context.Context, key, table string) (boo
 
 	if txs.dryRun {
 		txs.waitsDryRun.Add(table, 1)
-		if txs.env.Config().SanitizeLogMessages {
-			txs.logWaitsDryRun.Warningf("Would have queued BeginExecute RPC for row (range): '%v' because another transaction to the same range is already in progress.", txs.sanitizeKey(key))
-		} else {
-			txs.logWaitsDryRun.Warningf("Would have queued BeginExecute RPC for row (range): '%v' because another transaction to the same range is already in progress.", key)
-		}
+		txs.logWaitsDryRun.Warn("Would have queued BeginExecute RPC for row (range) because another transaction to the same range is already in progress.",
+			slog.String("table", table),
+			slog.String("row_range", txs.logKey(key)),
+		)
 		return false, nil
 	}
 
@@ -273,19 +277,15 @@ func (txs *TxSerializer) unlockLocked(key string, returnSlot bool) {
 		delete(txs.queues, key)
 
 		if q.max > 1 {
-			formattedKey := key
-			var logMsg string
-
-			if txs.env.Config().SanitizeLogMessages {
-				formattedKey = txs.sanitizeKey(key)
+			attrs := []slog.Attr{
+				slog.Int("simultaneous_transactions", q.max),
+				slog.Int("total_transactions", q.count),
+				slog.String("row_range", txs.logKey(key)),
 			}
-
 			if txs.dryRun {
-				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) would have been queued.", q.max, q.count, formattedKey)
-				txs.logDryRun.Infof(logMsg)
+				txs.logDryRun.Info("simultaneous transactions for the same row range would have been queued.", attrs...)
 			} else {
-				logMsg = fmt.Sprintf("%v simultaneous transactions (%v in total) for the same row range (%v) have been queued.", q.max, q.count, formattedKey)
-				txs.log.Infof(logMsg)
+				txs.log.Info("simultaneous transactions for the same row range have been queued.", attrs...)
 			}
 		}
 
@@ -409,4 +409,13 @@ func (txs *TxSerializer) sanitizeKey(key string) string {
 		sanitizedKey = key
 	}
 	return sanitizedKey
+}
+
+// logKey returns key as it may be logged: sanitized if log messages must be
+// sanitized.
+func (txs *TxSerializer) logKey(key string) string {
+	if txs.env.Config().SanitizeLogMessages {
+		return txs.sanitizeKey(key)
+	}
+	return key
 }

@@ -5757,9 +5757,12 @@ func TestDynamicClusterReplaceLogs(t *testing.T) {
 	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
 	t.Cleanup(func() { _ = api.Close() })
 
-	// A spec with "id": true is looked up under "true", but its cluster's ID is "1".
-	api.WithCluster(newCluster("1", true), "true")
-	api.WithCluster(newCluster("1", false), "true")
+	// The cluster's ID differs from its id only so the test can tell
+	// existing_cluster_id and cluster_id apart; real callers pass matching ids.
+	_, err := api.WithCluster(newCluster("1", true), "true")
+	require.NoError(t, err)
+	_, err = api.WithCluster(newCluster("1", false), "true")
+	require.NoError(t, err)
 
 	record := logs.Record(t, "Error checking for existing cluster equality with new cluster")
 	assert.Equal(t, "ERROR", record["level"])
@@ -5774,7 +5777,16 @@ func TestDynamicClusterReplaceLogs(t *testing.T) {
 	assert.Contains(t, record["error"], assert.AnError.Error())
 
 	logs.Reset()
-	api.WithCluster(newCluster("c2", false), "c2")
+	_, err = api.WithCluster(newCluster("c2", false), "c2")
+	require.NoError(t, err)
+	_, err = api.WithCluster(newCluster("c2", false), "c2")
+	require.NoError(t, err)
+	record = logs.Record(t, "failed to close duplicate dynamic cluster; some connections and goroutines may linger")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "c2", record["cluster_id"])
+	assert.Contains(t, record["error"], assert.AnError.Error())
+
+	logs.Reset()
 	api.EjectDynamicCluster("c2", nil)
 	record = logs.Record(t, "failed to close cluster; some connections and goroutines may linger")
 	assert.Equal(t, "ERROR", record["level"])
@@ -5997,6 +6009,147 @@ func TestServeHTTP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServeHTTPUnknownDynamicCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
+	req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(`{"id": "dynamiccluster1"}`)))})
+
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, req)
+
+	res := w.Result()
+	t.Cleanup(func() { _ = res.Body.Close() })
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+	var body struct {
+		Ok    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.False(t, body.Ok)
+	assert.Equal(t, "invalid cluster", body.Error.Code)
+	assert.Contains(t, body.Error.Message, "no cluster with id dynamiccluster1")
+}
+
+// newUnresolvableCluster builds a cluster whose vtctld and vtgate hosts don't
+// resolve.
+func newUnresolvableCluster(t *testing.T, id string, vtctldHost string) *cluster.Cluster {
+	t.Helper()
+
+	c, err := cluster.Config{
+		ID:            id,
+		Name:          id,
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": fmt.Sprintf(`{"vtctlds": [{"host": {"hostname": %q}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`, vtctldHost),
+			},
+		},
+	}.Cluster(t.Context())
+	require.NoError(t, err)
+
+	return c
+}
+
+func clusterIDs(t *testing.T, api *API) []string {
+	t.Helper()
+
+	resp, err := api.GetClusters(t.Context(), &vtadminpb.GetClustersRequest{})
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(resp.Clusters))
+	for _, c := range resp.Clusters {
+		ids = append(ids, c.Id)
+	}
+
+	return ids
+}
+
+func TestWithClusterReplacesChangedCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
+		newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999"),
+		newUnresolvableCluster(t, "c2", "vtctld2.invalid:15999"),
+	}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld3.invalid:15999"), "c1")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
+
+	_, err = api.WithCluster(newUnresolvableCluster(t, "c2", "vtctld4.invalid:15999"), "c2")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
+}
+
+func TestWithClusterSameClusterTwice(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	c := newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999")
+	for range 2 {
+		_, err := api.WithCluster(c, "c1")
+		require.NoError(t, err)
+	}
+
+	type debuggable interface{ Debug() map[string]any }
+	assert.Equal(t, []string{"c1"}, clusterIDs(t, api))
+	assert.Equal(t, true, c.DB.(debuggable).Debug()["is_connected"], "the registered cluster's vtgate proxy must stay open")
+	assert.Equal(t, true, c.Vtctld.(debuggable).Debug()["is_connected"], "the registered cluster's vtctld proxy must stay open")
+}
+
+func TestEjectDynamicCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
+		newUnresolvableCluster(t, "a", "vtctld-a.invalid:15999"),
+		newUnresolvableCluster(t, "b", "vtctld-b.invalid:15999"),
+		newUnresolvableCluster(t, "c", "vtctld-c.invalid:15999"),
+		newUnresolvableCluster(t, "d", "vtctld-d.invalid:15999"),
+	}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	api.EjectDynamicCluster("a", nil)
+	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
+
+	api.EjectDynamicCluster("unknown", nil)
+	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
+}
+
+// Not parallel, because it captures the process-wide logger.
+func TestDynamicClusterLookupLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	for range 2 {
+		_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999"), "c1")
+		require.NoError(t, err)
+	}
+
+	record := logs.Record(t, "API already has an equal cluster, using that instead")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "c1", record["cluster_id"])
+
+	api.EjectDynamicCluster("unknown", nil)
+	record = logs.Record(t, "Cannot remove cluster from api.clusters. Cluster not found.")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "unknown", record["cluster_id"])
+	assert.Equal(t, float64(1), record["cluster_count"])
 }
 
 func init() {

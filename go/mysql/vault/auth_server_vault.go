@@ -20,6 +20,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -69,7 +70,7 @@ func InitAuthServerVault(vaultAddr string, vaultTimeout time.Duration, vaultCACe
 func registerAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) {
 	authServerVault, err := newAuthServerVault(addr, timeout, caCertPath, path, ttl, tokenFilePath, roleID, secretIDPath, roleMountPoint)
 	if err != nil {
-		log.Error(fmt.Sprintf("%s", err))
+		log.Error("Failed to create AuthServerVault", slog.Any("error", err))
 		os.Exit(1)
 	}
 	mysql.RegisterAuthServer("vault", authServerVault)
@@ -119,7 +120,7 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 
 	client, err := vaultapi.NewClient(config)
 	if err != nil || client == nil {
-		log.Error(fmt.Sprintf("Error in vault client initialization, will retry: %v", err))
+		log.Error("Error in vault client initialization, will retry", slog.Any("error", err))
 	}
 
 	a := &AuthServerVault{
@@ -224,7 +225,7 @@ func (a *AuthServerVault) reloadVault() error {
 		return errors.New("vtgate credentials from Vault empty! Not updating previously cached values")
 	}
 
-	log.Info("reloadVault(): success. Client status: " + a.vaultClient.GetStatus())
+	log.Info("reloadVault(): success", slog.String("vault_status", a.vaultClient.GetStatus()))
 	a.mu.Lock()
 	a.entries = entries
 	a.mu.Unlock()
@@ -242,7 +243,7 @@ func (a *AuthServerVault) installSignalHandlers() {
 		for range a.sigChan {
 			err := a.reloadVault()
 			if err != nil {
-				log.Error(fmt.Sprintf("%s", err))
+				log.Error("reloadVault(): failed", slog.Any("error", err))
 			}
 		}
 	}()
@@ -269,7 +270,7 @@ func readFromFile(filePath string) (string, error) {
 	}
 	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Error("Could not read file: " + filePath)
+		log.Error("Could not read file", slog.String("path", filePath))
 		return "", err
 	}
 	return strings.TrimSpace(string(fileBytes)), nil

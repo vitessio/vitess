@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -81,7 +83,10 @@ func (p vreplicationPlanner) exec(
 		return nil, err
 	}
 	if qr.RowsAffected == 0 && len(qr.Rows) == 0 {
-		log.Info(fmt.Sprintf("no matching streams found for workflow %s, tablet %s, query %s", p.vx.workflow, primaryAlias, query))
+		log.Info("no matching streams found for workflow",
+			slog.String("workflow", p.vx.workflow),
+			slog.String("tablet", topoproto.TabletAliasString(primaryAlias)),
+			slog.String("query", query))
 	}
 	return qr, nil
 }

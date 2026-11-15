@@ -292,7 +292,10 @@ func (e *Executor) Execute(
 			piiSafeSQL = logStats.StmtType
 		}
 		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, len(result.Rows))
-		exceedMemoryRowsLogger.Warningf(warningMsg)
+		exceedMemoryRowsLogger.Warn("query exceeds warning threshold of max memory rows",
+			slog.String("query", piiSafeSQL),
+			slog.Int("warn_memory_rows", warnMemoryRows),
+			slog.Int("row_count", len(result.Rows)))
 		safeSession.RecordWarning(&querypb.QueryWarning{
 			Code:    uint32(sqlerror.EROutOfMemory),
 			Message: warningMsg,
@@ -500,7 +503,10 @@ func (e *Executor) StreamExecute(
 			piiSafeSQL = logStats.StmtType
 		}
 		warningMsg := fmt.Sprintf("%q exceeds warning threshold of max memory rows: %v. Actual memory rows: %v", piiSafeSQL, warnMemoryRows, srr.rowsReturned)
-		exceedMemoryRowsLogger.Warningf(warningMsg)
+		exceedMemoryRowsLogger.Warn("query exceeds warning threshold of max memory rows",
+			slog.String("query", piiSafeSQL),
+			slog.Int("warn_memory_rows", warnMemoryRows),
+			slog.Int("row_count", srr.rowsReturned))
 		safeSession.RecordWarning(&querypb.QueryWarning{
 			Code:    uint32(sqlerror.EROutOfMemory),
 			Message: warningMsg,
@@ -961,7 +967,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 		if filter.Filter != nil {
 			// TODO build a query planner I guess? lol that should be fun
-			log.Info(fmt.Sprintf("SHOW VITESS_SHARDS where clause %+v. Ignoring this (for now).", filter.Filter))
+			log.Info("SHOW VITESS_SHARDS where clause. Ignoring this (for now).")
 		}
 
 		return keyspaceFilters, shardFilters
@@ -1045,7 +1051,7 @@ func (e *Executor) ShowTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 		}
 
 		if filter.Filter != nil {
-			log.Info(fmt.Sprintf("SHOW VITESS_TABLETS where clause: %+v. Ignoring this (for now).", filter.Filter))
+			log.Info("SHOW VITESS_TABLETS where clause. Ignoring this (for now).")
 		}
 
 		return filters
@@ -1124,7 +1130,7 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			tabletHostPort := ts.GetTabletHostPort()
 			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
 			if err != nil {
-				log.Warn(fmt.Sprintf("Could not get throttler status from %s: %v", topoproto.TabletAliasString(ts.Tablet.Alias), err))
+				log.Warn("Could not get throttler status", slog.String("tablet", topoproto.TabletAliasString(ts.Tablet.Alias)), slog.Any("error", err))
 			}
 
 			replSourceHost := ""
@@ -1150,7 +1156,14 @@ func (e *Executor) ShowVitessReplicationStatus(ctx context.Context, filter *sqlp
 			}
 			results, err := e.txConn.tabletGateway.Execute(ctx, nil, ts.Target, sql, nil, 0, 0, nil)
 			if err != nil || results == nil {
-				log.Warn(fmt.Sprintf("Could not get replication status from %s: %v", tabletHostPort, err))
+				attrs := []slog.Attr{
+					slog.String("tablet", topoproto.TabletAliasString(ts.Tablet.Alias)),
+					slog.String("tablet_host_port", tabletHostPort),
+				}
+				if err != nil {
+					attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+				}
+				log.Warn("Could not get replication status", attrs...)
 			} else if row := results.Named().Row(); row != nil {
 				replSourceHost = row[sourceHostField].ToString()
 				replSourcePort, _ = row[sourcePortField].ToInt64()
@@ -1252,7 +1265,7 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 // comment and logs it.
 func (e *Executor) countDoubleSlashComment() {
 	warnings.Add("DoubleSlashComment", 1)
-	doubleSlashCommentsLogger.Warningf("a statement uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead")
+	doubleSlashCommentsLogger.Warn("a statement uses a // comment, which is deprecated and will be removed in a future release; use --, # or /* */ instead")
 }
 
 // doubleSlashCommentWarning is the warning that a client gets for a statement

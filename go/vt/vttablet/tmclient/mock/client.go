@@ -549,21 +549,6 @@ func (mr *MockTabletManagerClientMockRecorder) PreflightSchema(ctx, tablet, chan
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreflightSchema", reflect.TypeOf((*MockTabletManagerClient)(nil).PreflightSchema), ctx, tablet, changes)
 }
 
-// PrepareEmergencyReparent mocks base method.
-func (m *MockTabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodata.Tablet, request *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareEmergencyReparent", ctx, tablet, request)
-	ret0, _ := ret[0].(*tabletmanagerdata.PrepareEmergencyReparentResponse)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// PrepareEmergencyReparent indicates an expected call of PrepareEmergencyReparent.
-func (mr *MockTabletManagerClientMockRecorder) PrepareEmergencyReparent(ctx, tablet, request any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareEmergencyReparent", reflect.TypeOf((*MockTabletManagerClient)(nil).PrepareEmergencyReparent), ctx, tablet, request)
-}
-
 // PrimaryPosition mocks base method.
 func (m *MockTabletManagerClient) PrimaryPosition(ctx context.Context, tablet *topodata.Tablet) (string, error) {
 	m.ctrl.T.Helper()

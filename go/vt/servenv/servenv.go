@@ -31,9 +31,9 @@ package servenv
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -139,7 +139,7 @@ func populateListeningURL(port int32) {
 	if err != nil {
 		host, err = os.Hostname()
 		if err != nil {
-			log.Error(fmt.Sprintf("os.Hostname() failed: %v", err))
+			log.Error("os.Hostname() failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
@@ -194,7 +194,7 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
 	defer log.Flush()
-	log.Info(fmt.Sprintf("Firing %s hooks and waiting up to %v for them", name, timeout))
+	log.Info("Firing hooks and waiting up to timeout for them", slog.String("hook_group", name), slog.Duration("timeout", timeout))
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -207,10 +207,10 @@ func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) boo
 
 	select {
 	case <-done:
-		log.Info(name + " hooks finished")
+		log.Info("Hooks finished", slog.String("hook_group", name))
 		return true
 	case <-timer.C:
-		log.Info(name + " hooks timed out")
+		log.Info("Hooks timed out", slog.String("hook_group", name))
 		return false
 	}
 }
@@ -320,7 +320,7 @@ func ParseFlags(cmd string) {
 	args := fs.Args()
 	if len(args) > 0 {
 		_flag.Usage()
-		log.Error(fmt.Sprintf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " ")))
+		log.Error("Command doesn't take any positional arguments", slog.String("command", cmd), slog.Any("args", args))
 		os.Exit(1)
 	}
 
@@ -399,7 +399,7 @@ func CobraPreRunE(cmd *cobra.Command, args []string) error {
 	viperutil.NotifyConfigReload(ch)
 	go func() {
 		for range ch {
-			log.Info(fmt.Sprintf("Change in configuration - %v", viperdebug.AllSettings()))
+			log.Info("Change in configuration", slog.String("settings", fmt.Sprint(viperdebug.AllSettings())))
 		}
 	}()
 
@@ -451,7 +451,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 
 	args := fs.Args()
 	if len(args) == 0 {
-		log.Error(cmd + " expected at least one positional argument")
+		log.Error("Command expected at least one positional argument", slog.String("command", cmd))
 		os.Exit(1)
 	}
 
@@ -465,7 +465,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 func loadViper(cmd string) {
 	watchCancel, err := viperutil.LoadConfig()
 	if err != nil {
-		log.Error(fmt.Sprintf("%s: failed to read in config: %s", cmd, err.Error()))
+		log.Error("Failed to read in config", slog.String("command", cmd), slog.Any("error", err))
 		os.Exit(1)
 	}
 	OnTerm(watchCancel)

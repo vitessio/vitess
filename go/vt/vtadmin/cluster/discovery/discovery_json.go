@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 
@@ -82,6 +83,22 @@ type JSONVtctldConfig struct {
 func (d *JSONDiscovery) parseConfig(bytes []byte) error {
 	if err := json.Unmarshal(bytes, &d.config); err != nil {
 		return fmt.Errorf("failed to unmarshal staticfile config from json: %w", err)
+	}
+
+	if d.config == nil {
+		return errors.New("discovery config is null")
+	}
+
+	for i, gate := range d.config.VTGates {
+		if gate == nil || gate.Host == nil {
+			return fmt.Errorf("vtgate %d in discovery config has no host", i)
+		}
+	}
+
+	for i, vtctld := range d.config.Vtctlds {
+		if vtctld == nil || vtctld.Host == nil {
+			return fmt.Errorf("vtctld %d in discovery config has no host", i)
+		}
 	}
 
 	d.gates.byName = make(map[string]*vtadminpb.VTGate, len(d.config.VTGates))

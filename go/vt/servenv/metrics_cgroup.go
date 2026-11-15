@@ -21,6 +21,7 @@ package servenv
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ func setup() {
 	}
 	manager, path, err := getCgroupManager()
 	if err != nil {
-		log.Warn(fmt.Sprintf("Failed to init cgroup manager for metrics, will use host metrics: %v", err))
+		log.Warn("Failed to init cgroup manager for metrics, will use host metrics", slog.Any("error", err))
 	}
 	cgroupManager = manager
 	cgroupPath = path
