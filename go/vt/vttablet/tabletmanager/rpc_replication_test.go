@@ -468,6 +468,14 @@ func (c *fullStatusController) IsDiskStalled() bool {
 	return c.diskStalled.Load()
 }
 
+// enableFullStatusConsolidation turns on FullStatus consolidation for one test.
+func enableFullStatusConsolidation(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	oldTimeout := fullStatusConsolidationTimeout
+	fullStatusConsolidationTimeout = timeout
+	t.Cleanup(func() { fullStatusConsolidationTimeout = oldTimeout })
+}
+
 func newConsolidatingFullStatusTM(t *testing.T, daemon *consolidatingFullStatusDaemon) *TabletManager {
 	t.Helper()
 	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), daemon, nil)
@@ -477,7 +485,65 @@ func newConsolidatingFullStatusTM(t *testing.T, daemon *consolidatingFullStatusD
 	return tm
 }
 
+// TestFullStatusWithoutConsolidation checks that with consolidation off, each
+// call collects on its own context, as on main.
+func TestFullStatusWithoutConsolidation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		collectionCtxs := make(chan context.Context, 2)
+		daemon := &consolidatingFullStatusDaemon{
+			collect: func(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+				collectionCtxs <- ctx
+				select {
+				case <-release:
+					return &replicationdatapb.FullStatus{ServerId: 42}, nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			},
+		}
+		tm := newConsolidatingFullStatusTM(t, daemon)
+		deadline := time.Now().Add(time.Minute)
+		firstCtx, cancel := context.WithDeadline(t.Context(), deadline)
+		t.Cleanup(cancel)
+		var statuses [2]*replicationdatapb.FullStatus
+		var errs [2]error
+		var done [2]bool
+		for i, ctx := range []context.Context{firstCtx, t.Context()} {
+			go func() {
+				statuses[i], errs[i] = tm.FullStatus(ctx)
+				done[i] = true
+			}()
+			synctest.Wait()
+		}
+
+		// Each call collects on its own context, so the caller's deadline bounds it.
+		assert.EqualValues(t, 2, daemon.calls.Load())
+		first, second := <-collectionCtxs, <-collectionCtxs
+		collectionDeadline, ok := first.Deadline()
+		require.True(t, ok)
+		assert.Equal(t, deadline, collectionDeadline)
+		_, ok = second.Deadline()
+		assert.False(t, ok)
+
+		// Cancelling one caller stops only its own collection.
+		cancel()
+		synctest.Wait()
+		assert.True(t, done[0])
+		require.ErrorIs(t, errs[0], context.Canceled)
+		assert.Nil(t, statuses[0])
+		assert.False(t, done[1])
+
+		close(release)
+		synctest.Wait()
+		require.NoError(t, errs[1])
+		require.NotNil(t, statuses[1])
+		assert.Equal(t, uint32(42), statuses[1].ServerId)
+	})
+}
+
 func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
+	enableFullStatusConsolidation(t, 15*time.Second)
 	for _, outcome := range []string{"success", "error", "panic"} {
 		t.Run(outcome, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -568,6 +634,7 @@ func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
 }
 
 func TestFullStatusAfterTabletAction(t *testing.T) {
+	enableFullStatusConsolidation(t, 15*time.Second)
 	synctest.Test(t, func(t *testing.T) {
 		beforeAction := make(chan struct{})
 		afterAction := make(chan struct{})
@@ -623,6 +690,7 @@ func TestFullStatusAfterTabletAction(t *testing.T) {
 }
 
 func TestFullStatusCancellationDoesNotCancelOtherCallers(t *testing.T) {
+	enableFullStatusConsolidation(t, 15*time.Second)
 	t.Run("already cancelled", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			daemon := &consolidatingFullStatusDaemon{
@@ -703,9 +771,7 @@ func TestFullStatusCancellationDoesNotCancelOtherCallers(t *testing.T) {
 func TestFullStatusSharedCollectionLifetime(t *testing.T) {
 	// A value other than --remote-operation-timeout, so the timeout case shows
 	// which one bounds the collection.
-	oldTimeout := fullStatusQueryTimeout
-	fullStatusQueryTimeout = 3 * time.Second
-	t.Cleanup(func() { fullStatusQueryTimeout = oldTimeout })
+	enableFullStatusConsolidation(t, 3*time.Second)
 
 	for _, stop := range []string{"timeout", "shutdown"} {
 		t.Run(stop, func(t *testing.T) {
@@ -742,7 +808,7 @@ func TestFullStatusSharedCollectionLifetime(t *testing.T) {
 				}
 				require.ErrorIs(t, <-finished, wantErr)
 				if stop == "timeout" {
-					assert.Equal(t, fullStatusQueryTimeout, time.Since(start))
+					assert.Equal(t, fullStatusConsolidationTimeout, time.Since(start))
 				}
 			})
 		})

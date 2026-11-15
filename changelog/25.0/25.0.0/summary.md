@@ -61,7 +61,7 @@
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
-        - [New `--full-status-query-timeout` flag](#vttablet-full-status-query-timeout)
+        - [New `--full-status-consolidation-timeout` flag](#vttablet-full-status-consolidation-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -667,11 +667,11 @@ When disabled (the default), demotion behavior is unchanged and the wait is unbo
 
 See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
-#### <a id="vttablet-full-status-query-timeout"/>New `--full-status-query-timeout` flag</a>
+#### <a id="vttablet-full-status-consolidation-timeout"/>New `--full-status-consolidation-timeout` flag</a>
 
-Concurrent `FullStatus` RPCs on a tablet now share one in-flight MySQL collection. A new VTTablet flag, `--full-status-query-timeout` (default `15s`, the same as the default `--remote-operation-timeout`), bounds that collection; each caller's own deadline still applies. When it expires, the tablet closes the collection's MySQL connection and kills its query, so a stalled read no longer holds a DBA pool connection until MySQL answers.
+A new VTTablet flag, `--full-status-consolidation-timeout` (default `0`, off), lets concurrent `FullStatus` RPCs on a tablet share one in-flight MySQL collection, bounded by the flag rather than by any one caller's deadline. Each caller's own deadline still applies, so a caller with a longer deadline than the flag fails when the flag expires. A call can also join a collection that started before it, though never one from before a completed tablet action. With the default, each RPC collects on its own deadline, as before.
 
-A `FullStatus` caller with a longer deadline than the flag now fails when the flag expires, and a timed-out query shows up in MySQL's `Aborted_clients`.
+In both modes, when a `FullStatus` query is cancelled or times out, the tablet now closes its MySQL connection and kills the query, so a stalled read no longer holds a DBA pool connection until MySQL answers. A cancelled query shows up in MySQL's `Aborted_clients`.
 
 See [#21495](https://github.com/vitessio/vitess/pull/21495) for details.
 

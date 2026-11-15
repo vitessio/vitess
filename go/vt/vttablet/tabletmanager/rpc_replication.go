@@ -170,8 +170,9 @@ const fullStatusGroupKey = "FullStatus"
 
 // FullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 //
-// Concurrent calls share an in-flight collection. Releasing the tablet action lock
-// invalidates it so later calls cannot join a pre-action collection.
+// With --full-status-consolidation-timeout above 0, concurrent calls share an
+// in-flight collection. Releasing the tablet action lock invalidates it so later
+// calls cannot join a pre-action collection.
 func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
 	if err := tm.waitForGrantsToHaveApplied(ctx); err != nil {
 		return nil, err
@@ -187,6 +188,10 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return &replicationdatapb.FullStatus{
 			DiskStalled: true,
 		}, nil
+	}
+
+	if fullStatusConsolidationTimeout <= 0 {
+		return tm.collectFullStatus(ctx)
 	}
 
 	resultChan := tm.fullStatusGroup.DoChan(fullStatusGroupKey, func() (result any, err error) {
@@ -205,21 +210,9 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 
 		// One caller timing out must not cancel the collection for the others.
 		// Bound the shared work even if all callers have left.
-		ctx, cancel := context.WithTimeout(tm.BatchCtx, fullStatusQueryTimeout)
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, fullStatusConsolidationTimeout)
 		defer cancel()
-
-		status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if status == nil {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
-		}
-
-		status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
-		status.TabletType = tm.Tablet().Type
-		status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
-		return status, nil
+		return tm.collectFullStatus(ctx)
 	})
 	select {
 	case <-ctx.Done():
@@ -231,6 +224,22 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		// Each RPC owns its response; callers must not mutate a shared proto.
 		return result.Val.(*replicationdatapb.FullStatus).CloneVT(), nil
 	}
+}
+
+// collectFullStatus collects the MySQL state on ctx and adds the tablet's own.
+func (tm *TabletManager) collectFullStatus(ctx context.Context) (*replicationdatapb.FullStatus, error) {
+	status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if status == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collector returned no data")
+	}
+
+	status.SemiSyncBlocked = tm.SemiSyncMonitor.AllWritesBlocked()
+	status.TabletType = tm.Tablet().Type
+	status.ShardPeerHealth = tm.shardPeerHealthSnapshot()
+	return status, nil
 }
 
 // shardPeerHealthSnapshot returns the latest shard-peer liveness signals, or nil when
@@ -605,14 +614,14 @@ func registerDemotePrimaryFlags(fs *pflag.FlagSet) {
 		"Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.")
 }
 
-// fullStatusQueryTimeout bounds the MySQL queries of a FullStatus collection,
-// which concurrent FullStatus calls share. Each caller's own deadline still
-// applies.
-var fullStatusQueryTimeout = 15 * time.Second
+// fullStatusConsolidationTimeout, when above 0, makes concurrent FullStatus
+// calls share one collection, bounded by this timeout rather than by any one
+// caller's deadline. 0 collects once per call, on the caller's context.
+var fullStatusConsolidationTimeout time.Duration
 
 func registerFullStatusFlags(fs *pflag.FlagSet) {
-	utils.SetFlagDurationVar(fs, &fullStatusQueryTimeout, "full-status-query-timeout", fullStatusQueryTimeout,
-		"Timeout for the MySQL queries of a FullStatus collection, which concurrent FullStatus RPCs share. Each caller's own deadline still applies.")
+	utils.SetFlagDurationVar(fs, &fullStatusConsolidationTimeout, "full-status-consolidation-timeout", fullStatusConsolidationTimeout,
+		"When above 0, concurrent FullStatus RPCs share one MySQL collection, bounded by this timeout. Each caller's own deadline still applies. 0 disables sharing, so each RPC collects on its own deadline.")
 }
 
 func init() {

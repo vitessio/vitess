@@ -384,9 +384,9 @@ func validateFlags() error {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
 	}
-	if fullStatusQueryTimeout <= 0 {
+	if fullStatusConsolidationTimeout < 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-			"--full-status-query-timeout must be positive, got %v", fullStatusQueryTimeout)
+			"--full-status-consolidation-timeout cannot be negative, got %v", fullStatusConsolidationTimeout)
 	}
 
 	return nil
