@@ -4161,6 +4161,11 @@ type SetExprs []*SetExpr
 type SetExpr struct {
 	Var  *Variable
 	Expr Expr
+	// Collation is the COLLATE of SET NAMES: utf8mb4_bin for SET NAMES
+	// utf8mb4 COLLATE utf8mb4_bin. vtgate reads it to set
+	// character_set_results. It is not written out, as before it was kept:
+	// a statement that is sent on reads SET NAMES utf8mb4.
+	Collation string
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.

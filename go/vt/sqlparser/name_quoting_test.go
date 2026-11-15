@@ -292,36 +292,63 @@ func TestExpressionCollateQuotesBinary(t *testing.T) {
 	}
 }
 
-// TestSetNamesIgnoresCollation documents what SET NAMES and SET CHARACTER SET do
-// with a collation: they accept one and discard it, so the session is left on the
-// charset default. That is long-standing behaviour and none of the quoting work
-// here changes it -- the test is here so that widening collate_opt, which these two
-// share, is a deliberate choice rather than an accident.
+// TestSetNamesCollation documents what SET NAMES and SET CHARACTER SET do
+// with a collation. SET NAMES keeps it in SetExpr.Collation, for vtgate to
+// set character_set_results with: MySQL reports utf8mb4_bin (46) in result
+// fields after SET NAMES utf8mb4 COLLATE utf8mb4_bin. SET CHARACTER SET and
+// SET NAMES DEFAULT drop it, and MySQL refuses COLLATE there with a syntax
+// error. The collation is not written out, as before, so a statement that is
+// sent on reads SET NAMES utf8mb4. The test is here so that widening
+// collate_opt, which these share, is a deliberate choice rather than an
+// accident.
 //
-// `binary` is accepted for the same reason every other collation name is: MySQL
-// accepts it, and singling it out for a parse error would be arbitrary when the
-// rest are accepted and ignored.
+// `binary` and names that are no collation are accepted by the parser, as
+// before; vtgate judges the name when it runs the statement.
 //
 // An empty name is the exception: it is a parse error, as it is in MySQL; see
 // TestEmptyNameIsRejected.
-func TestSetNamesIgnoresCollation(t *testing.T) {
+func TestSetNamesCollation(t *testing.T) {
 	parser := NewTestParser()
 	testcases := []struct {
-		input  string
-		output string
+		input     string
+		output    string
+		collation string
 	}{
-		{input: "set names utf8mb4 collate utf8mb4_bin", output: "set names 'utf8mb4'"},
-		{input: "set names utf8mb4 collate 'utf8mb4_bin'", output: "set names 'utf8mb4'"},
-		{input: "set names utf8mb4 collate binary", output: "set names 'utf8mb4'"},
+		{input: "set names utf8mb4 collate utf8mb4_bin", output: "set names 'utf8mb4'", collation: "utf8mb4_bin"},
+		{input: "set names utf8mb4 collate 'utf8mb4_bin'", output: "set names 'utf8mb4'", collation: "utf8mb4_bin"},
+		{input: "set names utf8mb4 collate binary", output: "set names 'utf8mb4'", collation: "binary"},
+		{input: "set names utf8mb4", output: "set names 'utf8mb4'"},
+		{input: "set names default collate utf8mb4_bin", output: "set names default"},
 		{input: "set character set utf8mb4 collate utf8mb4_bin", output: "set charset 'utf8mb4'"},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.input, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.input)
 			require.NoError(t, err)
-			// The collation is not represented, so it cannot be written back out.
 			assert.Equal(t, tc.output, String(stmt))
+			set := stmt.(*Set)
+			require.Len(t, set.Exprs, 1)
+			assert.Equal(t, tc.collation, set.Exprs[0].Collation)
+			// A copy of the statement keeps it.
+			assert.Equal(t, tc.collation, Clone(set).Exprs[0].Collation)
 		})
+	}
+}
+
+// TestSetCharacterSetResultsBinary covers SET character_set_results =
+// BINARY, which MySQL accepts as the binary character set. Other variables
+// do not accept BINARY there, as before.
+func TestSetCharacterSetResultsBinary(t *testing.T) {
+	parser := NewTestParser()
+	for _, in := range []string{"set character_set_results = binary", "SET @@session.CHARACTER_SET_RESULTS = BINARY"} {
+		stmt, err := parser.Parse(in)
+		require.NoError(t, err, in)
+		set := stmt.(*Set)
+		assert.Equal(t, NewStrLiteral("binary"), set.Exprs[0].Expr, in)
+	}
+	for _, in := range []string{"set sql_mode = binary", "set @a = binary", "set @character_set_results = binary"} {
+		_, err := parser.Parse(in)
+		assert.ErrorContains(t, err, "syntax error", in)
 	}
 }
 
