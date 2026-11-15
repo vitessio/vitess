@@ -37,6 +37,33 @@ type Environment struct {
 	byCharsetName map[ID]string
 	unsupported   map[string]ID
 	byID          map[ID]string
+
+	// rowsInConnectionCharset is set by WithRowsInConnectionCharset.
+	rowsInConnectionCharset bool
+}
+
+// WithRowsInConnectionCharset returns a copy of env for a process that holds
+// the text of every row and bind variable in the connection character set,
+// utf8mb4, whatever the collation of its column is. vtgate does with
+// --convert-result-charset, which makes it convert every result of a tablet
+// to that character set.
+//
+// The evaluation engine converts such text to the character set of the
+// collation it evaluates it in: a latin1_swedish_ci column with 'é' holds C3
+// A9, and is compared as E9. With an environment without it, the engine takes
+// text to be in the character set of its collation already, which is what
+// VReplication and VDiff hand it: they read rows with the binary character
+// set, and from the binary log.
+func (env *Environment) WithRowsInConnectionCharset() *Environment {
+	c := *env
+	c.rowsInConnectionCharset = true
+	return &c
+}
+
+// RowsInConnectionCharset reports whether env was made by
+// WithRowsInConnectionCharset. It is false for a nil env.
+func (env *Environment) RowsInConnectionCharset() bool {
+	return env != nil && env.rowsInConnectionCharset
 }
 
 // LookupByName returns the collation with the given name.

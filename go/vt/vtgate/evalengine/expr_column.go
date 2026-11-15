@@ -57,7 +57,7 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	return valueToEval(env.Row[c.Offset], c.Collation, c.Values, env.connText())
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {

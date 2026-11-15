@@ -209,3 +209,89 @@ func TestVtcomboRawResultCharset(t *testing.T) {
 		})
 	}
 }
+
+const sortedSchema = `create table sorted (
+	id int primary key,
+	l varchar(10) character set latin1 collate latin1_german2_ci,
+	g varchar(10) character set gbk
+) Engine=InnoDB;
+`
+
+// TestVtgateEvaluatesColumnCollations checks that a vtgate with
+// --convert-result-charset, which holds the text of every row in utf8mb4,
+// sorts, groups and counts the distinct values of a latin1 and a gbk column
+// across two shards in the collation of the column, as MySQL does. The expected values are the
+// ones of the same table and rows on one MySQL 8.0.46 and 8.4.13 server: in
+// latin1_german2_ci 'é' sorts between 'd' and 'f' and 'Müller' equals
+// 'MUELLER', where the utf8mb4 bytes of 'é' taken as latin1 sort before 'd'
+// and those of 'Müller' differ from 'MUELLER'. The rows with 'Müller' and
+// with 'MUELLER' are on different shards.
+func TestVtgateEvaluatesColumnCollations(t *testing.T) {
+	cfg := vttest.Config{
+		Topology: &vttestpb.VTTestTopology{
+			Keyspaces: []*vttestpb.Keyspace{{
+				Name:   "ks",
+				Shards: []*vttestpb.Shard{{Name: "-80"}, {Name: "80-"}},
+			}},
+		},
+	}
+	require.NoError(t, cfg.InitSchemas("ks", sortedSchema, &vschemapb.Keyspace{
+		Sharded:  true,
+		Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+		Tables: map[string]*vschemapb.Table{
+			"sorted": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "id", Name: "hash"}},
+				// With the collations of the columns in the vschema, vtgate
+				// compares their text itself. Without them it asks MySQL for
+				// the weight string of each value and compares those.
+				Columns: []*vschemapb.Column{
+					{Name: "id", Type: sqltypes.Int32},
+					{Name: "l", Type: sqltypes.VarChar, CollationName: "latin1_german2_ci"},
+					{Name: "g", Type: sqltypes.VarChar, CollationName: "gbk_chinese_ci"},
+				},
+				ColumnListAuthoritative: true,
+			},
+		},
+	}))
+	t.Cleanup(func() { os.RemoveAll(cfg.SchemaDir) })
+
+	queryServerArgs := vttest.QueryServerArgs
+	vttest.QueryServerArgs = append(slices.Clone(queryServerArgs), "--convert-result-charset", "--queryserver-config-raw-result-charset")
+	cluster := &vttest.LocalCluster{Config: cfg}
+	err := cluster.Setup()
+	vttest.QueryServerArgs = queryServerArgs
+	t.Cleanup(func() { _ = cluster.TearDown() })
+	require.NoError(t, err)
+
+	params := mysql.ConnParams{Host: "localhost", Port: cluster.Env.PortForProtocol("vtcombo_mysql_port", "")}
+	conn, err := mysql.Connect(t.Context(), &params)
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	_, err = conn.ExecuteFetch("insert into sorted (id, l, g) values (1, 'é', '中'), (2, 'd', '波'), (3, 'f', '啊'), (4, 'Müller', '中'), (5, 'MUELLER', 'abc'), (6, 'z', 'ABC')", 0, false)
+	require.NoError(t, err)
+
+	// column returns the values of one column of the result of query.
+	column := func(query string, col int) []string {
+		qr, err := conn.ExecuteFetch(query, 100, false)
+		require.NoError(t, err, query)
+		var values []string
+		for _, row := range qr.Rows {
+			values = append(values, row[col].ToString())
+		}
+		return values
+	}
+
+	for _, workload := range []string{"oltp", "olap"} {
+		_, err := conn.ExecuteFetch("set workload = "+workload, 0, false)
+		require.NoError(t, err)
+
+		assert.Equal(t, []string{"2", "1", "3", "4", "5", "6"}, column("select id, l from sorted order by l, id", 0), workload)
+		assert.Equal(t, []string{"5", "6", "3", "2", "1", "4"}, column("select id, g from sorted order by g, id", 0), workload)
+
+		assert.Equal(t, []string{"5"}, column("select count(distinct l) from sorted", 0), workload)
+		assert.Equal(t, []string{"4"}, column("select count(distinct g) from sorted", 0), workload)
+
+		assert.Equal(t, []string{"1", "1", "1", "2", "1"}, column("select l, count(*) from sorted group by l order by l", 1), workload)
+		assert.Equal(t, []string{"2", "1", "1", "2"}, column("select g, count(*) from sorted group by g order by g", 1), workload)
+	}
+}

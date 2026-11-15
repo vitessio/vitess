@@ -57,6 +57,15 @@ func New(cfg Options) (*Environment, error) {
 	}, nil
 }
 
+// WithRowsInConnectionCharset returns a copy of e whose collation environment
+// is the one of collations.Environment.WithRowsInConnectionCharset: for a
+// process that holds the text of rows in the connection character set.
+func (e *Environment) WithRowsInConnectionCharset() *Environment {
+	c := *e
+	c.collationEnv = e.collationEnv.WithRowsInConnectionCharset()
+	return &c
+}
+
 func NewTestEnv() *Environment {
 	return &Environment{
 		collationEnv:   collations.NewEnvironment(config.DefaultMySQLVersion),

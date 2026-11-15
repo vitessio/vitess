@@ -41,7 +41,10 @@ import (
 // externally communicates with the `WEIGHT_STRING` function, so that we
 // can also use this to order / sort other types like Float and Decimal
 // as well.
-func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
+//
+// For a collationEnv made by WithRowsInConnectionCharset, text is converted
+// from the connection character set to the one of col first.
+func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, collationEnv *collations.Environment, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
 	// We optimize here for the case where we already have the desired type.
 	// Otherwise, we fall back to the general evalengine conversion logic.
 	if v.Type() != coerceTo {
@@ -98,7 +101,10 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, col coll
 		if coll == nil {
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
-		b := connectionText(v.Raw(), col)
+		b := v.Raw()
+		if collationEnv.RowsInConnectionCharset() {
+			b = connectionText(b, col)
+		}
 		if length != 0 {
 			b = charset.Slice(coll.Charset(), b, 0, length)
 		}
@@ -199,7 +205,10 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 // and the weight strings are **different**, the two values will sort accordingly to the 32-bit
 // numerical sort of their tiny weight strings. Otherwise, the relative sorting of the two values
 // will not be known, and they will require a full sort using e.g. NullsafeCompare.
-func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Value) {
+//
+// For a collationEnv made by WithRowsInConnectionCharset, text is converted
+// from the connection character set to the one of collation first.
+func TinyWeighter(f *querypb.Field, collationEnv *collations.Environment, collation collations.ID) func(v *sqltypes.Value) {
 	switch {
 	case sqltypes.IsNull(f.Type):
 		return nil
@@ -267,11 +276,16 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 	case sqltypes.IsText(f.Type):
 		if coll := colldata.Lookup(collation); coll != nil {
 			if twcoll, ok := coll.(colldata.TinyWeightCollation); ok {
+				connText := collationEnv.RowsInConnectionCharset()
 				return func(v *sqltypes.Value) {
 					if v.IsNull() {
 						return
 					}
-					v.SetTinyWeight(twcoll.TinyWeightString(connectionText(v.Raw(), collation)))
+					raw := v.Raw()
+					if connText {
+						raw = connectionText(raw, collation)
+					}
+					v.SetTinyWeight(twcoll.TinyWeightString(raw))
 				}
 			}
 		}
