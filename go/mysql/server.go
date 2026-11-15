@@ -157,6 +157,23 @@ type ConnActivityObserver interface {
 	ConnActivity(c *Conn)
 }
 
+// HandshakeChecker is an optional interface a Handler may additionally
+// implement to refuse a connection because of what the client sent in its
+// handshake response, such as its collation (Conn.CharacterSet). It is a
+// separate, optional interface, rather than a Handler method, so that adding
+// it is not a breaking change for existing Handler implementations.
+//
+// CheckHandshake is called once the server has read the handshake response,
+// and after TLS is set up, but before the client is authenticated. MySQL 8.0
+// and 8.4 check the client character set at the same point: a client with a
+// ucs2 handshake and a wrong password gets "Variable 'character_set_client'
+// can't be set to the value of 'ucs2'" (1231), not "Access denied" (1045).
+// An error is sent to the client as an error packet, through
+// sqlerror.NewSQLErrorFromError, and the connection is closed.
+type HandshakeChecker interface {
+	CheckHandshake(c *Conn) error
+}
+
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy
 // the Handler interface. Intended to be embedded into your custom Handler
 // implementation without needing to define every callback and to help be forwards
@@ -488,6 +505,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
+	}
+
+	if checker, ok := l.handler.(HandshakeChecker); ok {
+		if err := checker.CheckHandshake(c); err != nil {
+			c.writeErrorPacketFromError(sqlerror.NewSQLErrorFromError(err))
+			return
+		}
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
