@@ -35,6 +35,7 @@ package resultcharset
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -808,6 +809,72 @@ func (c *Conversion) Value(col int, value sqltypes.Value) sqltypes.Value {
 // Rows returns the converted rows. A row without a value that changes is the
 // row it was, and so is the slice when no row changes.
 func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
+	return c.rows(rows, nil)
+}
+
+// Lost is a value that Rows converts with a loss: it has a character that the
+// character set it is converted to does not have, which becomes "?".
+type Lost struct {
+	// Row and Column are the indexes of the value in the rows.
+	Row, Column int
+	// Text is the text of the value, in the character set it was in, from
+	// the first character that is lost on.
+	Text []byte
+
+	from charset.Charset
+}
+
+// Printable returns the text of the value as MySQL writes it in the message
+// of error 1366, "Incorrect string value": its first six bytes, each as
+// itself from 0x20 to 0x7F and as \x and two hexadecimal digits otherwise,
+// and "..." when there are more. For 'ab中cd' in utf8mb4 that cannot become
+// latin1, MySQL 8.0.46 writes \xE4\xB8\xADcd, and for 'x中文中文'
+// \xE4\xB8\xAD\xE6\x96\x87... . It writes every byte of ucs2, utf16 and
+// utf32 text in hexadecimal: \x4E\x2D\x00\x62 for '中b' in ucs2.
+func (l Lost) Printable() string {
+	const maxBytes = 6
+	text := l.Text
+	more := len(text) > maxBytes
+	if more {
+		text = text[:maxBytes]
+	}
+	ascii := l.from == nil || isASCIICompatible(l.from)
+	var out strings.Builder
+	for _, b := range text {
+		if ascii && b >= 0x20 && b <= 0x7F {
+			out.WriteByte(b)
+			continue
+		}
+		fmt.Fprintf(&out, "\\x%02X", b)
+	}
+	if more {
+		out.WriteString("...")
+	}
+	return out.String()
+}
+
+// lostText returns raw, which is text of from, from its first character that
+// to does not have.
+func lostText(raw []byte, from, to charset.Charset) []byte {
+	var buf [8]byte
+	for len(raw) > 0 {
+		r, width, ok := from.DecodeRune(raw)
+		if !ok || width <= 0 || to.EncodeRune(buf[:], r) < 0 {
+			break
+		}
+		raw = raw[width:]
+	}
+	return raw
+}
+
+// RowsLossy returns the converted rows, as Rows does, and calls lost for
+// each value that has a character that the character set it is converted to
+// does not have, row by row and column by column.
+func (c *Conversion) RowsLossy(rows []sqltypes.Row, lost func(Lost)) []sqltypes.Row {
+	return c.rows(rows, lost)
+}
+
+func (c *Conversion) rows(rows []sqltypes.Row, lost func(Lost)) []sqltypes.Row {
 	if c.columns == nil {
 		return rows
 	}
@@ -842,7 +909,11 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 			if col.ucs2 {
 				buf = appendUCS2AsUTF8(buf, raw)
 			} else {
-				buf, _ = charset.Convert(buf, col.to, raw, col.from)
+				var err error
+				buf, err = charset.Convert(buf, col.to, raw, col.from)
+				if err != nil && lost != nil {
+					lost(Lost{Row: r, Column: i, Text: lostText(raw, col.from, col.to), from: col.from})
+				}
 			}
 			converted := buf[start:len(buf):len(buf)]
 			newRow[i] = sqltypes.MakeTrusted(value.Type(), converted)

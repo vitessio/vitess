@@ -46,6 +46,7 @@ const (
 	DupFieldName
 	WrongValueCountOnRow
 	WrongValue
+	TruncatedWrongValueForField
 	WrongArguments
 	BadNullError
 	InvalidGroupFuncUse

@@ -27,6 +27,8 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestRecurseDualQuery(t *testing.T) {
@@ -269,14 +271,6 @@ func TestRecurseCTECharsets(t *testing.T) {
 		rows:     []string{"é", "é"},
 		bindVars: []string{"é", "é"},
 	}, {
-		// MySQL does this without STRICT_TRANS_TABLES.
-		name: "latin1 seed, a character that latin1 does not have",
-		seed: latin1Swedish, seedText: "\xe9",
-		term: utf8mb4, termText: "中",
-		convert:  true,
-		rows:     []string{"\xe9", "?"},
-		bindVars: []string{"é", "?"},
-	}, {
 		name: "the same character set",
 		seed: latin1Swedish, seedText: "\xe9",
 		term: latin1Swedish, termText: "\xdf",
@@ -339,6 +333,90 @@ func TestRecurseCTECharsets(t *testing.T) {
 					log = append(log, fmt.Sprintf("%s r_l: %v %v", call, sqltypes.ValueBindVariable(sqltypes.NewVarChar(text)), tc.convert))
 				}
 				term.ExpectLog(t, log)
+			})
+		}
+	}
+}
+
+// TestRecurseCTEIncorrectStringValue checks a recursion that reads a value
+// with a character that the character set of the column of the seed does not
+// have. For a latin1 column l of the seed and 'ab中cd' in the utf8mb4 column
+// that the recursion reads, MySQL 8.0.46 fails with
+//
+//	ERROR 1366 (HY000): Incorrect string value: '\xE4\xB8\xADcd' for column 'l' at row 1
+//
+// with the default sql_mode, with STRICT_TRANS_TABLES, with STRICT_ALL_TABLES
+// and with TRADITIONAL. With ” and with ONLY_FULL_GROUP_BY it returns
+// 'ab?cd', 61 62 3F 63 64, and has the message as a warning. A session has
+// its sql_mode as it stands in a SET statement, and none when it did not set
+// it.
+func TestRecurseCTEIncorrectStringValue(t *testing.T) {
+	latin1Swedish := collations.MySQL8().LookupByName("latin1_swedish_ci")
+	utf8mb4 := collations.MySQL8().DefaultConnectionCharset()
+	const message = `Incorrect string value: '\xE4\xB8\xADcd' for column 'l' at row 1`
+
+	tests := []struct {
+		name    string
+		sqlMode map[string]string
+		strict  bool
+	}{
+		{"the session did not set it", nil, true},
+		{"STRICT_TRANS_TABLES", map[string]string{"sql_mode": "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES'"}, true},
+		{"STRICT_ALL_TABLES", map[string]string{"sql_mode": "'STRICT_ALL_TABLES'"}, true},
+		{"TRADITIONAL", map[string]string{"sql_mode": "'TRADITIONAL'"}, true},
+		// 2097152 is STRICT_TRANS_TABLES, and 32 is ONLY_FULL_GROUP_BY.
+		{"a number with STRICT_TRANS_TABLES", map[string]string{"sql_mode": "2097152"}, true},
+		{"empty", map[string]string{"sql_mode": "''"}, false},
+		{"ONLY_FULL_GROUP_BY", map[string]string{"sql_mode": "'ONLY_FULL_GROUP_BY'"}, false},
+		{"a number without a strict mode", map[string]string{"sql_mode": "32"}, false},
+	}
+	for _, tc := range tests {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, stream %v", tc.name, stream), func(t *testing.T) {
+				field := func(collation collations.ID) []*querypb.Field {
+					return []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collation)}}
+				}
+				cte := &RecurseCTE{
+					Seed: &fakePrimitive{results: []*sqltypes.Result{{
+						Fields: field(latin1Swedish),
+						Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("abc"))}},
+					}}},
+					Term: &fakePrimitive{results: []*sqltypes.Result{
+						{Fields: field(utf8mb4), Rows: []sqltypes.Row{{sqltypes.NewVarChar("ab中cd")}}},
+						{Fields: field(utf8mb4)},
+					}},
+					Vars: map[string]int{"r_l": 0},
+				}
+				vcursor := &noopVCursor{convertResultCharset: true, systemVariables: tc.sqlMode}
+
+				var rows []string
+				collect := func(qr *sqltypes.Result) error {
+					for _, row := range qr.Rows {
+						rows = append(rows, row[0].ToString())
+					}
+					return nil
+				}
+				var err error
+				if stream {
+					err = cte.TryStreamExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true, collect)
+				} else {
+					var qr *sqltypes.Result
+					qr, err = cte.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true)
+					if err == nil {
+						require.NoError(t, collect(qr))
+					}
+				}
+
+				if tc.strict {
+					require.EqualError(t, err, message)
+					assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+					assert.Equal(t, vterrors.TruncatedWrongValueForField, vterrors.ErrState(err))
+					assert.Empty(t, vcursor.recordedWarnings)
+					return
+				}
+				require.NoError(t, err)
+				assert.Equal(t, []string{"abc", "ab?cd"}, rows)
+				assert.Equal(t, []*querypb.QueryWarning{{Code: 1366, Message: message}}, vcursor.recordedWarnings)
 			})
 		}
 	}
