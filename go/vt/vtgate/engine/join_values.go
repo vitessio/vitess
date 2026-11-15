@@ -42,7 +42,9 @@ type ValuesJoin struct {
 
 // TryExecute performs a non-streaming exec.
 func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	lresult, err := vcursor.ExecutePrimitive(ctx, jv.Left, bindVars, wantfields)
+	// The values of the left rows go into the rows of the VALUES of the right
+	// side, which takes the fields of the left side to convert them.
+	lresult, err := vcursor.ExecutePrimitive(ctx, jv.Left, bindVars, wantfields || vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
@@ -64,12 +66,13 @@ func (jv *ValuesJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return jv.Right.GetFields(ctx, vcursor, bindVars)
 	}
 
+	leftValues := newStatementValues(vcursor, lresult.Fields)
 	for i, row := range lresult.Rows {
 		newRow := make(sqltypes.Row, 0, len(jv.Vars)+1)      // +1 since we always add the row ID
 		newRow = append(newRow, sqltypes.NewInt64(int64(i))) // Adding the LHS row ID
 
 		for _, loffset := range jv.Vars {
-			newRow = append(newRow, row[loffset])
+			newRow = append(newRow, leftValues.value(loffset, row[loffset]))
 		}
 
 		bv.Values = append(bv.Values, sqltypes.TupleToProto(newRow))
