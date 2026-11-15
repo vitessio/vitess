@@ -272,8 +272,9 @@ func validateConnectionCharsetPlan(inner planFunc) planFunc {
 // character_set_results of the session (see engine.SysVarResultCharset), and
 // character_set_results takes any character set that Vitess implements: a
 // result is converted to it, and no query is read in it. SET NAMES and SET
-// CHARACTER SET refuse the same character sets as without the flag. Without
-// the flag, the wrapped planFunc plans them as before.
+// CHARACTER SET accept only utf8mb4 and utf8mb3, because vtgate reads every
+// query as utf8mb4. Without the flag, the wrapped planFunc plans them as
+// before.
 func resultCharsetPlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
 		if !vschema.ConvertResultCharset() {

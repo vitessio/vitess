@@ -174,6 +174,13 @@ func TestResultCharset(t *testing.T) {
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
 	}, {
+		name:      "SET NAMES utf8mb3",
+		handshake: 255,
+		set:       "set names utf8mb3",
+		text:      [3]column{{33, 30, "4dc3bc6c6c6572"}, {33, 30, "e4b8ade69687"}, {33, 30, "c3a9e282ac3f"}},
+		json:      "7b2261223a2022c3a9e282ac3f227d",
+		results:   "757466386d6233",
+	}, {
 		name:      "SET NAMES DEFAULT after a utf8mb3 handshake",
 		handshake: 33,
 		set:       "set names default",
@@ -319,9 +326,10 @@ func TestResultCharsetNames(t *testing.T) {
 	assert.Equal(t, "00750034", hex.EncodeToString([]byte(qr.Fields[0].Name)))
 }
 
-// TestResultCharsetErrors covers what MySQL refuses, and the error messages,
-// which MySQL sends in character_set_results: with gb2312, the duplicate entry
-// 'Müller' is 4D A8 B9 6C 6C 65 72, and with NULL it is in utf8.
+// TestResultCharsetErrors covers what MySQL refuses, what vtgate refuses
+// where MySQL accepts it, and the error messages, which MySQL sends in
+// character_set_results: with gb2312, the duplicate entry 'Müller' is
+// 4D A8 B9 6C 6C 65 72, and with NULL it is in utf8.
 func TestResultCharsetErrors(t *testing.T) {
 	insertRow(t)
 	conn := connect(t, collations.CollationUtf8mb4ID)
@@ -331,9 +339,22 @@ func TestResultCharsetErrors(t *testing.T) {
 	assert.Equal(t, sqlerror.ERUnknownCharacterSet, err.(*sqlerror.SQLError).Num)
 	assert.Contains(t, err.Error(), "Unknown character set: 'nosuch'")
 
-	_, err = conn.ExecuteFetch("set names latin1 collate utf8mb4_bin", 10, false)
+	_, err = conn.ExecuteFetch("set names utf8 collate utf8mb4_bin", 10, false)
 	require.Error(t, err)
 	assert.Equal(t, sqlerror.ERCollationCharsetMismatch, err.(*sqlerror.SQLError).Num)
+	assert.Contains(t, err.Error(), "COLLATION 'utf8mb4_bin' is not valid for CHARACTER SET 'utf8mb3'")
+
+	// vtgate reads every query as utf8mb4, and refuses SET NAMES and SET
+	// CHARACTER SET with another character set.
+	for _, set := range []string{"set names latin1", "set names binary", "set character set gb2312"} {
+		_, err = conn.ExecuteFetch(set, 10, false)
+		require.Error(t, err, set)
+		assert.Equal(t, sqlerror.ERNotSupportedYet, err.(*sqlerror.SQLError).Num, set)
+		assert.Contains(t, err.Error(), "accepts SET NAMES and SET CHARACTER SET with utf8mb4 and utf8mb3", set)
+	}
+	qr, err := conn.ExecuteFetch("select @@character_set_results", 10, false)
+	require.NoError(t, err)
+	assert.Equal(t, "utf8mb4", qr.Rows[0][0].ToString())
 
 	const duplicate = "insert into rc (id, l) values (2, 'Müller')"
 	exec(t, conn, "set character_set_results = gb2312")

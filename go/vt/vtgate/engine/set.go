@@ -700,13 +700,12 @@ func (svrc *SysVarResultCharset) VariableName() string {
 // Execute implements the SetOp interface method. It sets the
 // character_set_results of the session as MySQL 8.0 and 8.4 do:
 //
-//   - SET NAMES latin1 sets the default collation of the character set,
-//     latin1_swedish_ci (8), and SET NAMES utf8mb4 COLLATE utf8mb4_bin sets
-//     utf8mb4_bin (46). SET CHARACTER SET gb2312 sets gb2312_chinese_ci (24).
-//     SET NAMES accepts the same character sets as without
-//     --convert-result-charset, see checkNamesCharset. MySQL also changes
-//     the character set it reads queries in; vtgate does not, and reads them
-//     as utf8mb4.
+//   - SET NAMES utf8mb3 sets the default collation of the character set,
+//     utf8mb3_general_ci (33), and SET NAMES utf8mb4 COLLATE utf8mb4_bin sets
+//     utf8mb4_bin (46). SET CHARACTER SET utf8 sets utf8mb3_general_ci (33).
+//     They accept only utf8mb4 and utf8mb3, see checkResultNamesCharset:
+//     MySQL also changes the character set it reads queries in, and vtgate
+//     reads them as utf8mb4.
 //   - SET character_set_results takes the name of any character set that
 //     Vitess implements, binary, a collation ID (46 sets utf8mb4_bin, which
 //     result fields then report), or NULL.
@@ -737,7 +736,7 @@ func (svrc *SysVarResultCharset) Execute(ctx context.Context, vcursor VCursor, e
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svrc.Name, value.Type().String())
 	}
 	name := value.ToString()
-	if err := checkNamesCharset(name); err != nil {
+	if err := checkResultNamesCharset(name); err != nil {
 		return err
 	}
 	name = strings.ToLower(name)
@@ -758,6 +757,22 @@ func (svrc *SysVarResultCharset) Execute(ctx context.Context, vcursor VCursor, e
 	}
 	vcursor.Session().SetResultCharset(collation, false)
 	return nil
+}
+
+// checkResultNamesCharset refuses the character sets that SET NAMES and SET
+// CHARACTER SET do not accept with --convert-result-charset: vtgate reads
+// the text of every query as utf8mb4, and accepts utf8mb4, utf8mb3 and utf8,
+// as well as DEFAULT and the empty string. Without the flag,
+// checkNamesCharset accepts latin1 and ignores it; with the flag, SET NAMES
+// latin1 would give results in latin1 while the queries are still read as
+// utf8mb4, so it is refused. SET character_set_results takes any character
+// set.
+func checkResultNamesCharset(name string) error {
+	switch strings.ToLower(name) {
+	case "", "utf8", "utf8mb3", "utf8mb4", "default":
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported: vtgate with --convert-result-charset accepts SET NAMES and SET CHARACTER SET with utf8mb4 and utf8mb3, and SET character_set_results gives results in another character set", name)
 }
 
 // namesCollation returns the collation of SET NAMES charset COLLATE name.

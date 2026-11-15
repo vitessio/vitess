@@ -84,14 +84,15 @@ func TestSetResultCharset(t *testing.T) {
 		collation collations.ID
 		null      bool
 	}{
-		{set: "set names latin1", collation: 8},
+		{set: "set names utf8mb4", collation: 255},
 		{set: "set names utf8mb4 collate utf8mb4_bin", collation: 46},
-		{set: "set names 'latin1' collate latin1_german1_ci", collation: 5},
+		{set: "set names 'utf8mb3' collate utf8mb3_bin", collation: 83},
 		{set: "set names utf8", collation: 33},
+		{set: "set names utf8mb3", collation: 33},
 		{set: "set names utf8 collate utf8_bin", collation: 83},
 		{set: "set names utf8mb4 collate 'utf8mb4_0900_bin'", collation: 309},
 		{set: "set names default", collation: 0},
-		{set: "set character set latin1", collation: 8},
+		{set: "set character set utf8", collation: 33},
 		{set: "set charset default", collation: 0},
 		{set: "set character_set_results = gb2312", collation: 24},
 		{set: "set character_set_results = 'sjis'", collation: 13},
@@ -105,8 +106,8 @@ func TestSetResultCharset(t *testing.T) {
 		{set: "set character_set_results = default", collation: 0},
 		{set: "set @@session.character_set_results = gb2312", collation: 24},
 		{set: "set session character_set_results = latin1", collation: 8},
-		{set: "set names latin1 collate latin1_german1_ci, character_set_results = gb2312", collation: 24},
-		{set: "set character_set_results = gb2312, names latin1", collation: 8},
+		{set: "set names utf8mb4 collate utf8mb4_bin, character_set_results = gb2312", collation: 24},
+		{set: "set character_set_results = gb2312, names utf8mb3", collation: 33},
 	}
 	for _, tc := range tests {
 		t.Run(tc.set, func(t *testing.T) {
@@ -123,7 +124,7 @@ func TestSetResultCharset(t *testing.T) {
 
 // TestSetResultCharsetErrors covers the values that MySQL refuses, with the
 // error number it refuses them with, and the character sets that SET NAMES
-// refuses in vtgate, as it did before.
+// and SET CHARACTER SET refuse in vtgate: all but utf8mb4 and utf8mb3.
 func TestSetResultCharsetErrors(t *testing.T) {
 	setConvertResultCharset(t, true)
 	vtg, _, ctx := createVtgateEnv(t)
@@ -133,7 +134,7 @@ func TestSetResultCharsetErrors(t *testing.T) {
 		num     sqlerror.ErrorCode
 		message string
 	}{
-		{"set names latin1 collate utf8mb4_bin", sqlerror.ERCollationCharsetMismatch, "COLLATION 'utf8mb4_bin' is not valid for CHARACTER SET 'latin1'"},
+		{"set names utf8 collate utf8mb4_bin", sqlerror.ERCollationCharsetMismatch, "COLLATION 'utf8mb4_bin' is not valid for CHARACTER SET 'utf8mb3'"},
 		{"set names utf8mb4 collate binary", sqlerror.ERCollationCharsetMismatch, "COLLATION 'binary' is not valid for CHARACTER SET 'utf8mb4'"},
 		{"set names utf8mb4 collate nosuch", sqlerror.ERUnknownCollation, "Unknown collation: 'nosuch'"},
 		{"set character_set_results = nosuch", sqlerror.ERUnknownCharacterSet, "Unknown character set: 'nosuch'"},
@@ -143,10 +144,16 @@ func TestSetResultCharsetErrors(t *testing.T) {
 		{"set character_set_results = 0", sqlerror.ERUnknownCharacterSet, "Unknown character set: '0'"},
 		{"set character_set_results = 9999", sqlerror.ERUnknownCharacterSet, "Unknown character set: '9999'"},
 		{"set character_set_results = 1.5", sqlerror.ERWrongTypeForVar, "Incorrect argument type to variable 'character_set_results'"},
-		// vtgate reads every query as utf8mb4, and SET NAMES refuses what it
-		// refused before.
+		// vtgate reads every query as utf8mb4, and SET NAMES refuses every
+		// other character set.
 		{"set names gb2312", sqlerror.ERNotSupportedYet, "charset/name gb2312 is not supported"},
 		{"set charset ascii", sqlerror.ERNotSupportedYet, "charset/name ascii is not supported"},
+		{"set names latin1", sqlerror.ERNotSupportedYet, "charset/name latin1 is not supported: vtgate with --convert-result-charset accepts SET NAMES and SET CHARACTER SET with utf8mb4 and utf8mb3, and SET character_set_results gives results in another character set"},
+		{"set names 'latin1' collate latin1_german1_ci", sqlerror.ERNotSupportedYet, "charset/name latin1 is not supported"},
+		{"set names latin1 collate utf8mb4_bin", sqlerror.ERNotSupportedYet, "charset/name latin1 is not supported"},
+		{"set names binary", sqlerror.ERNotSupportedYet, "charset/name binary is not supported"},
+		{"set names ucs2", sqlerror.ERNotSupportedYet, "charset/name ucs2 is not supported"},
+		{"set character set latin1", sqlerror.ERNotSupportedYet, "charset/name latin1 is not supported"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.set, func(t *testing.T) {
@@ -175,7 +182,7 @@ func TestReadResultCharset(t *testing.T) {
 		want sqltypes.Value
 	}{
 		{"set names utf8", sqltypes.NewVarChar("utf8mb3")},
-		{"set names latin1 collate latin1_german1_ci", sqltypes.NewVarChar("latin1")},
+		{"set character_set_results = 5", sqltypes.NewVarChar("latin1")},
 		{"set character_set_results = 46", sqltypes.NewVarChar("utf8mb4")},
 		{"set character_set_results = binary", sqltypes.NewVarChar("binary")},
 		{"set character_set_results = gb2312", sqltypes.NewVarChar("gb2312")},
