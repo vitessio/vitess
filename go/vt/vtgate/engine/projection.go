@@ -47,24 +47,29 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	// The fields say which character set each value is returned in.
+	var fields []*querypb.Field
+	if wantfields || vcursor.ConvertResultCharset() {
+		fields, err = p.evalFields(env, result.Fields, p.textCollation(vcursor))
+		if err != nil && wantfields {
+			return nil, err
+		}
+	}
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 		env.Row = row
-		for _, exp := range p.Exprs {
+		for i, exp := range p.Exprs {
 			c, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
+			resultRow = append(resultRow, p.value(vcursor, fields, i, c))
 		}
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		result.Fields, err = p.evalFields(env, result.Fields, vcursor.ConnCollation())
-		if err != nil {
-			return nil, err
-		}
+		result.Fields = fields
 	}
 	result.Rows = resultRows
 	return result, nil
@@ -82,7 +87,7 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		defer mu.Unlock()
 		if wantfields {
 			once.Do(func() {
-				fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
+				fields, err = p.evalFields(env, qr.Fields, p.textCollation(vcursor))
 				if err != nil {
 					return
 				}
@@ -100,12 +105,12 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		for _, r := range qr.Rows {
 			resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 			env.Row = r
-			for _, exp := range p.Exprs {
+			for i, exp := range p.Exprs {
 				c, err := env.Evaluate(exp)
 				if err != nil {
 					return err
 				}
-				resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
+				resultRow = append(resultRow, p.value(vcursor, fields, i, c))
 			}
 			resultRows = append(resultRows, resultRow)
 		}
@@ -121,11 +126,40 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	qr.Fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
+	qr.Fields, err = p.evalFields(env, qr.Fields, p.textCollation(vcursor))
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
+}
+
+// textCollation returns the collation that evalFields gives the text columns
+// of the projection. Without --convert-result-charset it is the connection
+// collation: every value is returned in the connection character set. With
+// the flag it is collations.Unknown, for the collation of each expression
+// itself: UPPER() of a latin1_german2_ci column is returned in latin1 with
+// the collation 31, as MySQL sends it with character_set_results = NULL, so
+// that what vtgate evaluates above the projection, and what it returns to a
+// client that asked for NULL or binary, is the text of that collation.
+func (p *Projection) textCollation(vcursor VCursor) collations.ID {
+	if vcursor.ConvertResultCharset() {
+		return collations.Unknown
+	}
+	return vcursor.ConnCollation()
+}
+
+// value returns the value of the column i of a row in the character set of
+// the collation that fields has for it, see textCollation. Without fields it
+// is in the character set of its own collation.
+func (p *Projection) value(vcursor VCursor, fields []*querypb.Field, i int, c evalengine.EvalResult) sqltypes.Value {
+	switch {
+	case !vcursor.ConvertResultCharset():
+		return c.Value(vcursor.ConnCollation())
+	case i < len(fields):
+		return c.Value(collations.ID(fields[i].Charset))
+	default:
+		return c.Value(c.Collation())
+	}
 }
 
 func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field, coll collations.ID) ([]*querypb.Field, error) {
@@ -144,7 +178,7 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
 		}
 		typCol := typ.Collation()
-		if sqltypes.IsTextOrBinary(typ.Type()) && typCol != collations.CollationBinaryID {
+		if coll != collations.Unknown && sqltypes.IsTextOrBinary(typ.Type()) && typCol != collations.CollationBinaryID {
 			typCol = coll
 		}
 

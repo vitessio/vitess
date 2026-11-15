@@ -265,3 +265,64 @@ func TestFieldConversion(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectionKeepsCharset checks the character set that a projection
+// returns an evaluated value in. The row is one of a tablet with
+// --queryserver-config-raw-result-charset: a latin1_german2_ci column with
+// 'Müller' as 4D FC 6C 6C 65 72.
+//
+// With --convert-result-charset the value of UPPER() of the column is
+// returned in latin1, 4D DC 4C 4C 45 52, with the collation 31 in its field,
+// which is what MySQL 8.0.46 and 8.4.13 send for it with character_set_results
+// = NULL. Without the flag it is returned in the connection character set,
+// 4D C3 9C 4C 4C 45 52, with the connection collation, as before.
+func TestProjectionKeepsCharset(t *testing.T) {
+	latin1German2 := collations.MySQL8().LookupByName("latin1_german2_ci")
+	input := func() Primitive {
+		return &fakePrimitive{results: []*sqltypes.Result{{
+			Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(latin1German2), ColumnLength: 10}},
+			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}},
+		}}}
+	}
+	expr, err := sqlparser.NewTestParser().ParseExpr("upper(l)")
+	require.NoError(t, err)
+	upper, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+		ResolveColumn: func(*sqlparser.ColName) (int, error) {
+			return 0, nil
+		},
+		ResolveType: func(sqlparser.Expr) (evalengine.Type, bool) {
+			return evalengine.NewType(sqltypes.VarChar, latin1German2), true
+		},
+	})
+	require.NoError(t, err)
+
+	tests := []struct {
+		convert   bool
+		collation collations.ID
+		value     string
+	}{
+		{true, latin1German2, "M\xDCLLER"},
+		{false, collations.MySQL8().DefaultConnectionCharset(), "MÜLLER"},
+	}
+	for _, tc := range tests {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("convert %v, stream %v", tc.convert, stream), func(t *testing.T) {
+				proj := &Projection{Cols: []string{"u"}, Exprs: []evalengine.Expr{upper}, Input: input()}
+				vcursor := &noopVCursor{convertResultCharset: tc.convert}
+				var qr *sqltypes.Result
+				var err error
+				if stream {
+					qr, err = wrapStreamExecute(proj, vcursor, nil, true)
+				} else {
+					qr, err = proj.TryExecute(t.Context(), vcursor, nil, true)
+				}
+				require.NoError(t, err)
+				require.Len(t, qr.Rows, 1)
+				assert.Equal(t, tc.collation, collations.ID(qr.Fields[0].Charset))
+				assert.Equal(t, tc.value, qr.Rows[0][0].ToString())
+			})
+		}
+	}
+}
