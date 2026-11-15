@@ -371,7 +371,8 @@ func TestSortERSCandidates(t *testing.T) {
 				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
 				Type:  topodatapb.TabletType_REPLICA,
 			}},
-			positions: &RelayLogPositions{Combined: pos, Executed: pos},
+			positions:    &RelayLogPositions{Combined: pos, Executed: pos},
+			mysqlVersion: unknownVersion,
 		}
 	}
 
@@ -394,11 +395,9 @@ func TestSortERSCandidates(t *testing.T) {
 		higherVersion := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		higherVersion.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 4}
 		higherVersion.mysqlFlavor = mysqlctl.FlavorMySQL
-		higherVersion.hasMySQLVersion = true
 		lowerVersion := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		lowerVersion.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
 		lowerVersion.mysqlFlavor = mysqlctl.FlavorPercona
-		lowerVersion.hasMySQLVersion = true
 		candidates := []*ersCandidate{higherVersion, lowerVersion}
 
 		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
@@ -412,7 +411,6 @@ func TestSortERSCandidates(t *testing.T) {
 		known := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		known.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 4}
 		known.mysqlFlavor = mysqlctl.FlavorMySQL
-		known.hasMySQLVersion = true
 		candidates := []*ersCandidate{unknown, known}
 
 		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)
@@ -425,11 +423,9 @@ func TestSortERSCandidates(t *testing.T) {
 		mariaDB := makeCandidate(100, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		mariaDB.mysqlVersion = mysqlctl.ServerVersion{Major: 10, Minor: 6}
 		mariaDB.mysqlFlavor = mysqlctl.FlavorMariaDB
-		mariaDB.hasMySQLVersion = true
 		mysql := makeCandidate(101, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10")
 		mysql.mysqlVersion = mysqlctl.ServerVersion{Major: 8, Minor: 0, Patch: 35}
 		mysql.mysqlFlavor = mysqlctl.FlavorMySQL
-		mysql.hasMySQLVersion = true
 		candidates := []*ersCandidate{mysql, mariaDB}
 
 		mysqlVersions, mixedFlavorFamilies := usableERSCandidateMySQLVersions(candidates)

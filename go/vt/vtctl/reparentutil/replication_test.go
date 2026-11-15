@@ -574,7 +574,6 @@ func TestBuildERSCandidates(t *testing.T) {
 		assert.Same(t, replicaStatus, replicaCandidate.stopStatus)
 		assert.True(t, replicaCandidate.takingBackup)
 		assert.Zero(t, replicaCandidate.reparentJournalLen)
-		assert.True(t, replicaCandidate.hasMySQLVersion)
 		assert.Equal(t, replicaVersion, replicaCandidate.mysqlVersion)
 		assert.Equal(t, mysqlctl.FlavorPercona, replicaCandidate.mysqlFlavor)
 		assert.True(t, replicaCandidate.positions.Combined.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")))
@@ -587,7 +586,6 @@ func TestBuildERSCandidates(t *testing.T) {
 		assert.Nil(t, primaryCandidate.stopStatus)
 		assert.False(t, primaryCandidate.takingBackup)
 		assert.Zero(t, primaryCandidate.reparentJournalLen)
-		assert.True(t, primaryCandidate.hasMySQLVersion)
 		assert.Equal(t, primaryVersion, primaryCandidate.mysqlVersion)
 		assert.Equal(t, mysqlctl.FlavorMySQL, primaryCandidate.mysqlFlavor)
 		assert.True(t, primaryCandidate.positions.Combined.Equal(replication.MustParsePosition(replication.Mysql56FlavorID, "3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5")))
@@ -621,7 +619,7 @@ func TestBuildERSCandidates(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, isGTIDBased)
 		require.Len(t, candidates, 1)
-		assert.False(t, candidates[0].hasMySQLVersion)
+		assert.Equal(t, unknownVersion, candidates[0].mysqlVersion)
 		assert.Equal(t, mysqlctl.FlavorUnknown, candidates[0].mysqlFlavor)
 	})
 
@@ -2925,8 +2923,9 @@ func ersCandidatesFromPositions(t *testing.T, positions map[string]*RelayLogPosi
 		alias, err := topoproto.ParseTabletAlias(aliasString)
 		require.NoError(t, err)
 		candidates = append(candidates, &ersCandidate{
-			info:      &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias}},
-			positions: position,
+			info:         &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias}},
+			positions:    position,
+			mysqlVersion: unknownVersion,
 		})
 	}
 	return candidates

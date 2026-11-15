@@ -468,7 +468,7 @@ func findCandidate(
 	// cross-family comparison result is always discarded. Keep that invariant if
 	// editing the source-preference block below.
 	sourceVersion := unknownVersion
-	if intermediateSource != nil && intermediateSource.hasMySQLVersion {
+	if intermediateSource != nil {
 		sourceVersion = intermediateSource.mysqlVersion
 	}
 

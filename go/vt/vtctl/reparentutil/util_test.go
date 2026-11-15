@@ -2563,7 +2563,7 @@ func Test_findCandidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			possibleCandidates := make([]*ersCandidate, 0, len(tt.possibleCandidates))
 			for _, tablet := range tt.possibleCandidates {
-				candidate := &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}}
+				candidate := &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}, mysqlVersion: unknownVersion}
 				alias := topoproto.TabletAliasString(tablet.Alias)
 				if version, ok := tt.versionMap[alias]; ok {
 					candidate.mysqlVersion = version
@@ -2571,7 +2571,6 @@ func Test_findCandidate(t *testing.T) {
 					if flavor, ok := tt.flavorMap[alias]; ok {
 						candidate.mysqlFlavor = flavor
 					}
-					candidate.hasMySQLVersion = true
 				}
 				possibleCandidates = append(possibleCandidates, candidate)
 			}
@@ -2582,7 +2581,7 @@ func Test_findCandidate(t *testing.T) {
 				intermediateSource = findERSCandidateByAlias(possibleCandidates, tt.intermediateSource.Alias)
 			}
 			if tt.intermediateSource != nil && intermediateSource == nil {
-				intermediateSource = &ersCandidate{info: &topo.TabletInfo{Tablet: tt.intermediateSource}}
+				intermediateSource = &ersCandidate{info: &topo.TabletInfo{Tablet: tt.intermediateSource}, mysqlVersion: unknownVersion}
 				alias := topoproto.TabletAliasString(tt.intermediateSource.Alias)
 				if version, ok := tt.versionMap[alias]; ok {
 					intermediateSource.mysqlVersion = version
@@ -2590,7 +2589,6 @@ func Test_findCandidate(t *testing.T) {
 					if flavor, ok := tt.flavorMap[alias]; ok {
 						intermediateSource.mysqlFlavor = flavor
 					}
-					intermediateSource.hasMySQLVersion = true
 				}
 			}
 

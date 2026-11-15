@@ -70,9 +70,10 @@ func ersCandidatesFromPositionsForTest(
 		info := tabletMap[alias]
 		require.NotNil(t, info)
 		candidates = append(candidates, &ersCandidate{
-			info:       info,
-			positions:  candidatePositions,
-			stopStatus: statusMap[alias],
+			info:         info,
+			positions:    candidatePositions,
+			stopStatus:   statusMap[alias],
+			mysqlVersion: unknownVersion,
 		})
 	}
 
@@ -96,6 +97,7 @@ func ersCandidatesFromTabletsForTest(
 			info:         info,
 			stopStatus:   statusMap[alias],
 			takingBackup: tabletsTakingBackup[alias],
+			mysqlVersion: unknownVersion,
 		})
 	}
 
@@ -109,7 +111,10 @@ func setERSCandidateVersionsForTest(
 ) {
 	for _, candidate := range candidates {
 		alias := candidate.alias()
-		candidate.mysqlVersion, candidate.hasMySQLVersion = versionMap[alias]
+		candidate.mysqlVersion = unknownVersion
+		if version, ok := versionMap[alias]; ok {
+			candidate.mysqlVersion = version
+		}
 		candidate.mysqlFlavor = flavorMap[alias]
 	}
 }
@@ -121,7 +126,7 @@ func ersCandidateForTabletForTest(candidates []*ersCandidate, tablet *topodatapb
 	if candidate := findERSCandidateByAlias(candidates, tablet.Alias); candidate != nil {
 		return candidate
 	}
-	return &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}}
+	return &ersCandidate{info: &topo.TabletInfo{Tablet: tablet}, mysqlVersion: unknownVersion}
 }
 
 func ersCandidateByAliasForTest(t *testing.T, candidates []*ersCandidate, alias string) *ersCandidate {

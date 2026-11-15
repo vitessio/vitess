@@ -334,10 +334,13 @@ func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*top
 			positions:    positions,
 			stopStatus:   snapshot.statusMap[alias],
 			takingBackup: snapshot.tabletsBackupState[alias],
+			mysqlVersion: unknownVersion,
 			mysqlFlavor:  mysqlctl.FlavorUnknown,
 		}
 		if isGTIDBased {
-			candidate.mysqlVersion, candidate.hasMySQLVersion = snapshot.mysqlVersions[alias]
+			if version, ok := snapshot.mysqlVersions[alias]; ok {
+				candidate.mysqlVersion = version
+			}
 			candidate.mysqlFlavor = snapshot.mysqlFlavors[alias]
 		}
 		candidates = append(candidates, candidate)

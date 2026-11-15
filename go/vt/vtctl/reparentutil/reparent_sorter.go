@@ -353,24 +353,10 @@ func (es *ersCandidateSorter) Less(i, j int) bool {
 }
 
 func usableERSCandidateMySQLVersions(candidates []*ersCandidate) ([]mysqlctl.ServerVersion, bool) {
-	hasMySQLVersion := false
-	for _, candidate := range candidates {
-		if candidate.hasMySQLVersion {
-			hasMySQLVersion = true
-			break
-		}
-	}
-	if !hasMySQLVersion {
-		return nil, false
-	}
-
 	mysqlVersions := make([]mysqlctl.ServerVersion, len(candidates))
 	mysqlFlavors := make([]mysqlctl.MySQLFlavor, len(candidates))
 	for i, candidate := range candidates {
-		mysqlVersions[i] = unknownVersion
-		if candidate.hasMySQLVersion {
-			mysqlVersions[i] = candidate.mysqlVersion
-		}
+		mysqlVersions[i] = candidate.mysqlVersion
 		mysqlFlavors[i] = candidate.mysqlFlavor
 	}
 

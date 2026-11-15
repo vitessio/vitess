@@ -102,9 +102,9 @@ type ersCandidate struct {
 	info      *topo.TabletInfo
 	positions *RelayLogPositions
 
-	mysqlVersion    mysqlctl.ServerVersion
-	mysqlFlavor     mysqlctl.MySQLFlavor
-	hasMySQLVersion bool
+	// mysqlVersion is unknownVersion when the tablet's version isn't known.
+	mysqlVersion mysqlctl.ServerVersion
+	mysqlFlavor  mysqlctl.MySQLFlavor
 
 	// stopStatus is nil for a tablet that reported itself as primary rather than
 	// stopping replication, which is how the pipeline tells the two apart.
