@@ -162,6 +162,17 @@ message Session {
   string migration_context = 27;
 
   bool error_until_rollback = 28;
+
+  // character_set_results is the collation ID of the session's
+  // character_set_results: vtgate converts the text of a result to the
+  // character set of this collation and reports the collation in the fields
+  // of the result. 0 is the default connection collation of vtgate.
+  uint32 character_set_results = 29;
+
+  // character_set_results_null is true after SET character_set_results =
+  // NULL: vtgate returns each text column in the character set of the
+  // collation that the field of the column has, as MySQL does.
+  bool character_set_results_null = 30;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
