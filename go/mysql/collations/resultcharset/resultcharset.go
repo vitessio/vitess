@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -228,24 +229,48 @@ func ToConnection(fields []*querypb.Field, conn collations.ID, relabel bool) *Co
 //
 // results is the collation of character_set_results. The text of every
 // column, and the names in every field, are converted to the character set of
-// results, and every text field gets results as its collation, as MySQL
-// reports it.
+// results, and every text field gets results as its collation and the length
+// that MySQL reports for it: the length in characters times the longest
+// character of the character set of results. A utf8mb4 VARCHAR(10) has the
+// length 40, and 10 as latin1.
 //
 // null is true for character_set_results = NULL. The text of every column is
-// then converted to the character set of the collation in its field, and the
-// fields keep their collation and their names.
+// then converted to the character set of the collation in its field, the
+// fields keep their collation and get the length of the column in that
+// character set, and the names stay as they are.
 //
-// MySQL sends JSON as text and converts it with the rest, with the binary
-// collation in its field. This conversion does the same.
+// results can be the binary collation. MySQL then sends the text of every
+// column as it is stored, in the character set of the column, as for NULL, but
+// the fields of text columns get the binary collation and a length of one byte
+// per character, and the names stay as they are.
+//
+// The lengths in the fields are taken to be the ones MySQL reports with
+// character_set_results set to conn, which is what a tablet returns. A TEXT or
+// BLOB column with the length 4294967295 keeps it, as it does in MySQL for a
+// LONGTEXT column in every character set.
+//
+// Which columns are text is decided by the collation in the field, as MySQL
+// decides it: a column of a _bin collation is VARBINARY in Vitess, and is
+// text all the same. MySQL also sends JSON as text and converts it with the
+// rest. A JSON column keeps the binary collation and its length in its
+// field, and the field of a JSON function result, which has a text collation,
+// gets results like a text column. MySQL converts the text of a DECIMAL
+// expression as well, but not of a DECIMAL column: with ucs2, 1.5 is
+// 00 31 00 2E 00 35. Vitess tells the two apart by the binary flag, which
+// MySQL sets on the field of the expression only. Other numbers, dates and
+// binary columns are never converted.
 func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *Conversion {
 	c := &Conversion{}
 	from := lookupCharset(conn)
 	if from == nil {
 		return c
 	}
-	target := lookupCharset(results)
-	if !null && target == nil {
-		return c
+	asIs := null || results == collations.CollationBinaryID
+	var target charset.Charset
+	if !asIs {
+		if target = lookupCharset(results); target == nil {
+			return c
+		}
 	}
 
 	for i, field := range fields {
@@ -256,29 +281,59 @@ func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *
 			}
 			return converted
 		}
-
-		to := target
-		switch {
-		case field.Type == sqltypes.TypeJSON:
-			// The field of a JSON column keeps the binary collation
-			// and its length. With NULL the text stays as it is.
-			if null {
-				continue
-			}
-		case !isText(field.Type):
-			to = nil
-		case null:
-			to = lookupCharset(collations.ID(field.Charset))
-		default:
-			if length := scaleLength(field.ColumnLength, from, to); length != field.ColumnLength {
+		relabel := func(collation collations.ID, to charset.Charset) {
+			if length := clientLength(field, from, to, false); length != field.ColumnLength {
 				newField().ColumnLength = length
 			}
-			if field.Charset != uint32(results) {
-				newField().Charset = uint32(results)
+			if field.Charset != uint32(collation) {
+				newField().Charset = uint32(collation)
 			}
 		}
 
-		if !null && !target.IsSuperset(from) {
+		// to is the character set of the values, and nil when they stay
+		// as they are.
+		var to charset.Charset
+		switch kind := clientKind(field); {
+		case kind == kindOther:
+		case kind == kindDecimal:
+			to = target
+		case asIs:
+			if kind == kindJSON {
+				// JSON is in utf8mb4 already, and the text of a JSON
+				// column has no other character set. The field of a
+				// JSON function has a text collation.
+				own := lookupCharset(collations.ID(field.Charset))
+				switch {
+				case own == nil:
+				case null:
+					if length := clientLength(field, from, own, true); length != field.ColumnLength {
+						newField().ColumnLength = length
+					}
+				default:
+					relabel(collations.CollationBinaryID, binaryCharset{})
+				}
+				break
+			}
+			to = lookupCharset(collations.ID(field.Charset))
+			if to == nil {
+				break
+			}
+			if null {
+				if length := clientLength(field, from, to, true); length != field.ColumnLength {
+					newField().ColumnLength = length
+				}
+			} else {
+				relabel(collations.CollationBinaryID, binaryCharset{})
+			}
+		default:
+			to = target
+			if kind == kindJSON && field.Charset == uint32(collations.CollationBinaryID) {
+				break
+			}
+			relabel(results, target)
+		}
+
+		if !asIs && !target.IsSuperset(from) {
 			// MySQL sends the names of a result in
 			// character_set_results as well.
 			if name, ok := convertName(field.Name, from, target); ok {
@@ -306,6 +361,133 @@ func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *
 		}
 	}
 	return c
+}
+
+// The kinds of columns that ToClient tells apart.
+const (
+	kindOther = iota
+	kindText
+	kindJSON
+	kindDecimal
+)
+
+// clientKind returns how ToClient converts a column. A column of a string type
+// is text unless its field has the binary collation, so that a VARBINARY
+// column of utf8mb4_bin is text. A string column whose field has no collation
+// at all is text when its type is a text type, and binary otherwise.
+func clientKind(field *querypb.Field) int {
+	switch {
+	case field.Type == sqltypes.TypeJSON:
+		return kindJSON
+	case field.Type == sqltypes.Decimal:
+		if field.Flags&uint32(querypb.MySqlFlag_BINARY_FLAG) != 0 {
+			return kindDecimal
+		}
+		return kindOther
+	case isText(field.Type):
+		if field.Charset == uint32(collations.CollationBinaryID) {
+			return kindOther
+		}
+		return kindText
+	case field.Type == sqltypes.VarBinary || field.Type == sqltypes.Binary || field.Type == sqltypes.Blob:
+		if field.Charset == uint32(collations.CollationBinaryID) || field.Charset == uint32(collations.Unknown) {
+			return kindOther
+		}
+		return kindText
+	}
+	return kindOther
+}
+
+// clientLength returns the column length of a field in the character set to,
+// from its length in the character set from. MySQL computes it from the
+// length of the column in its own character set: the length in characters
+// times the longest character of to, and for a TEXT or BLOB column the
+// length in bytes divided by the shortest character of the column. The
+// length 4294967295 of a TEXT or BLOB column stays as it is.
+//
+// own is true when to is the character set of the column, for
+// character_set_results = NULL. The length of a TEXT or BLOB column is then
+// in bytes, and the length of any other column whose number of characters is
+// the largest that fits is 4294967295: MySQL sends 4294967295 for a JSON
+// function with NULL and 4294967292 with utf8mb4.
+func clientLength(field *querypb.Field, from, to charset.Charset, own bool) uint32 {
+	length := field.ColumnLength
+	blob := field.Type == sqltypes.Text || field.Type == sqltypes.Blob
+	if blob && length == math.MaxUint32 {
+		return length
+	}
+	chars := uint64(length) / uint64(from.MaxWidth())
+	if own && !blob && chars == math.MaxUint32/uint64(from.MaxWidth()) {
+		return math.MaxUint32
+	}
+	width := uint64(to.MaxWidth())
+	if own && blob {
+		width = uint64(minWidth(to))
+	}
+	if width == uint64(from.MaxWidth()) {
+		return length
+	}
+	return uint32(min(chars*width, math.MaxUint32))
+}
+
+// minWidth returns the length of the shortest character of cs: 1, or 2 for
+// ucs2, utf16 and utf16le, and 4 for utf32.
+func minWidth(cs charset.Charset) int {
+	var buf [4]byte
+	return max(cs.EncodeRune(buf[:], 'A'), 1)
+}
+
+// binaryCharset stands for the binary character set in the length of a field:
+// one byte for each character.
+type binaryCharset struct{ charset.Charset }
+
+func (binaryCharset) MaxWidth() int { return 1 }
+
+func (binaryCharset) EncodeRune(dst []byte, r rune) int {
+	dst[0] = byte(r)
+	return 1
+}
+
+// ToClientMessage returns the text of an error message, which is in utf8mb4,
+// in the character_set_results of a client, as MySQL sends it. results and
+// null are as for ToClient.
+//
+// MySQL writes a character that the character set does not have as a
+// backslash and its code point in four hexadecimal digits: with latin1,
+// "Table 't.x中' doesn't exist" ends in "x\4E2D'". It sends the message as
+// it is with NULL and binary, and an empty message with ucs2, utf16 and
+// utf32. A MySQL error message cannot hold a character beyond U+FFFF, it has
+// "?" for one, and so does this conversion when results does not have it.
+func ToClientMessage(message string, results collations.ID, null bool) string {
+	if null || results == collations.CollationBinaryID {
+		return message
+	}
+	to := lookupCharset(results)
+	if to == nil || (isASCII(message) && isASCIICompatible(to)) {
+		return message
+	}
+	if !isASCIICompatible(to) {
+		return ""
+	}
+	out := make([]byte, 0, len(message))
+	var buf [4]byte
+	for i := 0; i < len(message); {
+		r, width := utf8.DecodeRuneInString(message[i:])
+		if r == utf8.RuneError && width == 1 {
+			// MySQL takes a byte that is not UTF-8 as the code
+			// point of the same value.
+			r = rune(message[i])
+		}
+		i += width
+		if n := to.EncodeRune(buf[:], r); n > 0 {
+			out = append(out, buf[:n]...)
+		} else if r <= 0xFFFF {
+			out = fmt.Appendf(out, "\\%04X", r)
+		} else {
+			out = append(out, '?')
+		}
+	}
+	return string(out)
 }
 
 // convertName converts a name of a field, and reports whether the name
