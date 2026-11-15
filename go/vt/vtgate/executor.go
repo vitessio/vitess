@@ -1319,8 +1319,12 @@ func (e *Executor) fetchOrCreatePlan(
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
 	}
 
+	// The request's own hints and normalized SQL. A cached plan holds those
+	// of the request that built it.
+	var qh sqlparser.QueryHints
+	var normalized string
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		plan, logStats.CachedPlan, stmt, qh, normalized, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
@@ -1332,7 +1336,7 @@ func (e *Executor) fetchOrCreatePlan(
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
-		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
 			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
 				sp.Baseline = plan.Instructions
@@ -1343,10 +1347,19 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 
-	// Apply query hints
-	e.applyQueryHints(vcursor, plan)
+	if preparedPlan {
+		// A prepared statement's plan is looked up by the statement's text,
+		// which may not have been parsed for this request. The key is the
+		// whole text, so the plan's hints and SQL are the request's own.
+		qh, normalized = plan.QueryHints, plan.Original
+	} else if _, ok := stmt.(*sqlparser.ExecuteStmt); ok {
+		// An EXECUTE's plan is built for each request, and holds the hints
+		// of the prepared statement that it runs.
+		qh = plan.QueryHints
+	}
+	e.applyQueryHints(ctx, vcursor, qh)
 
-	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
+	logStats.SQL = comments.Leading + normalized + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
 	return plan, vcursor, stmt, nil
@@ -1368,7 +1381,7 @@ func (e *Executor) tryOptimizedPlan(
 	prevErr error,
 ) (*engine.Plan, error) {
 	vcursor.SetBindVars(bindVars)
-	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	sPlan, _, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
 	if err == nil {
 		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
 			sp.BaselineErr = prevErr
@@ -1393,14 +1406,13 @@ func shouldOptimizePlan(preparedPlan, isExecutePath bool, plan *engine.Plan) boo
 		(plan.Type == engine.PlanJoinOp || plan.Type == engine.PlanComplex)
 }
 
-// applyQueryHints applies query hints to the vcursor
-func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan) {
-	qh := plan.QueryHints
+// applyQueryHints applies the request's query hints to the vcursor. The
+// hints that become execute options are applied to the calls that the
+// statement makes, not to the session.
+func (e *Executor) applyQueryHints(ctx context.Context, vcursor *econtext.VCursorImpl, qh sqlparser.QueryHints) {
 	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
-	vcursor.SetConsolidator(qh.Consolidator)
-	vcursor.SetWorkloadName(qh.Workload)
-	vcursor.SetPriority(qh.Priority)
 	vcursor.SetExecQueryTimeout(qh.Timeout)
+	vcursor.SetStatementOptions(ctx, qh)
 }
 
 func (e *Executor) getCachedOrBuildPlan(
@@ -1412,10 +1424,10 @@ func (e *Executor) getCachedOrBuildPlan(
 	parameterize bool,
 	planKey engine.PlanKey,
 	ignoreCache bool,
-) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
+) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, qh sqlparser.QueryHints, normalized string, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, qh, "", err
 	}
 
 	preparedPlan := planKey.Query != ""
@@ -1431,7 +1443,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		// statement with NULL field types.
 		switch stmt.(type) {
 		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+			return nil, false, nil, qh, "", vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 		}
 	}
 
@@ -1441,15 +1453,25 @@ func (e *Executor) getCachedOrBuildPlan(
 		}
 	}()
 
-	qh, err := sqlparser.BuildQueryHints(stmt)
+	qh, err = sqlparser.BuildQueryHints(stmt)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, qh, "", err
 	}
 
 	if qh.ForeignKeyChecks == nil {
 		qh.ForeignKeyChecks = vcursor.SafeSession.ForeignKeyChecks()
 	}
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
+
+	// Plan the statement with marker blocks in place of its request-only
+	// directives, which VTGate has already read, so that requests that differ
+	// only in them share a plan. A prepared statement's plan is looked up by
+	// its text, which keeps the directives.
+	var rd *sqlparser.RequestDirectives
+	if !preparedPlan && !ignoreCache && sqlparser.CachePlan(stmt) && vcursor.CachePlan() {
+		rd = sqlparser.ReplaceRequestDirectives(stmt)
+		vcursor.SetRequestDirectives(rd)
+	}
 
 	paramsCount := uint16(0)
 	if preparedPlan {
@@ -1474,7 +1496,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		vcursor,
 	)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, qh, "", err
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
@@ -1487,14 +1509,15 @@ func (e *Executor) getCachedOrBuildPlan(
 		if !preparedPlan {
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+			planKey.RequestDirectives = rd != nil
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})
-		return plan, cached, stmt, err
+		return plan, cached, stmt, qh, rd.Restore(query), err
 	}
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
-	return plan, false, stmt, err
+	return plan, false, stmt, qh, rd.Restore(query), err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
@@ -1554,7 +1577,11 @@ func (e *Executor) buildStatement(
 
 	plan.ParamsCount = paramsCount
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
-	plan.QueryHints = qh
+	// An EXECUTE has no directives of its own: it runs with those of the
+	// prepared statement, which BuildFromStmt gave the plan.
+	if _, ok := stmt.(*sqlparser.ExecuteStmt); !ok {
+		plan.QueryHints = qh
+	}
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	return plan, err
@@ -1856,6 +1883,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *econtext.Safe
 		return nil, 0, err
 	}
 
+	ctx = econtext.WithStatementOptions(ctx, vcursor.StatementOptions())
 	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	if err != nil {

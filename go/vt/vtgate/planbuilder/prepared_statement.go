@@ -56,12 +56,14 @@ func buildExecuteStmtPlan(ctx context.Context, vschema plancontext.VSchema, eStm
 		return nil, err
 	}
 
+	queryHints := plan.QueryHints
 	return &planResult{
 		primitive: &engine.ExecStmt{
 			Params: eStmt.Arguments,
 			Input:  plan.Instructions,
 		},
-		tables: plan.TablesUsed,
+		tables:     plan.TablesUsed,
+		queryHints: &queryHints,
 	}, nil
 }
 
