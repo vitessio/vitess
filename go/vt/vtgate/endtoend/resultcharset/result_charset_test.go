@@ -16,10 +16,11 @@ limitations under the License.
 
 // Package resultcharset tests vtgate with --convert-result-charset and
 // tablets with --queryserver-config-raw-result-charset against MySQL: MySQL
-// protocol clients with different handshake collations and SET statements get
-// the bytes, field collations and lengths that MySQL sends. The expected
-// values were measured on MySQL 8.0.46 and 8.4.13 with the same table, and the
-// two agree on all of them.
+// protocol clients with utf8mb4 and utf8mb3 handshake collations and SET
+// statements get the bytes, field collations and lengths that MySQL sends,
+// and clients of other character sets are refused. The expected values were
+// measured on MySQL 8.0.46 and 8.4.13 with the same table, and the two agree
+// on all of them.
 //
 // The tablets read results with character_set_results = NULL, so vtgate knows
 // the collation of each column, which character_set_results = NULL and binary
@@ -152,31 +153,19 @@ func TestResultCharset(t *testing.T) {
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
 	}, {
-		name:      "latin1 handshake",
-		handshake: 8,
-		text:      [3]column{{8, 10, "4dfc6c6c6572"}, {8, 10, "3f3f"}, {8, 10, "e9803f"}},
-		json:      "7b2261223a2022e9803f227d",
-		results:   "6c6174696e31",
-	}, {
-		name:      "gb2312 handshake",
-		handshake: 28,
-		text:      [3]column{{24, 20, "4da8b96c6c6572"}, {24, 20, "d6d0cec4"}, {24, 20, "a8a63f3f"}},
-		json:      "7b2261223a2022a8a63f3f227d",
-		results:   "67626b",
+		// The 4-byte character of u4 is a ?, as in every character set
+		// other than utf8mb4.
+		name:      "utf8mb3 handshake",
+		handshake: 33,
+		text:      [3]column{{33, 30, "4dc3bc6c6c6572"}, {33, 30, "e4b8ade69687"}, {33, 30, "c3a9e282ac3f"}},
+		json:      "7b2261223a2022c3a9e282ac3f227d",
+		results:   "757466386d6233",
 	}, {
 		name:      "utf8mb4_bin handshake",
 		handshake: 46,
 		text:      [3]column{{46, 40, "4dc3bc6c6c6572"}, {46, 40, "e4b8ade69687"}, {46, 40, "c3a9e282acf09f9880"}},
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
-	}, {
-		// MySQL sends each column in its own character set, with the
-		// binary collation and one byte for each character of its length.
-		name:      "binary handshake",
-		handshake: 63,
-		text:      [3]column{{63, 10, "4dfc6c6c6572"}, {63, 10, "d6d0cec4"}, {63, 10, "c3a9e282acf09f9880"}},
-		json:      "7b2261223a2022c3a9e282acf09f9880227d",
-		results:   "62696e617279",
 	}, {
 		name:      "SET NAMES utf8mb4 COLLATE utf8mb4_bin",
 		handshake: 255,
@@ -185,12 +174,19 @@ func TestResultCharset(t *testing.T) {
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
 	}, {
-		name:      "SET NAMES DEFAULT after a latin1 handshake",
-		handshake: 8,
+		name:      "SET NAMES DEFAULT after a utf8mb3 handshake",
+		handshake: 33,
 		set:       "set names default",
 		text:      [3]column{{255, 40, "4dc3bc6c6c6572"}, {255, 40, "e4b8ade69687"}, {255, 40, "c3a9e282acf09f9880"}},
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
+	}, {
+		name:      "SET character_set_results = latin1",
+		handshake: 255,
+		set:       "set character_set_results = latin1",
+		text:      [3]column{{8, 10, "4dfc6c6c6572"}, {8, 10, "3f3f"}, {8, 10, "e9803f"}},
+		json:      "7b2261223a2022e9803f227d",
+		results:   "6c6174696e31",
 	}, {
 		name:      "SET character_set_results = gb2312",
 		handshake: 255,
@@ -213,6 +209,8 @@ func TestResultCharset(t *testing.T) {
 		json:      "007b002200610022003a0020002200e920ac003f0022007d",
 		results:   "0075006300730032",
 	}, {
+		// MySQL sends each column in its own character set, with the
+		// binary collation and one byte for each character of its length.
 		name:      "SET character_set_results = binary",
 		handshake: 255,
 		set:       "set character_set_results = binary",
@@ -268,6 +266,36 @@ func TestResultCharset(t *testing.T) {
 				}
 				assert.Equal(t, tc.results, got, workload)
 			}
+		})
+	}
+}
+
+// TestHandshakeRefused covers the clients that vtgate refuses with
+// --convert-result-charset, which reads every query as utf8mb4: a client
+// whose handshake collation belongs to another character set than utf8mb4
+// and utf8mb3. MySQL accepts latin1, gb2312 and binary, and refuses ucs2 with
+// the same error.
+func TestHandshakeRefused(t *testing.T) {
+	tests := []struct {
+		handshake collations.ID
+		charset   string
+	}{
+		{8, "latin1"},
+		{24, "gb2312"},
+		{63, "binary"},
+		{35, "ucs2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.charset, func(t *testing.T) {
+			params := vtParams
+			params.Charset = tc.handshake
+			_, err := mysql.Connect(t.Context(), &params)
+			require.Error(t, err)
+			var sqlErr *sqlerror.SQLError
+			require.ErrorAs(t, err, &sqlErr)
+			assert.Equal(t, sqlerror.ERWrongValueForVar, sqlErr.Num)
+			assert.Equal(t, sqlerror.SSClientError, sqlErr.State)
+			assert.Equal(t, "Variable 'character_set_client' can't be set to the value of '"+tc.charset+"': vtgate with --convert-result-charset accepts utf8mb4 and utf8mb3 clients, and SET character_set_results gives results in another character set", sqlErr.Message)
 		})
 	}
 }
