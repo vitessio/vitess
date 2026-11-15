@@ -394,6 +394,7 @@ func (m *ExecuteRequest) CloneVT() *ExecuteRequest {
 	r.ReservedId = m.ReservedId
 	r.ReservedConnKeepAlive = m.ReservedConnKeepAlive
 	r.ReservedConnActivityRefresh = m.ReservedConnActivityRefresh
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.ReservedConnKeepAliveIds; rhs != nil {
 		tmpContainer := make([]int64, len(rhs))
 		copy(tmpContainer, rhs)
@@ -457,6 +458,7 @@ func (m *StreamExecuteRequest) CloneVT() *StreamExecuteRequest {
 	r.Options = m.Options.CloneVT()
 	r.TransactionId = m.TransactionId
 	r.ReservedId = m.ReservedId
+	r.RawResultCharset = m.RawResultCharset
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -953,6 +955,7 @@ func (m *BeginExecuteRequest) CloneVT() *BeginExecuteRequest {
 	r.Query = m.Query.CloneVT()
 	r.Options = m.Options.CloneVT()
 	r.ReservedId = m.ReservedId
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1001,6 +1004,7 @@ func (m *BeginStreamExecuteRequest) CloneVT() *BeginStreamExecuteRequest {
 	r.Query = m.Query.CloneVT()
 	r.Options = m.Options.CloneVT()
 	r.ReservedId = m.ReservedId
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1047,6 +1051,7 @@ func (m *MessageStreamRequest) CloneVT() *MessageStreamRequest {
 	r.ImmediateCallerId = m.ImmediateCallerId.CloneVT()
 	r.Target = m.Target.CloneVT()
 	r.Name = m.Name
+	r.RawResultCharset = m.RawResultCharset
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -1130,6 +1135,7 @@ func (m *ReserveExecuteRequest) CloneVT() *ReserveExecuteRequest {
 	r.Query = m.Query.CloneVT()
 	r.TransactionId = m.TransactionId
 	r.Options = m.Options.CloneVT()
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1177,6 +1183,7 @@ func (m *ReserveStreamExecuteRequest) CloneVT() *ReserveStreamExecuteRequest {
 	r.Query = m.Query.CloneVT()
 	r.Options = m.Options.CloneVT()
 	r.TransactionId = m.TransactionId
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1223,6 +1230,7 @@ func (m *ReserveBeginExecuteRequest) CloneVT() *ReserveBeginExecuteRequest {
 	r.Target = m.Target.CloneVT()
 	r.Query = m.Query.CloneVT()
 	r.Options = m.Options.CloneVT()
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -1276,6 +1284,7 @@ func (m *ReserveBeginStreamExecuteRequest) CloneVT() *ReserveBeginStreamExecuteR
 	r.Target = m.Target.CloneVT()
 	r.Query = m.Query.CloneVT()
 	r.Options = m.Options.CloneVT()
+	r.RawResultCharset = m.RawResultCharset
 	if rhs := m.PreQueries; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
 		copy(tmpContainer, rhs)
@@ -2523,6 +2532,16 @@ func (m *ExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x58
+	}
 	if m.ReservedConnActivityRefresh {
 		i--
 		if m.ReservedConnActivityRefresh {
@@ -2752,6 +2771,16 @@ func (m *StreamExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if m.ReservedId != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ReservedId))
@@ -4213,6 +4242,16 @@ func (m *BeginExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.PreQueries) > 0 {
 		for iNdEx := len(m.PreQueries) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.PreQueries[iNdEx])
@@ -4385,6 +4424,16 @@ func (m *BeginStreamExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.ReservedId != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ReservedId))
 		i--
@@ -4556,6 +4605,16 @@ func (m *MessageStreamRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x28
 	}
 	if len(m.Name) > 0 {
 		i -= len(m.Name)
@@ -4795,6 +4854,16 @@ func (m *ReserveExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error)
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.PreQueries) > 0 {
 		for iNdEx := len(m.PreQueries) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.PreQueries[iNdEx])
@@ -4960,6 +5029,16 @@ func (m *ReserveStreamExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if len(m.PreQueries) > 0 {
 		for iNdEx := len(m.PreQueries) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.PreQueries[iNdEx])
@@ -5124,6 +5203,16 @@ func (m *ReserveBeginExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.PostBeginQueries) > 0 {
 		for iNdEx := len(m.PostBeginQueries) - 1; iNdEx >= 0; iNdEx-- {
@@ -5305,6 +5394,16 @@ func (m *ReserveBeginStreamExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.RawResultCharset {
+		i--
+		if m.RawResultCharset {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if len(m.PostBeginQueries) > 0 {
 		for iNdEx := len(m.PostBeginQueries) - 1; iNdEx >= 0; iNdEx-- {
@@ -6527,6 +6626,9 @@ func (m *ExecuteRequest) SizeVT() (n int) {
 	if m.ReservedConnActivityRefresh {
 		n += 2
 	}
+	if m.RawResultCharset {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -6594,6 +6696,9 @@ func (m *StreamExecuteRequest) SizeVT() (n int) {
 	}
 	if m.ReservedId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReservedId))
+	}
+	if m.RawResultCharset {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7125,6 +7230,9 @@ func (m *BeginExecuteRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
+	if m.RawResultCharset {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -7193,6 +7301,9 @@ func (m *BeginStreamExecuteRequest) SizeVT() (n int) {
 	if m.ReservedId != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReservedId))
 	}
+	if m.RawResultCharset {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -7247,6 +7358,9 @@ func (m *MessageStreamRequest) SizeVT() (n int) {
 	l = len(m.Name)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.RawResultCharset {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7347,6 +7461,9 @@ func (m *ReserveExecuteRequest) SizeVT() (n int) {
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
 	}
+	if m.RawResultCharset {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -7410,6 +7527,9 @@ func (m *ReserveStreamExecuteRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	if m.RawResultCharset {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7477,6 +7597,9 @@ func (m *ReserveBeginExecuteRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	if m.RawResultCharset {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -7551,6 +7674,9 @@ func (m *ReserveBeginStreamExecuteRequest) SizeVT() (n int) {
 			l = len(s)
 			n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 		}
+	}
+	if m.RawResultCharset {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -10685,6 +10811,26 @@ func (m *ExecuteRequest) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ReservedConnActivityRefresh = bool(v != 0)
+		case 11:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -11164,6 +11310,26 @@ func (m *StreamExecuteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -14726,6 +14892,26 @@ func (m *BeginExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PreQueries = append(m.PreQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -15218,6 +15404,26 @@ func (m *BeginStreamExecuteRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -15619,6 +15825,26 @@ func (m *MessageStreamRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.Name = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -16300,6 +16526,26 @@ func (m *ReserveExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PreQueries = append(m.PreQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -16760,6 +17006,26 @@ func (m *ReserveStreamExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PreQueries = append(m.PreQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -17233,6 +17499,26 @@ func (m *ReserveBeginExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PostBeginQueries = append(m.PostBeginQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
@@ -17757,6 +18043,26 @@ func (m *ReserveBeginStreamExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			m.PostBeginQueries = append(m.PostBeginQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RawResultCharset", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.RawResultCharset = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -70,6 +70,8 @@ func (m *Session) CloneVT() *Session {
 	r.QueryTimeout = m.QueryTimeout
 	r.MigrationContext = m.MigrationContext
 	r.ErrorUntilRollback = m.ErrorUntilRollback
+	r.CharacterSetResults = m.CharacterSetResults
+	r.CharacterSetResultsNull = m.CharacterSetResultsNull
 	if rhs := m.ShardSessions; rhs != nil {
 		tmpContainer := make([]*Session_ShardSession, len(rhs))
 		for k, v := range rhs {
@@ -736,6 +738,25 @@ func (m *Session) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.CharacterSetResultsNull {
+		i--
+		if m.CharacterSetResultsNull {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xf0
+	}
+	if m.CharacterSetResults != 0 {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.CharacterSetResults))
+		i--
+		dAtA[i] = 0x1
+		i--
+		dAtA[i] = 0xe8
 	}
 	if m.ErrorUntilRollback {
 		i--
@@ -2650,6 +2671,12 @@ func (m *Session) SizeVT() (n int) {
 	if m.ErrorUntilRollback {
 		n += 3
 	}
+	if m.CharacterSetResults != 0 {
+		n += 2 + protohelpers.SizeOfVarint(uint64(m.CharacterSetResults))
+	}
+	if m.CharacterSetResultsNull {
+		n += 3
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -4527,6 +4554,45 @@ func (m *Session) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.ErrorUntilRollback = bool(v != 0)
+		case 29:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CharacterSetResults", wireType)
+			}
+			m.CharacterSetResults = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.CharacterSetResults |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 30:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CharacterSetResultsNull", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.CharacterSetResultsNull = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

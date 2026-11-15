@@ -226,8 +226,17 @@ type Session struct {
 	// MigrationContext
 	MigrationContext   string `protobuf:"bytes,27,opt,name=migration_context,json=migrationContext,proto3" json:"migration_context,omitempty"`
 	ErrorUntilRollback bool   `protobuf:"varint,28,opt,name=error_until_rollback,json=errorUntilRollback,proto3" json:"error_until_rollback,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// character_set_results is the collation ID of the session's
+	// character_set_results: vtgate converts the text of a result to the
+	// character set of this collation and reports the collation in the fields
+	// of the result. 0 is the default connection collation of vtgate.
+	CharacterSetResults uint32 `protobuf:"varint,29,opt,name=character_set_results,json=characterSetResults,proto3" json:"character_set_results,omitempty"`
+	// character_set_results_null is true after SET character_set_results =
+	// NULL: vtgate returns each text column in the character set of the
+	// collation that the field of the column has, as MySQL does.
+	CharacterSetResultsNull bool `protobuf:"varint,30,opt,name=character_set_results_null,json=characterSetResultsNull,proto3" json:"character_set_results_null,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -445,6 +454,20 @@ func (x *Session) GetMigrationContext() string {
 func (x *Session) GetErrorUntilRollback() bool {
 	if x != nil {
 		return x.ErrorUntilRollback
+	}
+	return false
+}
+
+func (x *Session) GetCharacterSetResults() uint32 {
+	if x != nil {
+		return x.CharacterSetResults
+	}
+	return 0
+}
+
+func (x *Session) GetCharacterSetResultsNull() bool {
+	if x != nil {
+		return x.CharacterSetResultsNull
 	}
 	return false
 }
@@ -2112,7 +2135,7 @@ var File_vtgate_proto protoreflect.FileDescriptor
 
 const file_vtgate_proto_rawDesc = "" +
 	"\n" +
-	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xce\x0f\n" +
+	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xbf\x10\n" +
 	"\aSession\x12%\n" +
 	"\x0ein_transaction\x18\x01 \x01(\bR\rinTransaction\x12C\n" +
 	"\x0eshard_sessions\x18\x02 \x03(\v2\x1c.vtgate.Session.ShardSessionR\rshardSessions\x12\x1e\n" +
@@ -2146,7 +2169,9 @@ const file_vtgate_proto_rawDesc = "" +
 	"\rquery_timeout\x18\x19 \x01(\x03R\fqueryTimeout\x12R\n" +
 	"\x11prepare_statement\x18\x1a \x03(\v2%.vtgate.Session.PrepareStatementEntryR\x10prepareStatement\x12+\n" +
 	"\x11migration_context\x18\x1b \x01(\tR\x10migrationContext\x120\n" +
-	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x1a\xf9\x01\n" +
+	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x122\n" +
+	"\x15character_set_results\x18\x1d \x01(\rR\x13characterSetResults\x12;\n" +
+	"\x1acharacter_set_results_null\x18\x1e \x01(\bR\x17characterSetResultsNull\x1a\xf9\x01\n" +
 	"\fShardSession\x12%\n" +
 	"\x06target\x18\x01 \x01(\v2\r.query.TargetR\x06target\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\x03R\rtransactionId\x128\n" +
