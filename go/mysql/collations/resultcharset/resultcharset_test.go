@@ -107,7 +107,8 @@ func TestToConnection(t *testing.T) {
 			{utf8mb40900AICI, 8},
 		}
 		for i, f := range got.Fields {
-			assert.Equal(t, want[i], meta{collations.ID(f.Charset), f.ColumnLength}, "field %s", f.Name)
+			got := meta{collations.ID(f.Charset), f.ColumnLength}
+			assert.Equal(t, want[i], got, "field %s", f.Name)
 		}
 
 		assert.Equal(t, "Müller", got.Rows[0][0].ToString())
