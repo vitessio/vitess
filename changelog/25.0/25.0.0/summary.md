@@ -671,7 +671,7 @@ See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
 
 A new VTTablet flag, `--full-status-consolidation-timeout` (default `0`, off), lets concurrent `FullStatus` RPCs on a tablet share one in-flight MySQL collection, bounded by the flag rather than by any one caller's deadline. Each caller's own deadline still applies, so a caller with a longer deadline than the flag fails when the flag expires. A call can also join a collection that started before it, though never one from before a completed tablet action. With the default, each RPC collects on its own deadline, as before.
 
-In both modes, when a `FullStatus` query is cancelled or times out, the tablet now closes its MySQL connection and kills the query, so a stalled read no longer holds a DBA pool connection until MySQL answers. A cancelled query shows up in MySQL's `Aborted_clients`.
+In both modes, when a `FullStatus` query is cancelled or times out, the tablet now closes its MySQL connection straight away and kills the query in the background. Before, `SHOW REPLICA STATUS`, `SHOW BINARY LOG STATUS` and the replication configuration read could not be cancelled, so a stalled read held its DBA pool connection until MySQL answered, and the other `FullStatus` queries waited up to 5s for the kill before closing. A cancelled query shows up in MySQL's `Aborted_clients`. If MySQL is stuck in a wait that `KILL` cannot interrupt, such as `SHOW BINARY LOG STATUS` waiting on the binary log lock, each cancelled query's server thread remains until that wait ends, so these threads are no longer limited by `--dba-pool-size`.
 
 See [#21495](https://github.com/vitessio/vitess/pull/21495) for details.
 
