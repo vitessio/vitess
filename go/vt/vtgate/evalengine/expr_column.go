@@ -59,7 +59,12 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.rowCollation(env), c.Values)
+	value := env.Row[c.Offset]
+	collation := c.rowCollation(env)
+	if env.FieldCharsets && sqltypes.IsText(value.Type()) {
+		value = sqltypes.MakeTrusted(value.Type(), env.columnText(c.Offset, value.Raw(), collation.Collation))
+	}
+	return valueToEval(value, collation, c.Values)
 }
 
 // rowCollation returns the collation that the value of the column is

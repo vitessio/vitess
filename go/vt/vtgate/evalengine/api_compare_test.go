@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -1660,4 +1661,68 @@ func BenchmarkMerger(b *testing.B) {
 			}
 		})
 	}
+}
+
+// TestCompareForText checks the comparisons, the hash and the weight string
+// of the evaluation engine with a collation of colldata.ForText, which is
+// latin1_german2_ci for text that is in utf8mb4. In MySQL 8.0.46 'Müller'
+// equals 'MUELLER' in latin1_german2_ci and sorts after 'é', and the weight
+// string of both is 4D55454C4C4552. With latin1_german2_ci itself the utf8mb4
+// bytes of 'Müller' do not equal 'MUELLER'.
+func TestCompareForText(t *testing.T) {
+	collationEnv := collations.MySQL8()
+	planned := collationEnv.LookupByName("latin1_german2_ci")
+	forText := colldata.ForText(planned, collationEnv.DefaultConnectionCharset())
+	require.NotEqual(t, planned, forText)
+
+	mueller := sqltypes.NewVarChar("Müller")
+	tests := []struct {
+		name   string
+		v1, v2 sqltypes.Value
+		out    int
+	}{
+		{"equal", mueller, sqltypes.NewVarChar("MUELLER"), 0},
+		{"after", mueller, sqltypes.NewVarChar("é"), 1},
+		{"before", sqltypes.NewVarChar("é"), sqltypes.NewVarChar("f"), -1},
+		// Values of two types are compared by the evaluation engine.
+		{"equal, another type", mueller, sqltypes.MakeTrusted(sqltypes.Char, []byte("MUELLER")), 0},
+		{"after, another type", mueller, sqltypes.MakeTrusted(sqltypes.Text, []byte("é")), 1},
+		{"null", sqltypes.NULL, mueller, -1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := NullsafeCompare(tc.v1, tc.v2, collationEnv, forText, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.out, got)
+		})
+	}
+
+	got, err := NullsafeCompare(mueller, sqltypes.NewVarChar("MUELLER"), collationEnv, planned, nil)
+	require.NoError(t, err)
+	assert.NotZero(t, got)
+
+	hash1, err := NullsafeHashcode(mueller, forText, sqltypes.VarChar, 0, nil)
+	require.NoError(t, err)
+	hash2, err := NullsafeHashcode(sqltypes.NewVarChar("MUELLER"), forText, sqltypes.VarChar, 0, nil)
+	require.NoError(t, err)
+	assert.Equal(t, hash1, hash2)
+
+	weight, _, err := WeightString(nil, mueller, sqltypes.VarChar, forText, 0, 0, nil, 0)
+	require.NoError(t, err)
+	assert.Equal(t, "MUELLER", string(weight))
+
+	minmax := NewAggregationMinMax(sqltypes.VarChar, collationEnv, forText, nil)
+	for _, v := range []string{"é", "d", "f"} {
+		require.NoError(t, minmax.Min(sqltypes.NewVarChar(v)))
+	}
+	assert.Equal(t, "d", minmax.Result().ToString())
+
+	// The first four bytes of the weight string, for a sort.
+	field := &querypb.Field{Type: sqltypes.VarChar}
+	tiny := TinyWeighter(field, forText)
+	require.NotNil(t, tiny)
+	v1, v2 := sqltypes.NewVarChar("Müller"), sqltypes.NewVarChar("MUELLER")
+	tiny(&v1)
+	tiny(&v2)
+	assert.Zero(t, v1.TinyWeightCmp(v2))
 }

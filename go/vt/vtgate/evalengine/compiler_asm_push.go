@@ -475,7 +475,7 @@ func (asm *assembler) PushColumn_text(offset int, coll collations.TypedCollation
 		if col.IsNull() {
 			return push_null(env)
 		}
-		return push_text(env, col.Raw(), coll)
+		return push_text(env, env.columnText(offset, col.Raw(), coll.Collation), coll)
 	}, "PUSH VARCHAR(:%d) COLLATE %d", offset, coll.Collation)
 }
 

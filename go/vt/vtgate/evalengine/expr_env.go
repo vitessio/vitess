@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
@@ -48,6 +50,12 @@ type (
 		Row      []sqltypes.Value
 		Fields   []*querypb.Field
 
+		// FieldCharsets says that the text of each column of Row is in the
+		// character set of the collation that Fields has for it, and that a
+		// column that is evaluated in a collation of another character set
+		// has to be converted to it first, see columnText.
+		FieldCharsets bool
+
 		// internal state
 		now          time.Time
 		vc           VCursor
@@ -56,6 +64,34 @@ type (
 		collationEnv *collations.Environment
 	}
 )
+
+// columnText returns raw, the text of the column at offset of the row, in the
+// character set of the collation that the column is evaluated in.
+//
+// MySQL evaluates a column in the collation of the column, and sends its text
+// in character_set_results. A tablet that reads with a utf8mb4 connection
+// sends 'Müller' of a latin1_german2_ci column as 4D C3 BC 6C 6C 65 72, and
+// the planner types the column as latin1_german2_ci. Evaluated as they are,
+// those bytes are the latin1 text 'MÃ¼ller', which is not equal to 'Mueller'
+// as 'Müller' is in that collation. So the text becomes 4D FC 6C 6C 65 72
+// first. A character that the character set of the collation does not have
+// becomes "?", as it does in MySQL.
+//
+// Only an evaluation with FieldCharsets converts. The text of a row without
+// fields, and of a field with the binary collation, is taken for text of the
+// collation, as it is without FieldCharsets.
+func (env *ExpressionEnv) columnText(offset int, raw []byte, collation collations.ID) []byte {
+	if !env.FieldCharsets || offset >= len(env.Fields) {
+		return raw
+	}
+	to, from, ok := colldata.TextConversion(collation, collations.ID(env.Fields[offset].Charset))
+	if !ok {
+		return raw
+	}
+	// The error says that a character became "?".
+	converted, _ := charset.Convert(nil, to, raw, from)
+	return converted
+}
 
 func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 	if utc {

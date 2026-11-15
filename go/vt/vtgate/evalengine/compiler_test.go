@@ -1681,3 +1681,76 @@ func TestColumnCoercibility(t *testing.T) {
 		})
 	}
 }
+
+// TestColumnFieldCharsets checks that an evaluation with FieldCharsets
+// converts the text of a column from the character set of its field to the
+// one of the collation that the planner typed the column with, and evaluates
+// it as MySQL 8.0.46 evaluates the column. For a latin1_german2_ci column
+// with 'Müller', read with character_set_results = NULL:
+//
+//	l = 'mueller'       1
+//	HEX(UPPER(l))       4DDC4C4C4552
+//	HEX(CONCAT(l, 'x')) 4DFC6C6C657278
+//
+// The row has the utf8mb4 text of the column, 4D C3 BC 6C 6C 65 72, which is
+// the latin1 text 'MÃ¼ller'. Without FieldCharsets it is evaluated as that.
+func TestColumnFieldCharsets(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	latin1German2 := venv.CollationEnv().LookupByName("latin1_german2_ci")
+	planned := evalengine.FieldResolver([]*querypb.Field{
+		{Name: "l", Type: sqltypes.VarChar, Charset: uint32(latin1German2)},
+	})
+	utf8 := []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}}
+	latin1 := []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(latin1German2)}}
+	binary := []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collations.CollationBinaryID)}}
+
+	testCases := []struct {
+		name          string
+		expression    string
+		fields        []*querypb.Field
+		row           string
+		fieldCharsets bool
+		result        string
+	}{
+		{"utf8mb4 row", "l = 'mueller'", utf8, "Müller", true, "INT64(1)"},
+		{"utf8mb4 row", "hex(upper(l))", utf8, "Müller", true, `VARCHAR("4DDC4C4C4552")`},
+		{"utf8mb4 row", "hex(concat(l, 'x'))", utf8, "Müller", true, `VARCHAR("4DFC6C6C657278")`},
+		// A character that latin1 does not have is "?", as in MySQL.
+		{"utf8mb4 row", "hex(l)", utf8, "中", true, `VARCHAR("3F")`},
+		{"utf8mb4 row, as before", "l = 'mueller'", utf8, "Müller", false, "INT64(0)"},
+		{"utf8mb4 row, as before", "hex(l)", utf8, "Müller", false, `VARCHAR("4DC3BC6C6C6572")`},
+		// A row that is in the character set of the collation stays as it is.
+		{"latin1 row", "l = 'mueller'", latin1, "M\xfcller", true, "INT64(1)"},
+		{"latin1 row", "hex(l)", latin1, "M\xfcller", true, `VARCHAR("4DFC6C6C6572")`},
+		// So do a row whose field does not say which character set it is in,
+		// and a row without fields.
+		{"binary field", "hex(l)", binary, "M\xfcller", true, `VARCHAR("4DFC6C6C6572")`},
+		{"no fields", "hex(l)", nil, "M\xfcller", true, `VARCHAR("4DFC6C6C6572")`},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name+" "+tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: planned.Column,
+				ResolveType:   planned.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tc.row))}
+			env.Fields = tc.fields
+			env.FieldCharsets = tc.fieldCharsets
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+			compiled, err := env.Evaluate(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, compiled.String())
+			// The row is not changed.
+			assert.Equal(t, tc.row, env.Row[0].ToString())
+		})
+	}
+}
