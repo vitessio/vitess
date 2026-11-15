@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -768,4 +769,49 @@ func TestExecuteMultiShardLastInsertIDConcurrent(t *testing.T) {
 	// any writer may win; the guarantee under test is no data race,
 	// not which id lands last
 	require.NotZero(t, vc.SafeSession.GetLastInsertId())
+}
+
+// rawResultExecutor returns the result of a lookup query of a latin1
+// from column as a tablet with --queryserver-config-raw-result-charset
+// returns it: 'Müller' is 4D FC 6C 6C 65 72, with the collation 31.
+type rawResultExecutor struct {
+	fakeExecutor
+}
+
+func (rawResultExecutor) Execute(context.Context, vtgateservice.MySQLConnection, string, *SafeSession, string, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "l", Type: sqltypes.VarChar, Charset: 31, ColumnLength: 10},
+			{Name: "keyspace_id", Type: sqltypes.VarBinary, Charset: 63, ColumnLength: 10},
+		},
+		Rows: []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller")), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x16k@\xb4"))}},
+	}, nil
+}
+
+// TestExecuteConvertsResultCharset checks that with --convert-result-charset
+// the result of a query of a vindex is in the connection character set: a
+// lookup vindex with batch_lookup compares the text of its rows with the values
+// it looks up, which are utf8mb4. The keyspace ID is binary and stays as it is.
+// Without the flag the result is the one of the executor.
+func TestExecuteConvertsResultCharset(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			vc, err := NewVCursorImpl(NewSafeSession(nil), sqlparser.MarginComments{}, rawResultExecutor{}, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{
+				Collation:            collations.MySQL8().DefaultConnectionCharset(),
+				ConvertResultCharset: convert,
+			}, nil)
+			require.NoError(t, err)
+
+			qr, err := vc.Execute(t.Context(), "VindexLookup", "select l, keyspace_id from lkp where l in ::l", nil, false, vtgatepb.CommitOrder_NORMAL)
+			require.NoError(t, err)
+			want, charset := "M\xFCller", uint32(31)
+			if convert {
+				want, charset = "Müller", 255
+			}
+			require.Len(t, qr.Rows, 1)
+			require.Equal(t, want, qr.Rows[0][0].ToString())
+			require.Equal(t, charset, qr.Fields[0].Charset)
+			require.Equal(t, "\x16k@\xb4", qr.Rows[0][1].ToString())
+		})
+	}
 }
