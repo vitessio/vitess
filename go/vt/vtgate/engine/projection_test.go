@@ -298,18 +298,32 @@ func TestProjectionKeepsCharset(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// The same expression of a column whose type the planner does not know is
+	// evaluated in the collation of the field of the column.
+	untypedUpper, err := evalengine.Translate(expr, &evalengine.Config{
+		Environment: vtenv.NewTestEnv(),
+		Collation:   collations.MySQL8().DefaultConnectionCharset(),
+		ResolveColumn: func(*sqlparser.ColName) (int, error) {
+			return 0, nil
+		},
+	})
+	require.NoError(t, err)
+
 	tests := []struct {
+		name      string
+		expr      evalengine.Expr
 		convert   bool
 		collation collations.ID
 		value     string
 	}{
-		{true, latin1German2, "M\xDCLLER"},
-		{false, collations.MySQL8().DefaultConnectionCharset(), "MÜLLER"},
+		{"typed", upper, true, latin1German2, "M\xDCLLER"},
+		{"typed", upper, false, collations.MySQL8().DefaultConnectionCharset(), "MÜLLER"},
+		{"untyped", untypedUpper, true, latin1German2, "M\xDCLLER"},
 	}
 	for _, tc := range tests {
 		for _, stream := range []bool{false, true} {
-			t.Run(fmt.Sprintf("convert %v, stream %v", tc.convert, stream), func(t *testing.T) {
-				proj := &Projection{Cols: []string{"u"}, Exprs: []evalengine.Expr{upper}, Input: input()}
+			t.Run(fmt.Sprintf("%s, convert %v, stream %v", tc.name, tc.convert, stream), func(t *testing.T) {
+				proj := &Projection{Cols: []string{"u"}, Exprs: []evalengine.Expr{tc.expr}, Input: input()}
 				vcursor := &noopVCursor{convertResultCharset: tc.convert}
 				var qr *sqltypes.Result
 				var err error
