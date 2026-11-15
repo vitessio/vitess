@@ -165,13 +165,14 @@ type TinyWeightCollation interface {
 }
 
 func Lookup(id collations.ID) Collation {
+	if int(id) < len(collationsById) {
+		return collationsById[id]
+	}
+	// The ID of a collation of ForText is larger than every ID of MySQL.
 	if id&textCollationFlag != 0 {
 		return textCollations.lookup(id)
 	}
-	if int(id) >= len(collationsById) {
-		return nil
-	}
-	return collationsById[id]
+	return nil
 }
 
 // All returns a slice with all known collations in Vitess.

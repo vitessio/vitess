@@ -202,3 +202,73 @@ func TestForTextIsOneCollation(t *testing.T) {
 		assert.Equal(t, ids[0], id)
 	}
 }
+
+// BenchmarkTextCollation compares latin1_german2_ci on latin1 text with the
+// collation of ForText on the same text in utf8mb4, for a text that is ASCII,
+// which is not converted, and for one that is not.
+func BenchmarkTextCollation(b *testing.B) {
+	plain := Lookup(latin1German2CI)
+	forText := Lookup(ForText(latin1German2CI, utf8mb40900AICI))
+	texts := []struct {
+		name          string
+		latin1, utf8  string
+		latin1B, utfB string
+	}{
+		{"ASCII", "Mueller, Strasse 12", "Mueller, Strasse 12", "Mueller, Strasse 13", "Mueller, Strasse 13"},
+		{"not ASCII", "M\xfcller, Stra\xdfe 12", "Müller, Straße 12", "M\xfcller, Stra\xdfe 13", "Müller, Straße 13"},
+	}
+	for _, text := range texts {
+		for _, c := range []struct {
+			name string
+			coll Collation
+			a, b []byte
+		}{
+			{"latin1 text", plain, []byte(text.latin1), []byte(text.latin1B)},
+			{"utf8mb4 text", forText, []byte(text.utf8), []byte(text.utfB)},
+		} {
+			b.Run(text.name+"/"+c.name+"/Collate", func(b *testing.B) {
+				b.ReportAllocs()
+				for b.Loop() {
+					if c.coll.Collate(c.a, c.b, false) == 0 {
+						b.Fatal("the texts are not equal")
+					}
+				}
+			})
+			b.Run(text.name+"/"+c.name+"/Hash", func(b *testing.B) {
+				b.ReportAllocs()
+				hasher := vthash.New()
+				for b.Loop() {
+					hasher.Reset()
+					c.coll.Hash(&hasher, c.a, 0)
+				}
+			})
+			b.Run(text.name+"/"+c.name+"/TinyWeightString", func(b *testing.B) {
+				b.ReportAllocs()
+				tiny := c.coll.(TinyWeightCollation)
+				for b.Loop() {
+					tiny.TinyWeightString(c.a)
+				}
+			})
+			b.Run(text.name+"/"+c.name+"/WeightString", func(b *testing.B) {
+				b.ReportAllocs()
+				dst := make([]byte, 0, 256)
+				for b.Loop() {
+					dst = c.coll.WeightString(dst[:0], c.a, 0)
+				}
+			})
+		}
+	}
+}
+
+// BenchmarkLookup looks up collations that MySQL has, which every comparison
+// of text does.
+func BenchmarkLookup(b *testing.B) {
+	ids := []collations.ID{utf8mb40900AICI, utf8mb4GeneralC, latin1SwedishCI, latin1German2CI, collations.CollationBinaryID, gbkChineseCI}
+	var coll Collation
+	for b.Loop() {
+		for _, id := range ids {
+			coll = Lookup(id)
+		}
+	}
+	_ = coll
+}

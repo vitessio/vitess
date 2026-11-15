@@ -183,77 +183,108 @@ func (c *textCollation) Charset() Charset {
 	return c.from
 }
 
-// text returns src in the character set of the embedded collation. It appends
-// the converted text to dst, which is nil or has capacity, and returns src
-// itself when its bytes are the same in both character sets. A character that
-// the character set does not have becomes "?", as in a conversion in MySQL.
-func (c *textCollation) text(dst, src []byte) []byte {
-	if c.ascii {
-		ascii := true
-		for _, b := range src {
-			if b >= 0x80 {
-				ascii = false
-				break
-			}
-		}
-		if ascii {
-			return src
+// unchanged reports whether src has the same bytes in the character set of
+// the embedded collation, which ASCII text has in most character sets.
+func (c *textCollation) unchanged(src []byte) bool {
+	if !c.ascii {
+		return false
+	}
+	for _, b := range src {
+		if b >= 0x80 {
+			return false
 		}
 	}
+	return true
+}
+
+// convert appends src in the character set of the embedded collation to dst,
+// which has capacity. A character that the character set does not have
+// becomes "?", as in a conversion in MySQL.
+func (c *textCollation) convert(dst, src []byte) []byte {
 	// The error says that a character became "?".
 	converted, _ := charset.Convert(dst, c.Collation.Charset(), src, c.from)
 	return converted
 }
 
-// collateBuffers are the buffers that Collate converts its two texts into. A
-// sort compares the same values many times, so they are used again.
-type collateBuffers struct {
-	left, right []byte
-}
-
-var collateBufferPool = sync.Pool{New: func() any {
-	return &collateBuffers{left: make([]byte, 0, 64), right: make([]byte, 0, 64)}
+// textBuffers has the buffers that the texts are converted into. A sort, a
+// DISTINCT and a join convert every value, many of them more than once, so
+// the buffers are used again. A buffer has capacity: charset.Convert does not
+// append to one that has none.
+var textBuffers = sync.Pool{New: func() any {
+	buf := make([]byte, 0, 64)
+	return &buf
 }}
 
-// maxCollateBuffer is the largest buffer that goes back to collateBufferPool.
-const maxCollateBuffer = 64 * 1024
+// maxTextBuffer is the largest buffer that goes back to textBuffers.
+const maxTextBuffer = 64 * 1024
+
+// buffered returns src in the character set of the embedded collation, in a
+// buffer of textBuffers that release takes back. The text is not kept after
+// release.
+func (c *textCollation) buffered(src []byte) (buf *[]byte, text []byte) {
+	buf = textBuffers.Get().(*[]byte)
+	return buf, c.convert((*buf)[:0], src)
+}
+
+// release gives the buffer of buffered back, with the capacity that the text
+// grew it to. src is the text that was converted: a text that is src itself
+// is not a buffer.
+func release(buf *[]byte, text, src []byte) {
+	if cap(text) != 0 && cap(text) <= maxTextBuffer && (len(src) == 0 || &text[:1][0] != &src[0]) {
+		*buf = text[:0]
+	}
+	textBuffers.Put(buf)
+}
 
 // Collate implements Collation.
 func (c *textCollation) Collate(left, right []byte, isPrefix bool) int {
-	bufs := collateBufferPool.Get().(*collateBuffers)
-	l := c.text(bufs.left[:0], left)
-	r := c.text(bufs.right[:0], right)
+	var leftBuf, rightBuf *[]byte
+	l, r := left, right
+	if !c.unchanged(left) {
+		leftBuf, l = c.buffered(left)
+	}
+	if !c.unchanged(right) {
+		rightBuf, r = c.buffered(right)
+	}
 	result := c.Collation.Collate(l, r, isPrefix)
-	// A text that was not converted is not a buffer, and a buffer that grew
-	// large is not kept.
-	if converted(l, left) && cap(l) <= maxCollateBuffer {
-		bufs.left = l
+	if leftBuf != nil {
+		release(leftBuf, l, left)
 	}
-	if converted(r, right) && cap(r) <= maxCollateBuffer {
-		bufs.right = r
+	if rightBuf != nil {
+		release(rightBuf, r, right)
 	}
-	collateBufferPool.Put(bufs)
 	return result
-}
-
-// converted reports whether text is a conversion of src, and not src itself.
-func converted(text, src []byte) bool {
-	return len(text) != 0 && (len(src) == 0 || &text[0] != &src[0])
 }
 
 // WeightString implements Collation.
 func (c *textCollation) WeightString(dst, src []byte, numCodepoints int) []byte {
-	return c.Collation.WeightString(dst, c.text(nil, src), numCodepoints)
+	if c.unchanged(src) {
+		return c.Collation.WeightString(dst, src, numCodepoints)
+	}
+	buf, text := c.buffered(src)
+	dst = c.Collation.WeightString(dst, text, numCodepoints)
+	release(buf, text, src)
+	return dst
 }
 
 // Hash implements Collation.
 func (c *textCollation) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
-	c.Collation.Hash(hasher, c.text(nil, src), numCodepoints)
+	if c.unchanged(src) {
+		c.Collation.Hash(hasher, src, numCodepoints)
+		return
+	}
+	buf, text := c.buffered(src)
+	c.Collation.Hash(hasher, text, numCodepoints)
+	release(buf, text, src)
 }
 
-// Wildcard implements Collation.
+// Wildcard implements Collation. The pattern keeps its text, which is not in
+// a buffer.
 func (c *textCollation) Wildcard(pat []byte, matchOne, matchMany, escape rune) WildcardPattern {
-	return &textPattern{collation: c, pattern: c.Collation.Wildcard(c.text(nil, pat), matchOne, matchMany, escape)}
+	if !c.unchanged(pat) {
+		pat = c.convert(make([]byte, 0, len(pat)+1), pat)
+	}
+	return &textPattern{collation: c, pattern: c.Collation.Wildcard(pat, matchOne, matchMany, escape)}
 }
 
 // textPattern is a pattern of a textCollation.
@@ -264,7 +295,13 @@ type textPattern struct {
 
 // Match implements WildcardPattern.
 func (p *textPattern) Match(in []byte) bool {
-	return p.pattern.Match(p.collation.text(nil, in))
+	if p.collation.unchanged(in) {
+		return p.pattern.Match(in)
+	}
+	buf, text := p.collation.buffered(in)
+	matched := p.pattern.Match(text)
+	release(buf, text, in)
+	return matched
 }
 
 // tinyTextCollation is a textCollation of a collation that has tiny weight
@@ -276,5 +313,11 @@ type tinyTextCollation struct {
 
 // TinyWeightString implements TinyWeightCollation.
 func (c *tinyTextCollation) TinyWeightString(src []byte) uint32 {
-	return c.tiny.TinyWeightString(c.text(nil, src))
+	if c.unchanged(src) {
+		return c.tiny.TinyWeightString(src)
+	}
+	buf, text := c.buffered(src)
+	weight := c.tiny.TinyWeightString(text)
+	release(buf, text, src)
+	return weight
 }
