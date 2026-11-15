@@ -68,6 +68,15 @@ type StatefulConnection struct {
 	// connection must not return to the pool (see MarkSessionDiverged).
 	sessionDiverged bool
 
+	// resultCharsetSet is set once a SET of the client changed the
+	// character_set_results of the connection's session (SET NAMES, SET
+	// character_set_results), and stays set: MySQL then sends results the
+	// way the client asked for them, and a tablet that reads with
+	// character_set_results = NULL must return them as they are (see
+	// TabletServer.convertsResult). Written under the same exclusive-execution
+	// discipline as the marks above.
+	resultCharsetSet bool
+
 	// sessionWaitTimeout is this connection's own @@session.wait_timeout,
 	// captured when its first temporary-table DDL runs and re-captured after
 	// a SET wait_timeout on the connection. mysqld fixed the session value

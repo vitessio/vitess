@@ -364,7 +364,9 @@ func (qe *QueryEngine) Open() error {
 
 	config := qe.env.Config()
 
-	qe.conns.Open(config.DB.AppWithDB(), config.DB.DbaWithDB(), config.DB.AppDebugWithDB())
+	// The pools that run the queries of clients read with character_set_results
+	// = NULL when the tablet is configured so (see TabletServer.convertResult).
+	qe.conns.Open(config.QueryServingConnector(config.DB.AppWithDB()), config.DB.DbaWithDB(), config.QueryServingConnector(config.DB.AppDebugWithDB()))
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext(), nil)
 	if err != nil {
@@ -381,7 +383,7 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(config.DB.AppWithDB(), config.DB.DbaWithDB(), config.DB.AppDebugWithDB())
+	qe.streamConns.Open(config.QueryServingConnector(config.DB.AppWithDB()), config.DB.DbaWithDB(), config.QueryServingConnector(config.DB.AppDebugWithDB()))
 	qe.se.RegisterNotifier("qe", qe.schemaChanged, true)
 	qe.plans.EnsureOpen()
 	qe.settings.EnsureOpen()

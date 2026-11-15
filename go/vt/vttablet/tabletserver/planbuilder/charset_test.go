@@ -129,3 +129,30 @@ func TestSetExprsRejectUnsafeCharsets(t *testing.T) {
 		})
 	}
 }
+
+// TestSetsResultCharset checks which SET plans change the session's
+// character_set_results: an assignment to it and SET NAMES do, other
+// connection character set variables, a global assignment and a user-defined
+// variable of the same name do not.
+func TestSetsResultCharset(t *testing.T) {
+	parser := vtenv.NewTestEnv().Parser()
+	cases := map[string]bool{
+		"set character_set_results = null":                          true,
+		"set @@session.character_set_results = 'latin1'":            true,
+		"set names utf8mb4":                                         true,
+		"set names latin1 collate latin1_german2_ci":                true,
+		"set sql_safe_updates = 1, character_set_results = utf8mb4": true,
+		"set character_set_client = 'utf8mb4'":                      false,
+		"set collation_connection = 'utf8mb4_0900_ai_ci'":           false,
+		"set @@global.character_set_results = latin1":               false,
+		"set @character_set_results = 'latin1'":                     false,
+		"set sql_safe_updates = 1":                                  false,
+	}
+	for sql, want := range cases {
+		stmt, err := parser.Parse(sql)
+		require.NoError(t, err, sql)
+		plan, err := analyzeSet(stmt.(*sqlparser.Set))
+		require.NoError(t, err, sql)
+		require.Equal(t, want, plan.SetsResultCharset, sql)
+	}
+}

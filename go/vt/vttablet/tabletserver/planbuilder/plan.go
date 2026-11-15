@@ -225,6 +225,13 @@ type Plan struct {
 	// its only assignment (see validateSetStatementSQLMode).
 	VerifySQLMode bool
 
+	// SetsResultCharset is set on a PlanSet that changes character_set_results
+	// of the session: SET character_set_results or SET NAMES. After it, MySQL
+	// sends results the way the session asked for them, and a tablet that
+	// reads with character_set_results = NULL returns them so (see
+	// setsResultCharset).
+	SetsResultCharset bool
+
 	// stmtType is a sqlparser.StatementType; see StatementType. It is unexported so that
 	// /debug/query_plans doesn't show it, and a uint8 so that it fits in the padding after
 	// the bools above and doesn't grow every cached plan.

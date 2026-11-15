@@ -200,6 +200,7 @@ func analyzeSet(set *sqlparser.Set) (*Plan, error) {
 		FullStmt:          set,
 		NeedsReservedConn: true,
 		VerifySQLMode:     verify,
+		SetsResultCharset: setsResultCharset(set.Exprs),
 	}, nil
 }
 

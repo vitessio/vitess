@@ -115,3 +115,24 @@ func rejectSettingCharsetExprs(exprs sqlparser.SetExprs) error {
 	}
 	return nil
 }
+
+// setsResultCharset reports whether a SET changes the character_set_results of
+// the session: SET character_set_results = latin1 does, and so does SET NAMES
+// latin1, which sets character_set_client, character_set_connection and
+// character_set_results. SET CHARACTER SET sets it as well, and
+// validateSetExprsCharset refuses it. A global assignment and a user-defined
+// variable leave the session alone.
+func setsResultCharset(exprs sqlparser.SetExprs) bool {
+	for _, expr := range exprs {
+		switch expr.Var.Scope {
+		case sqlparser.SessionScope, sqlparser.NoScope, sqlparser.NextTxScope:
+		default:
+			continue
+		}
+		switch expr.Var.Name.Lowered() {
+		case "character_set_results", "names", "charset":
+			return true
+		}
+	}
+	return false
+}
