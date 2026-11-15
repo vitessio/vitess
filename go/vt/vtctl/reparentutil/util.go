@@ -447,7 +447,7 @@ func findCandidate(
 	if len(mysqlVersions) == 0 {
 		// Version ordering is unavailable, so prefer the intermediate source to avoid catch-up.
 		for _, candidate := range possibleCandidates {
-			if candidate.isSameTablet(intermediateSource) {
+			if candidate == intermediateSource {
 				return candidate
 			}
 		}
@@ -496,7 +496,7 @@ func findCandidate(
 	// if so, prefer it because it already holds the most-advanced position and won't need catch-up.
 	if sourceVersion.CompareForReplication(bestVersion) == 0 {
 		for _, candidate := range possibleCandidates {
-			if candidate.isSameTablet(intermediateSource) {
+			if candidate == intermediateSource {
 				return candidate
 			}
 		}

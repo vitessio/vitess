@@ -123,18 +123,6 @@ func (c *ersCandidate) tablet() *topodatapb.Tablet {
 	return c.info.Tablet
 }
 
-// isSameTablet compares aliases; a candidate without one never matches.
-func (c *ersCandidate) isSameTablet(other *ersCandidate) bool {
-	if c == nil || other == nil || c.info == nil || other.info == nil {
-		return false
-	}
-	if topoproto.TabletAliasIsZero(c.info.Alias) || topoproto.TabletAliasIsZero(other.info.Alias) {
-		return false
-	}
-
-	return topoproto.TabletAliasEqual(c.info.Alias, other.info.Alias)
-}
-
 // relayLogResult is a single tablet's result from waiting on its relay logs to apply.
 type relayLogResult struct {
 	candidate *ersCandidate
@@ -705,7 +693,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// if our better candidate is different from our intermediate source, then we wait for it to catch up to the intermediate source
-		if !topoproto.TabletAliasEqual(betterCandidate.tablet().Alias, intermediateSource.tablet().Alias) {
+		if betterCandidate != intermediateSource {
 			err = waitForCatchUp(ctx, erp.tmc, erp.logger, betterCandidate.tablet(), intermediateSource.tablet(), opts.WaitReplicasTimeout)
 			if err != nil {
 				return err
@@ -1329,7 +1317,7 @@ func (erp *EmergencyReparenter) isIntermediateSourceIdeal(
 	if err != nil {
 		return false, err
 	}
-	return candidate.isSameTablet(intermediateSource), nil
+	return candidate == intermediateSource, nil
 }
 
 // identifyPrimaryCandidate is used to find the final candidate for ERS promotion.

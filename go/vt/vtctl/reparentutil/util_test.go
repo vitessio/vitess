@@ -2578,6 +2578,10 @@ func Test_findCandidate(t *testing.T) {
 
 			var intermediateSource *ersCandidate
 			if tt.intermediateSource != nil {
+				// A source in the list is the same candidate, as in ERS.
+				intermediateSource = findERSCandidateByAlias(possibleCandidates, tt.intermediateSource.Alias)
+			}
+			if tt.intermediateSource != nil && intermediateSource == nil {
 				intermediateSource = &ersCandidate{info: &topo.TabletInfo{Tablet: tt.intermediateSource}}
 				alias := topoproto.TabletAliasString(tt.intermediateSource.Alias)
 				if version, ok := tt.versionMap[alias]; ok {

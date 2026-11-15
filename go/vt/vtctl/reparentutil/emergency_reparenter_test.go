@@ -154,44 +154,6 @@ func ersCandidateTabletsForTest(candidates []*ersCandidate) []*topodatapb.Tablet
 	return tablets
 }
 
-func TestERSCandidateIsSameTablet(t *testing.T) {
-	t.Parallel()
-
-	withAlias := func(cell string, uid uint32) *ersCandidate {
-		return &ersCandidate{info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{
-			Alias: &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		}}}
-	}
-
-	candidate := withAlias("zone1", 100)
-	var nilCandidate *ersCandidate
-
-	t.Run("same tablet built separately", func(t *testing.T) {
-		assert.True(t, candidate.isSameTablet(withAlias("zone1", 100)))
-	})
-
-	t.Run("different tablets", func(t *testing.T) {
-		assert.False(t, candidate.isSameTablet(withAlias("zone1", 101)))
-		assert.False(t, candidate.isSameTablet(withAlias("zone2", 100)))
-	})
-
-	// a candidate with no alias has no identity to match on, so it matches nothing.
-	// two of them must not compare equal either: isIntermediateSourceIdeal reads a
-	// true here as "no better candidate exists" and skips the intermediate promotion
-	t.Run("candidates without an identity match nothing", func(t *testing.T) {
-		noInfo := &ersCandidate{}
-		noAlias := &ersCandidate{info: &topo.TabletInfo{Tablet: &topodatapb.Tablet{}}}
-
-		for _, other := range []*ersCandidate{nilCandidate, noInfo, noAlias} {
-			assert.False(t, candidate.isSameTablet(other))
-			assert.False(t, other.isSameTablet(candidate))
-		}
-		assert.False(t, nilCandidate.isSameTablet(nilCandidate))
-		assert.False(t, noInfo.isSameTablet(noInfo))
-		assert.False(t, noAlias.isSameTablet(noAlias))
-	})
-}
-
 func TestNewEmergencyReparenter(t *testing.T) {
 	t.Parallel()
 
@@ -9352,6 +9314,37 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.True(t, topoproto.TabletAliasEqual(res.tablet().Alias, test.result.Alias))
+		})
+	}
+}
+
+// TestEmergencyReparenter_isIntermediateSourceIdeal checks that the intermediate
+// source is ideal only when it is the candidate ERS would pick.
+func TestEmergencyReparenter_isIntermediateSourceIdeal(t *testing.T) {
+	durability, err := policy.GetDurabilityPolicy(policy.DurabilityNone)
+	require.NoError(t, err)
+	tablets := []*topodatapb.Tablet{
+		{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_REPLICA},
+		{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_REPLICA},
+	}
+	tests := []struct {
+		name       string
+		newPrimary *topodatapb.TabletAlias
+		want       bool
+	}{
+		{name: "intermediate source is the pick", want: true},
+		{name: "another tablet is requested", newPrimary: tablets[1].Alias, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
+			candidates := ersCandidatesFromTabletsForTest(tablets, nil, nil, nil)
+			opts := EmergencyReparentOptions{NewPrimaryAlias: tt.newPrimary, durability: durability}
+
+			ideal, err := erp.isIntermediateSourceIdeal(candidates[0], candidates, opts)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, ideal)
 		})
 	}
 }
