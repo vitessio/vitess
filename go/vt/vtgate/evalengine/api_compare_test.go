@@ -1232,6 +1232,33 @@ func getCollationID(collation string) collations.ID {
 	return id
 }
 
+// TestNullsafeCompareConnectionText compares text of columns that are not
+// utf8mb4. The values are in utf8mb4, as rows are, and the comparison is in
+// the collation of the column: it has to convert the text first. The expected
+// results are STRCMP() of MySQL 8.4.13: 'é' is after 'd' in
+// latin1_swedish_ci, where the two utf8mb4 bytes of 'é' taken as latin1 are
+// before it.
+func TestNullsafeCompareConnectionText(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation string
+		out       int
+	}{
+		{"é", "d", "latin1_swedish_ci", 1},
+		{"é", "f", "latin1_swedish_ci", -1},
+		{"Müller", "MUELLER", "latin1_german2_ci", 0},
+		{"中", "波", "gbk_chinese_ci", 1},
+		{"啊", "波", "gbk_chinese_ci", -1},
+	}
+	for _, tcase := range tcases {
+		t.Run(fmt.Sprintf("%v/%v/%v", tcase.v1, tcase.v2, tcase.collation), func(t *testing.T) {
+			got, err := NullsafeCompare(TestValue(sqltypes.VarChar, tcase.v1), TestValue(sqltypes.VarChar, tcase.v2), collations.MySQL8(), getCollationID(tcase.collation), nil)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.out, got)
+		})
+	}
+}
+
 func TestNullsafeCompareCollate(t *testing.T) {
 	tcases := []struct {
 		v1, v2    string

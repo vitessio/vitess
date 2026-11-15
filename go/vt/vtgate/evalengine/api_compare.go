@@ -60,7 +60,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 			if coll == nil {
 				return 0, UnsupportedCollationError{ID: collationID}
 			}
-			result := coll.Collate(v1.Raw(), v2.Raw(), false)
+			result := coll.Collate(connectionText(v1.Raw(), collationID), connectionText(v2.Raw(), collationID), false)
 			switch {
 			case result < 0:
 				return -1, nil

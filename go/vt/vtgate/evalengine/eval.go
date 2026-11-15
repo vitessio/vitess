@@ -429,7 +429,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 			raw, err := parseBitNum(value.Raw())
 			return newEvalBytesBit(raw), wrap(err)
 		default:
-			return newEvalText(value.Raw(), collation), nil
+			return newEvalText(connectionText(value.Raw(), collation.Collation), collation), nil
 		}
 	case sqltypes.IsBinary(tt):
 		return newEvalBinary(value.Raw()), nil
