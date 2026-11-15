@@ -301,6 +301,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.WrongTypeForVar:                     {num: ERWrongTypeForVar, state: SSClientError},
 	vterrors.WrongValueForVar:                    {num: ERWrongValueForVar, state: SSClientError},
 	vterrors.WrongValue:                          {num: ERWrongValue, state: SSUnknownSQLState},
+	vterrors.TruncatedWrongValueForField:         {num: ERTruncatedWrongValueForField, state: SSUnknownSQLState},
 	vterrors.WrongFieldWithGroup:                 {num: ERWrongFieldWithGroup, state: SSClientError},
 	vterrors.ServerNotAvailable:                  {num: ERServerIsntAvailable, state: SSNetError},
 	vterrors.CantDoThisInTransaction:             {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},

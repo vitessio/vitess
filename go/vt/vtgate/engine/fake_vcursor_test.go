@@ -63,6 +63,10 @@ type noopVCursor struct {
 
 	// convertResultCharset is what ConvertResultCharset returns.
 	convertResultCharset bool
+	// systemVariables are the system variables of the session, and
+	// recordedWarnings the warnings that it was given.
+	systemVariables  map[string]string
+	recordedWarnings []*querypb.QueryWarning
 }
 
 func (t *noopVCursor) ConvertResultCharset() bool {
@@ -227,8 +231,10 @@ func (t *noopVCursor) HasSystemVariables() bool {
 	panic("implement me")
 }
 
-func (t *noopVCursor) GetSystemVariables(func(k string, v string)) {
-	panic("implement me")
+func (t *noopVCursor) GetSystemVariables(f func(k string, v string)) {
+	for k, v := range t.systemVariables {
+		f(k, v)
+	}
 }
 
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
@@ -415,6 +421,7 @@ func (t *noopVCursor) GetKeyspace() string {
 }
 
 func (t *noopVCursor) RecordWarning(warning *querypb.QueryWarning) {
+	t.recordedWarnings = append(t.recordedWarnings, warning)
 }
 
 func (t *noopVCursor) Execute(ctx context.Context, method string, query string, bindvars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
