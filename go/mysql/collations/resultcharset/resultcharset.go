@@ -35,6 +35,7 @@ package resultcharset
 import (
 	"fmt"
 	"math"
+	"sync"
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -63,6 +64,10 @@ type column struct {
 	// ascii is true when a value that is all ASCII is the same in from and
 	// to, which holds for every character set but ucs2, utf16 and utf32.
 	ascii bool
+	// ucs2 is true for a conversion from ucs2 to utf8mb3 or utf8mb4, which
+	// MySQL does for every code unit, surrogates included (see
+	// ucs2ToUTF8).
+	ucs2 bool
 }
 
 // isText reports whether MySQL converts the values of a column of this type
@@ -104,15 +109,38 @@ func scaleLength(length uint32, from, to charset.Charset) uint32 {
 	return uint32(min(scaled, math.MaxUint32))
 }
 
+// connectionLength returns the column length that MySQL sends for a column of
+// the character set from when character_set_results has the character set to.
+//
+// MySQL divides the length of the column by the longest character of from and
+// multiplies it by the longest character of to, so a latin1 VARCHAR(10) has
+// the length 10, and 40 as utf8mb4. For the MySQL types TINY_BLOB to BLOB,
+// which carry the TEXT types and long string expressions, it divides by the
+// shortest character instead: a ucs2 TEXT has the length 65535, and 131068 as
+// utf8mb4. The length is at most 4294967295, so a latin1 LONGTEXT keeps
+// 4294967295.
+func connectionLength(field *querypb.Field, from, to charset.Charset) uint32 {
+	width := from.MaxWidth()
+	if field.Type == sqltypes.Text || field.Type == sqltypes.Blob {
+		width = minWidth(from)
+	}
+	scaled := uint64(field.ColumnLength) / uint64(width) * uint64(to.MaxWidth())
+	return uint32(min(scaled, math.MaxUint32))
+}
+
 // ToConnection returns the conversion of a result that MySQL sent with
 // character_set_results = NULL to the connection collation conn.
 //
-// The text of every column is converted from the character set of the
-// collation in its field to the character set of conn, and the column length
-// is the one of the converted column. When relabel is true, the field also
-// gets conn as its collation, and the result is the one MySQL sends with
-// character_set_results set to conn. When relabel is false, the field keeps
-// the collation of the column.
+// The text of every column whose collation is not binary is converted from
+// the character set of that collation to the character set of conn, and the
+// column length is the one of the converted column. When relabel is true, the
+// field also gets conn as its collation, and the result is the one MySQL
+// sends with character_set_results set to conn. When relabel is false, the
+// field keeps the collation of the column.
+//
+// MySQL also converts the text of JSON, which keeps the binary collation in
+// its field, and the names of the fields. Both are utf8mb4 or utf8mb3 with
+// character_set_results = NULL, so for a utf8mb4 connection neither changes.
 func ToConnection(fields []*querypb.Field, conn collations.ID, relabel bool) *Conversion {
 	c := &Conversion{}
 	to := lookupCharset(conn)
@@ -120,15 +148,11 @@ func ToConnection(fields []*querypb.Field, conn collations.ID, relabel bool) *Co
 		return c
 	}
 
+	// MySQL sends the names of the fields in its system character set,
+	// utf8mb3, for character_set_results = NULL, and converts them for
+	// any other character_set_results.
+	names := !to.IsSuperset(systemCharset)
 	for i, field := range fields {
-		if !isText(field.Type) {
-			continue
-		}
-		from := lookupCharset(collations.ID(field.Charset))
-		if from == nil {
-			continue
-		}
-
 		converted := field
 		newField := func() *querypb.Field {
 			if converted == field {
@@ -136,21 +160,102 @@ func ToConnection(fields []*querypb.Field, conn collations.ID, relabel bool) *Co
 			}
 			return converted
 		}
-		if length := scaleLength(field.ColumnLength, from, to); length != field.ColumnLength {
-			newField().ColumnLength = length
+		if names {
+			convertNames(field, to, newField)
 		}
-		if relabel && field.Charset != uint32(conn) {
-			newField().Charset = uint32(conn)
+
+		// MySQL converts the text of every column whose collation is not
+		// binary, whatever its type. A utf8mb4_bin VARCHAR has the binary
+		// flag, which makes it a VarBinary here, and JSON_EXTRACT returns
+		// JSON with utf8mb4_bin: both arrive with the collation 46, and
+		// MySQL sends them with the collation and the length of the
+		// connection for character_set_results = utf8mb4.
+		from := lookupCharset(collations.ID(field.Charset))
+		switch {
+		case from != nil:
+			if length := connectionLength(field, from, to); length != field.ColumnLength {
+				newField().ColumnLength = length
+			}
+			if relabel && field.Charset != uint32(conn) {
+				newField().Charset = uint32(conn)
+			}
+		case field.Type == sqltypes.TypeJSON:
+			// A JSON column has the binary collation and its text is
+			// utf8mb4. MySQL converts the text, and keeps the field: a
+			// JSON value with "Müller" arrives as 4D FC 6C 6C 65 72 for
+			// character_set_results = latin1, with the collation 63.
+			from = jsonCharset
 		}
 		if converted != field {
 			c.setField(fields, i, converted)
 		}
-		if !to.IsSuperset(from) {
+		if from != nil && !to.IsSuperset(from) {
 			c.setColumn(len(fields), i, from, to)
+			// swe7 has Ä, Ö, Å, Ü, é, ä, ö, å and ü at the bytes of
+			// [ \ ] ^ ` { | } and ~, so a value of these bytes is not
+			// the same in utf8mb4: MySQL sends 5B as C3 84.
+			col := &c.columns[i]
+			col.ascii = col.ascii && isASCIIIdentical(from) && isASCIIIdentical(to)
+			_, fromUCS2 := from.(charset.Charset_ucs2)
+			col.ucs2 = fromUCS2 && to.IsSuperset(systemCharset)
 		}
 	}
 	return c
 }
+
+var (
+	// systemCharset is the character set of the names of the fields
+	// that MySQL sends for character_set_results = NULL.
+	systemCharset = lookupCharset(collations.ID(33))
+	// jsonCharset is the character set of the text of JSON.
+	jsonCharset = lookupCharset(collations.CollationUtf8mb4ID)
+)
+
+// convertNames converts the names of a field from the system character set
+// to the character set to, in the field that newField returns.
+func convertNames(field *querypb.Field, to charset.Charset, newField func() *querypb.Field) {
+	convert := func(name string) (string, bool) {
+		if isASCII(name) && isASCIIIdentical(to) {
+			return name, false
+		}
+		return convertName(name, systemCharset, to)
+	}
+	if name, ok := convert(field.Name); ok {
+		newField().Name = name
+	}
+	if name, ok := convert(field.OrgName); ok {
+		newField().OrgName = name
+	}
+	if name, ok := convert(field.Table); ok {
+		newField().Table = name
+	}
+	if name, ok := convert(field.OrgTable); ok {
+		newField().OrgTable = name
+	}
+	if name, ok := convert(field.Database); ok {
+		newField().Database = name
+	}
+}
+
+// isASCIIIdentical reports whether every byte below 0x80 is the same ASCII
+// character in cs. It is false for swe7, and for ucs2, utf16, utf16le and
+// utf32, where ASCII needs more than one byte.
+func isASCIIIdentical(cs charset.Charset) bool {
+	if v, ok := asciiIdentical.Load(cs.Name()); ok {
+		return v.(bool)
+	}
+	identical := true
+	var buf [4]byte
+	for b := 0; b < 0x80 && identical; b++ {
+		r, width, ok := cs.DecodeRune([]byte{byte(b)})
+		identical = ok && width == 1 && r == rune(b) && cs.EncodeRune(buf[:], rune(b)) == 1 && buf[0] == byte(b)
+	}
+	asciiIdentical.Store(cs.Name(), identical)
+	return identical
+}
+
+// asciiIdentical caches isASCIIIdentical by the name of the character set.
+var asciiIdentical sync.Map
 
 // ToClient returns the conversion of a result with all text in the character
 // set of the connection collation conn to the character_set_results of a
@@ -492,7 +597,12 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 			// The error says that a character has no form in the
 			// target character set. The converted text has "?" in
 			// its place, which is what MySQL sends.
-			converted, _ := charset.Convert(nil, col.to, raw, col.from)
+			var converted []byte
+			if col.ucs2 {
+				converted = ucs2ToUTF8(raw)
+			} else {
+				converted, _ = charset.Convert(nil, col.to, raw, col.from)
+			}
 			if newRow == nil {
 				newRow = make(sqltypes.Row, len(row))
 				copy(newRow, row)
@@ -512,6 +622,29 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 		return rows
 	}
 	return out
+}
+
+// ucs2ToUTF8 converts ucs2 text to utf8mb3, which is utf8mb4 as well, the
+// way MySQL does it for character_set_results.
+//
+// MySQL writes each 2-byte code unit as UTF-8, and a surrogate as well: a
+// ucs2 column with D8 00 arrives as ED A0 80 for character_set_results =
+// utf8mb4, where charset.Convert writes "?". It drops a last byte that has
+// no second byte.
+func ucs2ToUTF8(src []byte) []byte {
+	dst := make([]byte, 0, len(src)/2*3)
+	for ; len(src) >= 2; src = src[2:] {
+		r := uint16(src[0])<<8 | uint16(src[1])
+		switch {
+		case r < 0x80:
+			dst = append(dst, byte(r))
+		case r < 0x800:
+			dst = append(dst, 0xC0|byte(r>>6), 0x80|byte(r&0x3F))
+		default:
+			dst = append(dst, 0xE0|byte(r>>12), 0x80|byte(r>>6&0x3F), 0x80|byte(r&0x3F))
+		}
+	}
+	return dst
 }
 
 // Result returns the converted result: the result it is given when nothing
