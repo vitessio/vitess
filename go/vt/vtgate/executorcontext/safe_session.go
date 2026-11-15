@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -903,6 +904,26 @@ func (session *SafeSession) GetDDLStrategy() string {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.DDLStrategy
+}
+
+// SetResultCharset sets the character_set_results of the session: the
+// collation that vtgate converts the text of results to with
+// --convert-result-charset. 0 stands for the default connection collation of
+// vtgate, and null is true for character_set_results = NULL. SET NAMES gb2312
+// stores 24, the collation ID of gb2312_chinese_ci.
+func (session *SafeSession) SetResultCharset(collation collations.ID, null bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.CharacterSetResults = uint32(collation)
+	session.CharacterSetResultsNull = null
+}
+
+// ResultCharset returns the character_set_results of the session, see
+// SetResultCharset.
+func (session *SafeSession) ResultCharset() (collation collations.ID, null bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return collations.ID(session.CharacterSetResults), session.CharacterSetResultsNull
 }
 
 // SetMigrationContext set the migration_context setting.

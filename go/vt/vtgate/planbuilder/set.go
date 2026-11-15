@@ -267,6 +267,37 @@ func validateConnectionCharsetPlan(inner planFunc) planFunc {
 	}
 }
 
+// resultCharsetPlan wraps the planFunc of SET NAMES, SET CHARACTER SET and SET
+// character_set_results. With --convert-result-charset, they set the
+// character_set_results of the session (see engine.SysVarResultCharset), and
+// character_set_results takes any character set that Vitess implements: a
+// result is converted to it, and no query is read in it. SET NAMES and SET
+// CHARACTER SET refuse the same character sets as without the flag. Without
+// the flag, the wrapped planFunc plans them as before.
+func resultCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if !vschema.ConvertResultCharset() {
+			return inner(expr, vschema, ec)
+		}
+
+		op := &engine.SysVarResultCharset{Name: expr.Var.Name.Lowered(), Collation: expr.Collation}
+		if _, isDefault := expr.Expr.(*sqlparser.Default); isDefault {
+			return op, nil
+		}
+		if err := rejectQualifiedIdentifier(expr); err != nil {
+			return nil, err
+		}
+		// An identifier is the name of a character set, as in
+		// SET character_set_results = latin1.
+		runtimeExpr, err := ec.convert(expr.Expr, false, true)
+		if err != nil {
+			return nil, err
+		}
+		op.Expr = runtimeExpr
+		return op, nil
+	}
+}
+
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {

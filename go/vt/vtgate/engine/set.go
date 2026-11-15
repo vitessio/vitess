@@ -21,8 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -89,6 +92,19 @@ type (
 	SysVarSetAware struct {
 		Name string
 		Expr evalengine.Expr
+	}
+
+	// SysVarResultCharset implements the SetOp interface for SET NAMES, SET
+	// CHARACTER SET and SET character_set_results with
+	// --convert-result-charset: it sets the character_set_results of the
+	// session, which vtgate converts results to.
+	SysVarResultCharset struct {
+		// Name is names, charset or character_set_results.
+		Name string
+		// Expr is the value, and nil for DEFAULT.
+		Expr evalengine.Expr
+		// Collation is the COLLATE of SET NAMES, and empty without one.
+		Collation string
 	}
 
 	// VitessMetadata implements the SetOp interface and will write the changes variable into the topo server
@@ -547,12 +563,8 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		if err != nil {
 			return err
 		}
-		switch strings.ToLower(str) {
-		case "", "utf8", "utf8mb4", "latin1", "default":
-			// do nothing
-			break
-		default:
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
+		if err := checkNamesCharset(str); err != nil {
+			return err
 		}
 	case sysvars.ReadAfterWriteGTID.Name:
 		str, err := svss.evalAsString(env, vcursor)
@@ -645,6 +657,166 @@ func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.E
 // VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
+}
+
+// checkNamesCharset refuses the character sets that SET NAMES and SET
+// CHARACTER SET do not accept: vtgate reads the text of every query as
+// utf8mb4, and accepts utf8, utf8mb4 and latin1 as names for it, as well as
+// DEFAULT and the empty string.
+func checkNamesCharset(name string) error {
+	switch strings.ToLower(name) {
+	case "", "utf8", "utf8mb4", "latin1", "default":
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", name)
+}
+
+var _ SetOp = (*SysVarResultCharset)(nil)
+
+// MarshalJSON marshals the set operation for the plan description.
+func (svrc *SysVarResultCharset) MarshalJSON() ([]byte, error) {
+	expr := "default"
+	if svrc.Expr != nil {
+		expr = sqlparser.String(svrc.Expr)
+	}
+	return json.Marshal(struct {
+		Type      string
+		Name      string
+		Expr      string
+		Collation string `json:",omitempty"`
+	}{
+		Type:      "SysVarResultCharset",
+		Name:      svrc.Name,
+		Expr:      expr,
+		Collation: svrc.Collation,
+	})
+}
+
+// VariableName implements the SetOp interface method.
+func (svrc *SysVarResultCharset) VariableName() string {
+	return svrc.Name
+}
+
+// Execute implements the SetOp interface method. It sets the
+// character_set_results of the session as MySQL 8.0 and 8.4 do:
+//
+//   - SET NAMES latin1 sets the default collation of the character set,
+//     latin1_swedish_ci (8), and SET NAMES utf8mb4 COLLATE utf8mb4_bin sets
+//     utf8mb4_bin (46). SET CHARACTER SET gb2312 sets gb2312_chinese_ci (24).
+//     SET NAMES accepts the same character sets as without
+//     --convert-result-charset, see checkNamesCharset. MySQL also changes
+//     the character set it reads queries in; vtgate does not, and reads them
+//     as utf8mb4.
+//   - SET character_set_results takes the name of any character set that
+//     Vitess implements, binary, a collation ID (46 sets utf8mb4_bin, which
+//     result fields then report), or NULL.
+//
+// DEFAULT sets the default connection collation of vtgate.
+func (svrc *SysVarResultCharset) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	if svrc.Expr == nil {
+		vcursor.Session().SetResultCharset(collations.Unknown, false)
+		return nil
+	}
+	result, err := env.Evaluate(svrc.Expr)
+	if err != nil {
+		return err
+	}
+	value := result.Value(vcursor.ConnCollation())
+	collEnv := vcursor.Environment().CollationEnv()
+
+	if svrc.Name == "character_set_results" {
+		collation, null, err := resultCharsetValue(collEnv, value)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetResultCharset(collation, null)
+		return nil
+	}
+
+	if !value.IsText() && !value.IsBinary() {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svrc.Name, value.Type().String())
+	}
+	name := value.ToString()
+	if err := checkNamesCharset(name); err != nil {
+		return err
+	}
+	name = strings.ToLower(name)
+	if name == "" || name == "default" {
+		// Accepted as DEFAULT, as without --convert-result-charset.
+		vcursor.Session().SetResultCharset(collations.Unknown, false)
+		return nil
+	}
+	if alias, ok := collEnv.CharsetAlias(name); ok {
+		name = alias
+	}
+	collation := collEnv.DefaultCollationForCharset(name)
+	if svrc.Collation != "" {
+		collation, err = namesCollation(collEnv, name, svrc.Collation)
+		if err != nil {
+			return err
+		}
+	}
+	vcursor.Session().SetResultCharset(collation, false)
+	return nil
+}
+
+// namesCollation returns the collation of SET NAMES charset COLLATE name.
+// MySQL refuses a collation of another character set: SET NAMES latin1
+// COLLATE utf8mb4_bin fails with "COLLATION 'utf8mb4_bin' is not valid for
+// CHARACTER SET 'latin1'" (1253).
+func namesCollation(collEnv *collations.Environment, charset, name string) (collations.ID, error) {
+	lowered := strings.ToLower(name)
+	if alias, ok := collEnv.CollationAlias(lowered); ok {
+		lowered = alias
+	}
+	collation := collEnv.LookupByName(lowered)
+	if collation == collations.Unknown || colldata.Lookup(collation) == nil {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownCollation, "Unknown collation: '%s'", name)
+	}
+	if collEnv.LookupCharsetName(collation) != charset {
+		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CollationCharsetMismatch, "COLLATION '%s' is not valid for CHARACTER SET '%s'", name, charset)
+	}
+	return collation, nil
+}
+
+// resultCharsetValue returns the collation that a value of
+// character_set_results stands for, as MySQL reads it: NULL, a collation ID
+// or the name of a character set, which stands for its default collation.
+// The character set must be one that Vitess implements. MySQL refuses a
+// collation name, 0 and an ID it does not have with "Unknown character set"
+// (1115), and a value of another type with "Incorrect argument type" (1232).
+func resultCharsetValue(collEnv *collations.Environment, value sqltypes.Value) (collations.ID, bool, error) {
+	switch {
+	case value.IsNull():
+		return collations.Unknown, true, nil
+	case value.IsIntegral():
+		id, err := value.ToUint64()
+		if err == nil && id > 0 && id <= math.MaxUint16 && implementsCollation(collEnv, collations.ID(id)) {
+			return collations.ID(id), false, nil
+		}
+		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownCharacterSet, "Unknown character set: '%s'", value.ToString())
+	case value.IsText() || value.IsBinary():
+		name := strings.ToLower(value.ToString())
+		if alias, ok := collEnv.CharsetAlias(name); ok {
+			name = alias
+		}
+		collation := collEnv.DefaultCollationForCharset(name)
+		if collation != collations.Unknown && implementsCollation(collEnv, collation) {
+			return collation, false, nil
+		}
+		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownCharacterSet, "Unknown character set: '%s'", value.ToString())
+	}
+	return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable 'character_set_results'")
+}
+
+// implementsCollation reports whether vtgate can convert results to the
+// character set of a collation: the binary collation, or one that Vitess
+// implements and that exists in its MySQL version.
+func implementsCollation(collEnv *collations.Environment, collation collations.ID) bool {
+	if collation == collations.CollationBinaryID {
+		return true
+	}
+	return collEnv.LookupName(collation) != "" && colldata.Lookup(collation) != nil
 }
 
 var _ SetOp = (*VitessMetadata)(nil)

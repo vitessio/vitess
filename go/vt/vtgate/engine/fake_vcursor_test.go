@@ -284,6 +284,10 @@ func (t *noopVCursor) SetSessionTrackGTIDs(b bool) {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetResultCharset(collations.ID, bool) {
+	panic("implement me")
+}
+
 func (t *noopVCursor) HasCreatedTempTable() {
 	panic("implement me")
 }

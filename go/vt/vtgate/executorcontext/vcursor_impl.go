@@ -86,9 +86,14 @@ type (
 		DBDDLPlugin        string
 		ForeignKeyMode     vschemapb.Keyspace_ForeignKeyMode
 		SetVarEnabled      bool
-		EnableViews        bool
-		WarnShardedOnly    bool
-		PlannerVersion     plancontext.PlannerVersion
+
+		// ConvertResultCharset is --convert-result-charset: vtgate converts
+		// results to the character_set_results of the session, which SET
+		// NAMES, SET CHARACTER SET and SET character_set_results then set.
+		ConvertResultCharset bool
+		EnableViews          bool
+		WarnShardedOnly      bool
+		PlannerVersion       plancontext.PlannerVersion
 
 		PreventCrossKeyspaceReads bool
 
@@ -700,6 +705,11 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
+}
+
+// ConvertResultCharset implements the plancontext.VSchema interface.
+func (vc *VCursorImpl) ConvertResultCharset() bool {
+	return vc.config.ConvertResultCharset
 }
 
 // IsSystemVariableDenied implements the plancontext.VSchema interface.
@@ -1424,6 +1434,11 @@ func (vc *VCursorImpl) SetReadAfterWriteTimeout(timeout float64) {
 // SetSessionTrackGTIDs implements the SessionActions interface
 func (vc *VCursorImpl) SetSessionTrackGTIDs(enable bool) {
 	vc.SafeSession.SetSessionTrackGtids(enable)
+}
+
+// SetResultCharset implements the SessionActions interface
+func (vc *VCursorImpl) SetResultCharset(collation collations.ID, null bool) {
+	vc.SafeSession.SetResultCharset(collation, null)
 }
 
 // HasCreatedTempTable implements the SessionActions interface

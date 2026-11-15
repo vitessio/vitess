@@ -666,6 +666,10 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case characterSetResults:
+			// Only planned with --convert-result-charset, see
+			// getCachedOrBuildPlan.
+			bindVars[key] = e.characterSetResultsValue(session)
 		case sysvars.Version.Name:
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
 		case sysvars.VersionComment.Name:
@@ -715,6 +719,36 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 	}
 
 	return nil
+}
+
+// characterSetResults is the name of the system variable that vtgate keeps
+// with --convert-result-charset.
+const characterSetResults = "character_set_results"
+
+// characterSetResultsValue returns the value of @@character_set_results of
+// the session: the name of the character set, as MySQL returns it, or NULL.
+// SET NAMES utf8 makes it utf8mb3, and SET character_set_results = 46 makes it
+// utf8mb4.
+func (e *Executor) characterSetResultsValue(session *econtext.SafeSession) *querypb.BindVariable {
+	collation, null := session.ResultCharset()
+	if null {
+		return sqltypes.NullBindVariable
+	}
+	collEnv := e.env.CollationEnv()
+	if collation == collations.Unknown {
+		collation = collEnv.DefaultConnectionCharset()
+	}
+	return sqltypes.StringBindVariable(collEnv.LookupCharsetName(collation))
+}
+
+// isShowSessionVariables reports whether stmt is SHOW [SESSION] VARIABLES.
+func isShowSessionVariables(stmt sqlparser.Statement) bool {
+	show, ok := stmt.(*sqlparser.Show)
+	if !ok {
+		return false
+	}
+	basic, ok := show.Internal.(*sqlparser.ShowBasic)
+	return ok && basic.Command == sqlparser.VariableSession
 }
 
 func ifOptionsExist(session *econtext.SafeSession, f func(*querypb.ExecuteOptions)) {
@@ -1461,6 +1495,15 @@ func (e *Executor) getCachedOrBuildPlan(
 		}
 	}
 
+	sysVars := vcursor.GetSystemVariablesCopy()
+	if vcursor.ConvertResultCharset() {
+		// vtgate keeps character_set_results itself, so that it answers
+		// SELECT @@character_set_results: MySQL has another value.
+		if sysVars == nil {
+			sysVars = make(map[string]string, 1)
+		}
+		sysVars[characterSetResults] = ""
+	}
 	rewriteASTResult, err := sqlparser.Normalize(
 		stmt,
 		reservedVars,
@@ -1469,7 +1512,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		vcursor.GetKeyspace(),
 		vcursor.SafeSession.GetSelectLimit(),
 		setVarComment,
-		vcursor.GetSystemVariablesCopy(),
+		sysVars,
 		qh.ForeignKeyChecks,
 		vcursor,
 	)
@@ -1478,6 +1521,10 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
+	if vcursor.ConvertResultCharset() && isShowSessionVariables(stmt) {
+		// SHOW VARIABLES shows the value of the session as well.
+		bindVarNeeds.AddSysVar(characterSetResults)
+	}
 	if rewriteASTResult.UpdateQueryFromAST && !preparedPlan {
 		query = sqlparser.String(stmt)
 	}
@@ -1761,6 +1808,7 @@ func (e *Executor) initVConfig(warnOnShardedOnly bool, pv plancontext.PlannerVer
 		MaxMemoryRows: maxMemoryRows,
 
 		SetVarEnabled:         setVarEnabled,
+		ConvertResultCharset:  convertResultCharset,
 		DeniedSystemVariables: buildDeniedSystemVariables(deniedSystemVariables),
 		EnableViews:           enableViews,
 		ForeignKeyMode:        fkMode(foreignKeyMode),

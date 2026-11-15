@@ -45,18 +45,20 @@ var _ plancontext.VSchema = (*VSchemaWrapper)(nil)
 // VSchemaWrapper is a wrapper around VSchema that implements the ContextVSchema interface.
 // It is used in tests to provide a VSchema implementation.
 type VSchemaWrapper struct {
-	Vcursor               *econtext.VCursorImpl
-	V                     *vindexes.VSchema
-	Keyspace              *vindexes.Keyspace
-	TabletType_           topodatapb.TabletType
-	Dest                  key.ShardDestination
-	SysVarEnabled         bool
-	DeniedSysVars         map[string]struct{}
-	ForeignKeyChecksState *bool
-	Version               plancontext.PlannerVersion
-	EnableViews           bool
-	TestBuilder           func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
-	Env                   *vtenv.Environment
+	Vcursor       *econtext.VCursorImpl
+	V             *vindexes.VSchema
+	Keyspace      *vindexes.Keyspace
+	TabletType_   topodatapb.TabletType
+	Dest          key.ShardDestination
+	SysVarEnabled bool
+	// ConvertResultCharsetEnabled stands for --convert-result-charset.
+	ConvertResultCharsetEnabled bool
+	DeniedSysVars               map[string]struct{}
+	ForeignKeyChecksState       *bool
+	Version                     plancontext.PlannerVersion
+	EnableViews                 bool
+	TestBuilder                 func(query string, vschema plancontext.VSchema, keyspace string) (*engine.Plan, error)
+	Env                         *vtenv.Environment
 }
 
 func NewVschemaWrapper(
@@ -217,6 +219,10 @@ func (vw *VSchemaWrapper) KeyspaceExists(keyspace string) bool {
 
 func (vw *VSchemaWrapper) SysVarSetEnabled() bool {
 	return vw.SysVarEnabled
+}
+
+func (vw *VSchemaWrapper) ConvertResultCharset() bool {
+	return vw.ConvertResultCharsetEnabled
 }
 
 func (vw *VSchemaWrapper) IsSystemVariableDenied(name string) bool {
