@@ -149,6 +149,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields
 		}()
 		cfg := &evalengine.Config{
 			ResolveColumn:     evalengine.FieldResolver(fields).Column,
+			ResolveType:       evalengine.FieldResolver(fields).Type,
 			Collation:         collations.CollationUtf8mb4ID,
 			Environment:       env.VCursor().Environment(),
 			NoConstantFolding: !debugSimplify,

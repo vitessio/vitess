@@ -63,6 +63,56 @@ func newEvalText(raw []byte, col collations.TypedCollation) *evalBytes {
 	return newEvalRaw(sqltypes.VarChar, raw, col)
 }
 
+// connectionText returns the text of a row or of a bind variable in the
+// character set of the collation that the evaluation gives it.
+//
+// The text of rows and bind variables is in the connection character set,
+// utf8mb4, whatever the collation of the column is: MySQL converts the results
+// it sends to a tablet, and so does vtgate for results that a tablet sends
+// unconverted. A latin1 column with "é" arrives as C3 A9, and a comparison in
+// latin1_swedish_ci needs E9. Without the conversion the two bytes compare as
+// the two latin1 characters "Ã©", and 'é' < 'd' is true where MySQL has it
+// false.
+//
+// A character that the character set of the collation does not have becomes
+// "?", as in a conversion in MySQL. Text for a utf8mb3 collation is not
+// converted: text that came from a utf8mb3 column is valid utf8mb3 already.
+func connectionText(raw []byte, col collations.ID) []byte {
+	if col == collations.Unknown || col == collations.CollationBinaryID {
+		return raw
+	}
+	coll := colldata.Lookup(col)
+	if coll == nil {
+		return raw
+	}
+	cs := coll.Charset()
+	switch cs.(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
+		return raw
+	}
+
+	// ASCII has the same bytes in every character set but the ones with two
+	// or four bytes for each character.
+	ascii := true
+	for _, b := range raw {
+		if b >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		switch cs.(type) {
+		case charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_utf32:
+		default:
+			return raw
+		}
+	}
+
+	// The error says that a character became "?".
+	converted, _ := charset.Convert(nil, cs, raw, charset.Charset_utf8mb4{})
+	return converted
+}
+
 func newEvalVector(raw []byte) *evalBytes {
 	return newEvalRaw(sqltypes.Vector, raw, collationBinary)
 }

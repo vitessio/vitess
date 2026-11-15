@@ -48,6 +48,7 @@ var Cases = []TestCase{
 	{Run: DecimalClamping},
 	{Run: JSONNumberComparison},
 	{Run: JSONStoredNumbers, Schema: JSONStoredNumbers_Schema},
+	{Run: ColumnCharsets, Schema: ColumnCharsets_Schema},
 	{Run: JSONStringComparison},
 	{Run: JSONDoubleConversion},
 	{Run: JSONTextDoubles},
@@ -974,6 +975,65 @@ func JSONStoredNumbers(yield Query) {
 			}
 		}
 	}
+}
+
+// ColumnCharsets evaluates columns that are not utf8mb4. MySQL sends their
+// text in the character set of the connection, utf8mb4, and the collation of
+// a column is in a character set of its own: the evaluation has to convert
+// the text before it compares it. In latin1_german2_ci, 'Müller' = 'MUELLER'
+// is true and WEIGHT_STRING('Müller') is "MUELLER".
+func ColumnCharsets(yield Query) {
+	rows := [][]sqltypes.Value{
+		{sqltypes.NewVarChar("Müller"), sqltypes.NewVarChar("中文aé"), sqltypes.NewVarChar("é"), sqltypes.NewVarChar("é€中")},
+		{sqltypes.NewVarChar("ad"), sqltypes.NewVarChar("啊"), sqltypes.NewVarChar("d"), sqltypes.NewVarChar("Müller")},
+		{sqltypes.NewVarChar("Ä"), sqltypes.NewVarChar("ａ"), sqltypes.NewVarChar("É"), sqltypes.NewVarChar("ae")},
+		{sqltypes.NewVarChar("abc"), sqltypes.NewVarChar("abc"), sqltypes.NewVarChar("ABC"), sqltypes.NewVarChar("abc")},
+	}
+	queries := []string{
+		"column0 = 'MUELLER'", "column0 = 'ae'", "column0 < 'af'", "column0 > 'ad'", "column0 = column3",
+		"column2 = 'e'", "column2 < 'd'", "column2 > 'd'", "column2 = 'É'", "column2 = column3",
+		"column1 = '中文AÉ'", "column1 LIKE '中%'", "column1 = column3",
+		"HEX(column0)", "HEX(column1)", "HEX(column2)",
+		"LENGTH(column0)", "LENGTH(column1)", "CHAR_LENGTH(column1)",
+		"HEX(WEIGHT_STRING(column0))", "HEX(WEIGHT_STRING(column1))", "HEX(WEIGHT_STRING(column2))",
+		"UPPER(column0)", "LOWER(column2)", "UPPER(column1)",
+		"HEX(CONCAT(column0, column2))", "CONCAT(column0, column3)", "CONCAT(column1, 'x')",
+		"COLLATION(column0)", "COLLATION(column1)", "COLLATION(CONCAT(column0, column2))",
+		"column0 IN ('ae', 'MUELLER')", "STRCMP(column0, column2)", "STRCMP(column2, 'd')",
+		"column0 LIKE 'm_ller'", "column2 BETWEEN 'd' AND 'f'",
+	}
+	for _, row := range rows {
+		for _, query := range queries {
+			yield(query, row, false)
+		}
+	}
+}
+
+var ColumnCharsets_Schema = []*querypb.Field{
+	{
+		Name:       "column0",
+		Type:       sqltypes.VarChar,
+		ColumnType: "VARCHAR(20) CHARACTER SET latin1 COLLATE latin1_german2_ci",
+		Charset:    31,
+	},
+	{
+		Name:       "column1",
+		Type:       sqltypes.VarChar,
+		ColumnType: "VARCHAR(20) CHARACTER SET gbk COLLATE gbk_chinese_ci",
+		Charset:    28,
+	},
+	{
+		Name:       "column2",
+		Type:       sqltypes.VarChar,
+		ColumnType: "VARCHAR(20) CHARACTER SET latin1 COLLATE latin1_swedish_ci",
+		Charset:    8,
+	},
+	{
+		Name:       "column3",
+		Type:       sqltypes.VarChar,
+		ColumnType: "VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+		Charset:    255,
+	},
 }
 
 var JSONStoredNumbers_Schema = []*querypb.Field{
