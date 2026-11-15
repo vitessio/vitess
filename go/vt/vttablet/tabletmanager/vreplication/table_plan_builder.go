@@ -138,13 +138,15 @@ const (
 func (vr *vreplicator) buildReplicatorPlan(source *binlogdatapb.BinlogSource, colInfoMap map[string][]*ColumnInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats, collationEnv *collations.Environment, parser *sqlparser.Parser) (*ReplicatorPlan, error) {
 	filter := source.Filter
 	plan := &ReplicatorPlan{
-		VStreamFilter:  &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
-		TargetTables:   make(map[string]*TablePlan),
-		TablePlans:     make(map[string]*TablePlan),
-		ColInfoMap:     colInfoMap,
-		stats:          stats,
-		Source:         source,
-		collationEnv:   collationEnv,
+		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
+		TargetTables:  make(map[string]*TablePlan),
+		TablePlans:    make(map[string]*TablePlan),
+		ColInfoMap:    colInfoMap,
+		stats:         stats,
+		Source:        source,
+		// VReplication reads rows with SET NAMES binary and from the binary
+		// log, so their text is in the character set of its column.
+		collationEnv:   collationEnv.WithRowCharset(collations.CollationBinaryID),
 		workflowConfig: vr.workflowConfig,
 	}
 	for tableName := range colInfoMap {
@@ -270,7 +272,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		colInfos:       colInfos,
 		stats:          stats,
 		source:         source,
-		collationEnv:   collationEnv,
+		collationEnv:   collationEnv.WithRowCharset(collations.CollationBinaryID),
 		workflowConfig: workflowConfig,
 	}
 

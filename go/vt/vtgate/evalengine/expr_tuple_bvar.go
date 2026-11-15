@@ -72,7 +72,7 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 				return
 			}
 			found = true
-			e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), bv.Collation)), nil, env.connText())
+			e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), bv.Collation)), nil, env.rowCharset())
 			if err != nil {
 				evalErr = err
 				return

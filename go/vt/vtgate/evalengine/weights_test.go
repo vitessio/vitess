@@ -182,19 +182,19 @@ func TestWeightStrings(t *testing.T) {
 	}
 }
 
-// TestWeightStringsConnectionText takes the weight and the hash of text of
-// columns that are not utf8mb4, for an environment that holds the text of rows
-// in the connection character set, as vtgate does with
-// --convert-result-charset. The values are in utf8mb4 and have to be converted
-// to the character set of the collation first. The expected weights are
-// WEIGHT_STRING() of MySQL 8.0.46 and 8.4.13: 'é' in latin1_swedish_ci has the
-// weight of 'E', 45, where its two utf8mb4 bytes taken as latin1 have the
-// weights 41 A9.
+// TestWeightStringsRowCharset takes the weight and the hash of text of
+// columns that are not utf8mb4, for an environment whose rows are in utf8mb4,
+// as the ones of a vtgate with --convert-result-charset are. The values have
+// to be converted to the character set of the collation first. The expected
+// weights are WEIGHT_STRING() of MySQL 8.0.46 and 8.4.13: 'é' in
+// latin1_swedish_ci has the weight of 'E', 45, where its two utf8mb4 bytes
+// taken as latin1 have the weights 41 A9.
 //
-// For any other environment the text is in the character set of its collation
-// already, as VReplication and VDiff hand it over, and is not converted: the
-// same bytes get the weight and the hash of the latin1 text they are.
-func TestWeightStringsConnectionText(t *testing.T) {
+// For an environment with the row character set binary, which is the default,
+// the text is in the character set of its collation already, as VReplication
+// and VDiff hand it over, and is not converted: the same bytes get the weight
+// and the hash of the latin1 text they are.
+func TestWeightStringsRowCharset(t *testing.T) {
 	tcases := []struct {
 		value     string
 		collation string
@@ -209,7 +209,7 @@ func TestWeightStringsConnectionText(t *testing.T) {
 		{"中", "gb2312_chinese_ci", "\xd6\xd0", "中", ""},
 	}
 	plain := collations.MySQL8()
-	conn := plain.WithRowsInConnectionCharset()
+	conn := plain.WithRowCharset(collations.CollationUtf8mb4ID)
 	for _, tcase := range tcases {
 		t.Run(tcase.value+"/"+tcase.collation, func(t *testing.T) {
 			collation := plain.LookupByName(tcase.collation)

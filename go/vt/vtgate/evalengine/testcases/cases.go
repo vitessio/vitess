@@ -988,7 +988,7 @@ func JSONStoredNumbers(yield Query) {
 
 // ColumnCharsets evaluates columns that are not utf8mb4, for an environment
 // that holds the text of rows in the character set of the connection, utf8mb4
-// (collations.Environment.WithRowsInConnectionCharset). The collation of a
+// (collations.Environment.WithRowCharset). The collation of a
 // column is in a character set of its own: the evaluation has to convert the
 // text before it compares it. In latin1_german1_ci, 'Müller' = 'MULLER'
 // is true and WEIGHT_STRING('Müller') is "MULLER".

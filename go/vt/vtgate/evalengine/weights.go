@@ -42,8 +42,8 @@ import (
 // can also use this to order / sort other types like Float and Decimal
 // as well.
 //
-// For a collationEnv made by WithRowsInConnectionCharset, text is converted
-// from the connection character set to the one of col first.
+// For a collationEnv with a row character set, text is converted from that
+// character set to the one of col first.
 func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, collationEnv *collations.Environment, col collations.ID, length, precision int, values *EnumSetValues, sqlmode SQLMode) ([]byte, bool, error) {
 	// We optimize here for the case where we already have the desired type.
 	// Otherwise, we fall back to the general evalengine conversion logic.
@@ -102,8 +102,8 @@ func WeightString(dst []byte, v sqltypes.Value, coerceTo sqltypes.Type, collatio
 			return dst, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot hash unsupported collation")
 		}
 		b := v.Raw()
-		if collationEnv.RowsInConnectionCharset() {
-			b = connectionText(b, col)
+		if rows := rowCharset(collationEnv); rows != nil {
+			b = rowText(b, rows, col)
 		}
 		if length != 0 {
 			b = charset.Slice(coll.Charset(), b, 0, length)
@@ -206,8 +206,8 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 // numerical sort of their tiny weight strings. Otherwise, the relative sorting of the two values
 // will not be known, and they will require a full sort using e.g. NullsafeCompare.
 //
-// For a collationEnv made by WithRowsInConnectionCharset, text is converted
-// from the connection character set to the one of collation first.
+// For a collationEnv with a row character set, text is converted from that
+// character set to the one of collation first.
 func TinyWeighter(f *querypb.Field, collationEnv *collations.Environment, collation collations.ID) func(v *sqltypes.Value) {
 	switch {
 	case sqltypes.IsNull(f.Type):
@@ -276,14 +276,14 @@ func TinyWeighter(f *querypb.Field, collationEnv *collations.Environment, collat
 	case sqltypes.IsText(f.Type):
 		if coll := colldata.Lookup(collation); coll != nil {
 			if twcoll, ok := coll.(colldata.TinyWeightCollation); ok {
-				connText := collationEnv.RowsInConnectionCharset()
+				rows := rowCharset(collationEnv)
 				return func(v *sqltypes.Value) {
 					if v.IsNull() {
 						return
 					}
 					raw := v.Raw()
-					if connText {
-						raw = connectionText(raw, collation)
+					if rows != nil {
+						raw = rowText(raw, rows, collation)
 					}
 					v.SetTinyWeight(twcoll.TinyWeightString(raw))
 				}

@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
@@ -234,7 +235,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			return newEvalFloat(fval), nil
 		default:
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -261,7 +262,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			fval, _ := fastparse.ParseFloat64(v.RawStr())
 			dec = decimal.NewFromFloat(fval)
 		default:
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -281,7 +282,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			i, err := fastparse.ParseInt64(v.RawStr(), 10)
 			return newEvalInt64(i), err
 		default:
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -300,7 +301,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 			u, err := fastparse.ParseUint64(v.RawStr(), 10)
 			return newEvalUint64(u), err
 		default:
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -313,13 +314,13 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		case v.IsText() || v.IsBinary():
 			return newEvalRaw(v.Type(), v.Raw(), typedCoercionCollation(v.Type(), collation)), nil
 		case sqltypes.IsText(typ):
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
 			return evalToVarchar(e, collation, true)
 		default:
-			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+			e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -329,7 +330,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 	case typ == sqltypes.TypeJSON:
 		return json.NewFromSQL(v)
 	case typ == sqltypes.Date:
-		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -340,7 +341,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		}
 		return d, nil
 	case typ == sqltypes.Datetime || typ == sqltypes.Timestamp:
-		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -351,7 +352,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 		}
 		return dt, nil
 	case typ == sqltypes.Time:
-		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, false)
+		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -371,12 +372,11 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 
 // valueToEval returns the eval of a value of a row or of a bind variable.
 //
-// connText is true when the text of the value is in the connection character
-// set and has to be converted to the character set of collation (see
-// connectionText); the callers that evaluate for an environment made by
-// collations.Environment.WithRowsInConnectionCharset pass true. With false the
-// text is taken as it is.
-func valueToEval(value sqltypes.Value, collation collations.TypedCollation, values *EnumSetValues, connText bool) (eval, error) {
+// rows is the character set that the text of the value is in, when it has to
+// be converted to the character set of collation (see rowText): the callers
+// that evaluate for an environment with a row character set pass it. With nil
+// the text is taken as it is.
+func valueToEval(value sqltypes.Value, collation collations.TypedCollation, values *EnumSetValues, rows charset.Charset) (eval, error) {
 	wrap := func(err error) error {
 		if err == nil {
 			return nil
@@ -393,7 +393,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 				return
 			}
 			var e eval
-			e, memberErr = valueToEval(bv, collation, values, connText)
+			e, memberErr = valueToEval(bv, collation, values, rows)
 			if memberErr != nil {
 				return
 			}
@@ -437,8 +437,8 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation, valu
 			return newEvalBytesBit(raw), wrap(err)
 		default:
 			raw := value.Raw()
-			if connText {
-				raw = connectionText(raw, collation.Collation)
+			if rows != nil {
+				raw = rowText(raw, rows, collation.Collation)
 			}
 			return newEvalText(raw, collation), nil
 		}
