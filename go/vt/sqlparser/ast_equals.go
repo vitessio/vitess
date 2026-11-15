@@ -4626,7 +4626,8 @@ func (cmp *Comparator) RefOfSetExpr(a, b *SetExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.RefOfVariable(a.Var, b.Var) &&
+	return a.Collation == b.Collation &&
+		cmp.RefOfVariable(a.Var, b.Var) &&
 		cmp.Expr(a.Expr, b.Expr)
 }
 

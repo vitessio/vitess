@@ -1020,6 +1020,20 @@ func NewSetVariable(str string, scope Scope) *Variable {
 	return &Variable{Name: createIdentifierCI(str), Scope: scope}
 }
 
+// setNamesCollation returns the collation that a SET NAMES statement keeps:
+// the COLLATE of SET NAMES utf8mb4 COLLATE utf8mb4_bin. MySQL does not accept
+// COLLATE after SET CHARACTER SET nor after SET NAMES DEFAULT, and the parser
+// drops it there, as it did before for every form.
+func setNamesCollation(name string, value Expr, collation string) string {
+	if !strings.EqualFold(name, "names") {
+		return ""
+	}
+	if _, isDefault := value.(*Default); isDefault {
+		return ""
+	}
+	return collation
+}
+
 // NewSetStatement returns a Set struct
 func NewSetStatement(comments *ParsedComments, exprs SetExprs) *Set {
 	return &Set{Exprs: exprs, Comments: comments}

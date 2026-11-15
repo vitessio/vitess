@@ -1424,13 +1424,23 @@ set_expression:
   {
     $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
   }
+| set_variable '=' BINARY
+  {
+    // MySQL takes BINARY as the name of the binary character set here. Only
+    // character_set_results accepts it, which vtgate can set to binary.
+    if $1.Scope == VariableScope || !$1.Name.EqualString("character_set_results") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("binary")}
+  }
 | set_variable '=' expression
   {
     $$ = &SetExpr{Var: $1, Expr: $3}
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
+    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2, Collation: setNamesCollation($1, $2, $3)}
   }
 
 set_variable:
