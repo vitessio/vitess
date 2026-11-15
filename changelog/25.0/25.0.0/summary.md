@@ -49,6 +49,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [Results in the client's `character_set_results`](#vtgate-convert-result-charset)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -610,6 +611,22 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-convert-result-charset"/>Results in the client's `character_set_results`</a>
+
+VTGate has always returned the text of results in `utf8mb4`, whatever character set a client asked for. Two new flags, both off by default, make VTGate convert results to the `character_set_results` of each session, as MySQL does:
+
+- `--convert-result-charset` on VTGate. VTGate keeps `character_set_results` for each session, sets it from the handshake collation, `SET NAMES`, `SET CHARACTER SET` and `SET character_set_results` (a character set, `binary`, a collation ID, `NULL` or `DEFAULT`), answers `@@character_set_results` and `SHOW VARIABLES` from it, and converts the text, the field names, collations and lengths of every result, and the text of error messages to MySQL protocol clients. A character that the character set does not have becomes `?`.
+- `--queryserver-config-raw-result-charset` on VTTablet. The connections that serve queries read from MySQL with `character_set_results = NULL`, so MySQL sends each column in its own character set. A VTGate with `--convert-result-charset` converts that text itself and learns the collation of every column, which it needs to return a `latin1` or `gbk` column unconverted for `character_set_results = NULL` or `binary`. Every other caller of the tablet gets the results it got before.
+
+Enable `--convert-result-charset` on every VTGate before `--queryserver-config-raw-result-charset` on any tablet: through a VTGate without its flag, `SELECT @@character_set_results` and `SHOW VARIABLES` report `NULL` for a tablet with the flag. Either flag can be on without the other.
+
+With `--convert-result-charset`:
+
+- VTGate still reads the text of every statement as `utf8mb4`, so it accepts only `utf8mb4` and `utf8mb3` clients. A handshake with a collation of another character set, `binary` included, is refused with error 1231 (MySQL itself refuses `ucs2`, `utf16`, `utf16le` and `utf32` this way), and `SET NAMES` and `SET CHARACTER SET` to another character set fail. Without the flag these clients connect as before and `SET NAMES latin1` is accepted and ignored.
+- `SET character_set_results` is the way to get results in another character set, and accepts every character set that MySQL 8 has, including the ones that [cannot be connection character sets](#vttablet-connection-charsets-restricted): it only changes what VTGate sends.
+- VTGate sorts, groups and compares the text of a column that is not `utf8mb4` in the collation of the column when it knows it. Without the flag it compares the `utf8mb4` bytes as if they were text of the column's character set, so for example a `latin1` column with `é` sorts before `d` when VTGate merges the rows of several shards.
+- VStream results and gRPC error messages are not converted.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
