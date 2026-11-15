@@ -95,7 +95,15 @@ var (
 	healthCheckTimeout = time.Minute
 
 	// System settings related flags
-	sysVarSetEnabled      = true
+	sysVarSetEnabled = true
+
+	// convertResultCharset is true when vtgate converts the text of results
+	// itself: to the character_set_results of the session, where it
+	// otherwise sends every result in its connection character set whatever
+	// the session asked for, and with the collation of each column in the
+	// fields it works with, where it otherwise has its connection collation
+	// for every text column.
+	convertResultCharset  = false
 	setVarEnabled         = true
 	deniedSystemVariables []string
 
@@ -211,6 +219,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagIntVar(fs, &maxPayloadSize, "max-payload-size", maxPayloadSize, "The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.")
 	utils.SetFlagIntVar(fs, &warnPayloadSize, "warn-payload-size", warnPayloadSize, "The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.")
 	utils.SetFlagBoolVar(fs, &sysVarSetEnabled, "enable-system-settings", sysVarSetEnabled, "This will enable the system settings to be changed per session at the database connection level")
+	fs.BoolVar(&convertResultCharset, "convert-result-charset", convertResultCharset, "Convert the text of query results to the character_set_results of the session, which a client sets with its handshake, SET NAMES or SET character_set_results. Without it, results are in the connection character set of vtgate (utf8mb4) whatever the session asked for.")
 	utils.SetFlagBoolVar(fs, &setVarEnabled, "enable-set-var", setVarEnabled, "This will enable the use of MySQL's SET_VAR query hint for certain system variables instead of using reserved connections")
 	fs.StringSliceVar(&deniedSystemVariables, "denied-system-variables", deniedSystemVariables, "Comma-separated list of system variables that clients are not allowed to SET; attempts return an unsupported error. Names are matched case-insensitively.")
 	utils.SetFlagDurationVar(fs, &lockHeartbeatTime, "lock-heartbeat-time", lockHeartbeatTime, "If there is lock function used. This will keep the lock connection active by using this heartbeat")

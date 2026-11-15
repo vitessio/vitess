@@ -47,6 +47,7 @@ Flags:
       --config-persistence-min-interval duration                         minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                               Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
+      --convert-result-charset                                           Convert the text of query results to the character_set_results of the session, which a client sets with its handshake, SET NAMES or SET character_set_results. Without it, results are in the connection character set of vtgate (utf8mb4) whatever the session asked for.
       --dbddl-plugin string                                              controls how to handle CREATE/DROP DATABASE. use it if you are using your own database provisioning service (default "fail")
       --ddl-strategy string                                              Set default strategy for DDL statements. Override with @@ddl_strategy session variable (default "direct")
       --default-tablet-type topodatapb.TabletType                        The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
