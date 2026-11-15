@@ -164,6 +164,9 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		func(_ int, innerqr *sqltypes.Result) {
 			// Don't append more rows if row count is exceeded.
 			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
+				if convertResultCharset {
+					innerqr = shardResult(qr.Fields, innerqr)
+				}
 				qr.AppendResult(innerqr)
 			}
 		},
@@ -461,6 +464,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		}
 		return callback(reply)
 	}
+	var streams shardStreams
 
 	// Build a per-call copy of the execute options carrying the requested
 	// FetchLastInsertId. Mutating the shared session options in place races
@@ -490,6 +494,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			)
 			transactionID := info.transactionID
 			reservedID := info.reservedID
+			shardCallback := observedCallback
+			if convertResultCharset {
+				shardCallback = streams.stream(observedCallback)
+			}
 
 			opts = callOptions
 
@@ -525,20 +533,20 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			switch info.actionNeeded {
 			case nothing:
-				err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, observedCallback)
+				err = qs.StreamExecute(ctx, session, rs.Target, query, bindVars[i], transactionID, reservedID, opts, shardCallback)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
 						var state queryservice.ReservedState
-						state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, observedCallback)
+						state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, shardCallback)
 						reservedID = state.ReservedID
 						alias = state.TabletAlias
 					})
 				}
 			case begin:
 				var state queryservice.TransactionState
-				state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, observedCallback)
+				state, err = qs.BeginStreamExecute(ctx, session, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, shardCallback)
 				transactionID = state.TransactionID
 				alias = state.TabletAlias
 				if err != nil {
@@ -546,7 +554,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
 						var state queryservice.ReservedTransactionState
-						state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+						state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, shardCallback)
 						transactionID = state.TransactionID
 						reservedID = state.ReservedID
 						alias = state.TabletAlias
@@ -554,12 +562,12 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				}
 			case reserve:
 				var state queryservice.ReservedState
-				state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, observedCallback)
+				state, err = qs.ReserveStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, shardCallback)
 				reservedID = state.ReservedID
 				alias = state.TabletAlias
 			case reserveBegin:
 				var state queryservice.ReservedTransactionState
-				state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, observedCallback)
+				state, err = qs.ReserveBeginStreamExecute(ctx, session, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, shardCallback)
 				transactionID = state.TransactionID
 				reservedID = state.ReservedID
 				alias = state.TabletAlias
