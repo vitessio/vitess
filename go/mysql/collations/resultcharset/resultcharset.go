@@ -167,18 +167,6 @@ func isASCIICompatible(cs charset.Charset) bool {
 	return cs.EncodeRune(buf[:], 'A') == 1 && buf[0] == 'A'
 }
 
-// scaleLength returns the column length that MySQL reports for a column after
-// a conversion: the length in characters times the longest character of the
-// target character set. A latin1 VARCHAR(10) has the length 10, and 40 as
-// utf8mb4.
-func scaleLength(length uint32, from, to charset.Charset) uint32 {
-	if from.MaxWidth() == to.MaxWidth() {
-		return length
-	}
-	scaled := uint64(length) / uint64(from.MaxWidth()) * uint64(to.MaxWidth())
-	return uint32(min(scaled, math.MaxUint32))
-}
-
 // connectionLength returns the column length that MySQL sends for a column of
 // the character set from when character_set_results has the character set to.
 //
