@@ -1011,6 +1011,12 @@ func ColumnCharsets(yield Query) {
 		"COLLATION(column0)", "COLLATION(column1)", "COLLATION(CONCAT(column0, column2))",
 		"column0 IN ('ae', 'MULLER')", "STRCMP(column0, column2)", "STRCMP(column2, 'd')",
 		"column0 LIKE 'm_ller'", "column2 BETWEEN 'd' AND 'f'",
+		// A column against a literal of another character set is compared
+		// in the collation of the column.
+		"column1 < '波'", "column1 > '啊'", "column1 = 'ABC'", "column0 = 'Müller'", "column0 < 'z'",
+		"column3 = column0", "column3 < column1", "COLLATION(CONCAT(column0, 'x'))", "COLLATION(CONCAT(column1, 'x'))",
+		"column1 IN ('啊', 'ABC')", "STRCMP(column1, '波')", "column1 BETWEEN '啊' AND '中'",
+		"CASE WHEN column1 < '波' THEN 1 ELSE 0 END", "column0 <=> 'MULLER'", "column1 != '波'",
 	}
 	for _, row := range rows {
 		for _, query := range queries {

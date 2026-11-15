@@ -1665,3 +1665,54 @@ func TestJSONColumnDecimals(t *testing.T) {
 		})
 	}
 }
+
+// TestColumnCoercibility checks that a column has the coercibility that MySQL
+// gives it, 2, which is stronger than the 4 of a literal: a latin1_swedish_ci
+// column and a gb2312_chinese_ci column are compared with a literal that is not
+// ASCII, and concatenated with one, in their own collation. The expected
+// values are the ones of a table with these columns on MySQL 8.0.46 and
+// 8.4.13: 'Myller' = 'Müller' is true in latin1_swedish_ci and false in the
+// collation of the literal, utf8mb4_0900_ai_ci, and '中' < '波' is false in
+// gb2312_chinese_ci and true in utf8mb4_0900_ai_ci.
+func TestColumnCoercibility(t *testing.T) {
+	venv := vtenv.NewTestEnv().WithRowsInConnectionCharset()
+	fields := evalengine.FieldResolver([]*querypb.Field{
+		{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("latin1_swedish_ci"))},
+		{Name: "column1", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("gb2312_chinese_ci"))},
+	})
+	row := []sqltypes.Value{sqltypes.NewVarChar("Myller"), sqltypes.NewVarChar("中")}
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{"column0 = 'Müller'", "INT64(1)"},
+		{"collation(concat(column0, 'ü'))", `VARCHAR("latin1_swedish_ci")`},
+		{"column1 < '波'", "INT64(0)"},
+		{"collation(concat(column1, '波'))", `VARCHAR("gb2312_chinese_ci")`},
+		{"'Myller' = 'Müller'", "INT64(0)"},
+		{"'中' < '波'", "INT64(1)"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = row
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+			compiled, err := env.Evaluate(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, compiled.String())
+		})
+	}
+}

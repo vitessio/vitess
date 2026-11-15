@@ -22,6 +22,20 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+// typedColumnCollation returns the collation of a column of a row for the
+// evaluation. It is the one of typedCoercionCollation with the coercibility
+// that MySQL gives a column, implicit, which is stronger than the one of a
+// literal: a latin1_swedish_ci column compared with the literal 'MYLLER' is
+// compared in latin1_swedish_ci, where two literals are compared in the
+// collation of the connection.
+func typedColumnCollation(typ sqltypes.Type, id collations.ID) collations.TypedCollation {
+	col := typedCoercionCollation(typ, id)
+	if col.Coercibility == collations.CoerceCoercible {
+		col.Coercibility = collations.CoerceImplicit
+	}
+	return col
+}
+
 func typedCoercionCollation(typ sqltypes.Type, id collations.ID) collations.TypedCollation {
 	switch {
 	case sqltypes.IsNull(typ):
