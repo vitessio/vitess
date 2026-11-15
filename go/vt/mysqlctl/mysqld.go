@@ -1168,7 +1168,11 @@ func (mysqld *Mysqld) executeShutdown(ctx context.Context, cnf *Mycnf, waitForMy
 		if err != nil {
 			return false, err
 		}
-		if _, output, err := execCmdWithContext(ctx, name, args, env, dir, nil); err != nil {
+		// mysqladmin ignores ctx's cancellation: killing it after it delivered
+		// SHUTDOWN would count as not initiated, and the restore would then
+		// relax the crash-safety fence beneath the stop. --connect-timeout and
+		// --shutdown-timeout bound it instead.
+		if _, output, err := execCmdWithContext(context.WithoutCancel(ctx), name, args, env, dir, nil); err != nil {
 			// mysqladmin exits non-zero when its --shutdown-timeout expires
 			// while mysqld is still shutting down. The SHUTDOWN command has
 			// already been delivered at that point, so a slow-but-clean

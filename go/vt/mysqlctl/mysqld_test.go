@@ -746,3 +746,86 @@ func TestStartNoWaitMysqldOutput(t *testing.T) {
 	assert.NotEmpty(t, stderr["start_id"])
 	assert.Equal(t, stdout["start_id"], stderr["start_id"])
 }
+
+// TestShutdownCancelledDuringMysqladminKeepsFence checks that cancelling the
+// caller while mysqladmin runs doesn't arm the restore. mysqladmin may already
+// have delivered SHUTDOWN, so the restore would relax the durability fence and
+// restart replication beneath the stop.
+func TestShutdownCancelledDuringMysqladminKeepsFence(t *testing.T) {
+	const (
+		readDurability   = "SELECT @@global.innodb_flush_log_at_trx_commit, @@global.sync_binlog, @@global.sync_relay_log"
+		restoreFlushLog  = "SET GLOBAL innodb_flush_log_at_trx_commit = 2"
+		startReplication = "START REPLICA"
+	)
+
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Source_Host|Replica_IO_Running|Replica_SQL_Running", "varchar|varchar|varchar"),
+		"source|Yes|Yes",
+	))
+	db.AddQuery(readDurability, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"@@global.innodb_flush_log_at_trx_commit|@@global.sync_binlog|@@global.sync_relay_log",
+			"int64|int64|int64",
+		),
+		"2|0|10000",
+	))
+	for _, query := range []string{
+		"SET GLOBAL innodb_flush_log_at_trx_commit = 1", "SET GLOBAL sync_binlog = 1", "SET GLOBAL sync_relay_log = 1",
+		"FLUSH NO_WRITE_TO_BINLOG ENGINE LOGS", "FLUSH NO_WRITE_TO_BINLOG BINARY LOGS", "FLUSH NO_WRITE_TO_BINLOG RELAY LOGS",
+		"STOP REPLICA IO_THREAD", "STOP REPLICA SQL_THREAD",
+		restoreFlushLog, "SET GLOBAL sync_binlog = 0", "SET GLOBAL sync_relay_log = 10000", startReplication,
+	} {
+		db.AddQuery(query, &sqltypes.Result{})
+	}
+	db.AddQueryPattern("kill .*", &sqltypes.Result{})
+	params := *db.ConnParams()
+	// NewMysqld detects the version with the real mysqld, so VT_MYSQL_ROOT is set after it.
+	testMysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+
+	// There is no mysqld_shutdown hook, so Shutdown runs mysqladmin. The fake
+	// one marks that it started, then delivers SHUTDOWN and gives up waiting on
+	// the pid file after the caller has been cancelled.
+	vtroot := t.TempDir()
+	t.Setenv("VTROOT", vtroot)
+	require.NoError(t, os.MkdirAll(filepath.Join(vtroot, "vthook"), 0o755))
+	mysqlRoot := t.TempDir()
+	t.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+	require.NoError(t, os.Mkdir(filepath.Join(mysqlRoot, "bin"), 0o755))
+	started := filepath.Join(t.TempDir(), "started")
+	script := "#!/bin/sh\ntouch '" + started + "'\nsleep 1\necho \"Warning;  Aborted waiting on pid file: 'mysql.pid' after 1 seconds\" >&2\nexit 1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(mysqlRoot, "bin", "mysqladmin"), []byte(script), 0o755))
+
+	dir := t.TempDir()
+	cnf := &Mycnf{
+		SocketFile: filepath.Join(dir, "mysql.sock"),
+		PidFile:    filepath.Join(dir, "mysql.pid"),
+	}
+	require.NoError(t, os.WriteFile(cnf.PidFile, []byte("12345\n"), 0o600))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	shutdownErr := make(chan error, 1)
+	go func() {
+		shutdownErr <- testMysqld.Shutdown(ctx, cnf, true, 30*time.Second)
+	}()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(started)
+		return err == nil
+	}, 30*time.Second, 10*time.Millisecond, "mysqladmin must start")
+	cancel()
+	select {
+	case err := <-shutdownErr:
+		require.Error(t, err, "the pid file stays, so the shutdown can't succeed")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Shutdown did not return")
+	}
+
+	// Close first: it waits out any pending restoration, so the assertions
+	// below deterministically observe whether one was armed.
+	testMysqld.Close()
+	assert.Zero(t, db.GetQueryCalledNum(restoreFlushLog), "a possibly delivered shutdown must keep the durability fence")
+	assert.Zero(t, db.GetQueryCalledNum(startReplication), "a possibly delivered shutdown must not restart replication beneath the stop")
+}
