@@ -198,12 +198,52 @@ func connectionLength(field *querypb.Field, from, to charset.Charset) uint32 {
 	return uint32(min(scaled, math.MaxUint32))
 }
 
+// sameCharset reports whether a and b are the same character set.
+func sameCharset(a, b charset.Charset) bool {
+	return a.Name() == b.Name()
+}
+
+// ConnectionLengths returns the conversion that gives each column of a result
+// that MySQL sent with character_set_results = NULL whose collation is in the
+// character set of the connection collation conn the length that MySQL sends
+// for it with character_set_results set to conn, and changes nothing else.
+//
+// ToConnection leaves the length of such a column alone, because it cannot tell
+// it from a column that MySQL converted already: a utf8mb4_0900_ai_ci TEXT has
+// the length 65535 with character_set_results = NULL, and 262140 with
+// utf8mb4, with the same collation in both. A vttablet that returns a result
+// as MySQL sent it applies ConnectionLengths first, so that ToConnection gives
+// the lengths that MySQL sends, and leaves a result that a vttablet without
+// character_set_results = NULL returns as it is.
+func ConnectionLengths(fields []*querypb.Field, conn collations.ID) *Conversion {
+	c := &Conversion{}
+	to := lookupCharset(conn)
+	if to == nil {
+		return c
+	}
+	for i, field := range fields {
+		from := lookupCharset(collations.ID(field.Charset))
+		if from == nil || !sameCharset(from, to) {
+			continue
+		}
+		if length := connectionLength(field, from, to); length != field.ColumnLength {
+			converted := field.CloneVT()
+			converted.ColumnLength = length
+			c.setField(fields, i, converted)
+		}
+	}
+	return c
+}
+
 // ToConnection returns the conversion of a result that MySQL sent with
 // character_set_results = NULL to the connection collation conn.
 //
 // The text of every column whose collation is not binary is converted from
 // the character set of that collation to the character set of conn, and the
-// column length is the one of the converted column. When relabel is true, the
+// column length is the one of the converted column, except for a column whose
+// collation is in the character set of conn, which keeps its length (see
+// ConnectionLengths). Applied to a result that MySQL sent with
+// character_set_results set to conn, it changes nothing. When relabel is true, the
 // field also gets conn as its collation, and the result is the one MySQL
 // sends with character_set_results set to conn. When relabel is false, the
 // field keeps the collation of the column.
@@ -243,8 +283,12 @@ func ToConnection(fields []*querypb.Field, conn collations.ID, relabel bool) *Co
 		from := lookupCharset(collations.ID(field.Charset))
 		switch {
 		case from != nil:
-			if length := connectionLength(field, from, to); length != field.ColumnLength {
-				newField().ColumnLength = length
+			// A column in the character set of conn keeps its length:
+			// see ConnectionLengths.
+			if !sameCharset(from, to) {
+				if length := connectionLength(field, from, to); length != field.ColumnLength {
+					newField().ColumnLength = length
+				}
 			}
 			if relabel && field.Charset != uint32(conn) {
 				newField().Charset = uint32(conn)
