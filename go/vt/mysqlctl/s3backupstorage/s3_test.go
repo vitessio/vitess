@@ -2337,6 +2337,42 @@ func TestClientInitializationEmptyBucket(t *testing.T) {
 	require.Nil(t, bs._client)
 }
 
+// TestClientInitializationValidatesDownloadFlags checks that the caller that
+// initializes the client validates the download flags, and that a rejected
+// configuration isn't cached for later callers.
+func TestClientInitializationValidatesDownloadFlags(t *testing.T) {
+	mockServer := newMockS3Server()
+	t.Cleanup(mockServer.Close)
+
+	originalBucket := bucket
+	originalEndpoint := endpoint
+	originalForcePath := forcePath
+	originalRegion := region
+	originalConcurrency := downloadConcurrency
+	t.Cleanup(func() {
+		bucket = originalBucket
+		endpoint = originalEndpoint
+		forcePath = originalForcePath
+		region = originalRegion
+		downloadConcurrency = originalConcurrency
+	})
+
+	bucket = "test-bucket"
+	endpoint = mockServer.URL()
+	forcePath = true
+	region = "us-east-1"
+	downloadConcurrency = 0
+	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+
+	bs := newS3BackupStorage()
+	for range 2 {
+		_, err := bs.client(t.Context())
+		require.ErrorContains(t, err, "--s3-backup-download-concurrency must be >= 1")
+		require.Nil(t, bs._client)
+	}
+}
+
 func TestClientInitializationHonoursContextCancellation(t *testing.T) {
 	mockServer := newMockS3Server()
 	t.Cleanup(mockServer.Close)

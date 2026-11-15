@@ -735,18 +735,6 @@ func (bs *S3BackupStorage) client(ctx context.Context) (*s3.Client, error) {
 				return nil, err
 			}
 		}
-
-		if downloadConcurrency < 1 {
-			return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
-		}
-		if downloadConcurrency > 1 {
-			if downloadPartSize < minDownloadPartSize {
-				return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5 MiB), got %d", minDownloadPartSize, downloadPartSize)
-			}
-			if _, err := downloadBufferSize(downloadPartSize, downloadConcurrency); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	client, err := bs.initializeClient(ctx)
@@ -805,6 +793,18 @@ func (bs *S3BackupStorage) initializeClient(ctx context.Context) (*s3.Client, er
 
 	if err := bs.s3SSE.init(); err != nil {
 		return nil, err
+	}
+
+	if downloadConcurrency < 1 {
+		return nil, fmt.Errorf("--s3-backup-download-concurrency must be >= 1, got %d", downloadConcurrency)
+	}
+	if downloadConcurrency > 1 {
+		if downloadPartSize < minDownloadPartSize {
+			return nil, fmt.Errorf("--s3-backup-download-part-size must be >= %d (5 MiB), got %d", minDownloadPartSize, downloadPartSize)
+		}
+		if _, err := downloadBufferSize(downloadPartSize, downloadConcurrency); err != nil {
+			return nil, err
+		}
 	}
 
 	return client, nil
