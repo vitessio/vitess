@@ -1243,56 +1243,6 @@ func reparentPhaseError(err error) *vtrpc.RPCError {
 	return vterrors.ToVTRPC(err)
 }
 
-// PrepareEmergencyReparent applies the relay logs up to wait_position and then
-// reads the reparent journal, so an emergency reparent needs one round trip per
-// candidate instead of two. It leaves replication as it found it: stopping the I/O
-// thread beforehand, and restarting it if the reparent is abandoned, stay with the
-// caller, which holds the shard lock and knows which of the two happened.
-func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
-	if request == nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
-	}
-	waitTimeout, err := reparentPhaseTimeout(request.WaitForPositionTimeout)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "invalid wait_for_position_timeout")
-	}
-	if request.WaitPosition != "" {
-		if _, err := replication.DecodePosition(request.WaitPosition); err != nil {
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid wait_position: %v", err)
-		}
-	}
-
-	tabletAlias := slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias))
-	log.Info("PrepareEmergencyReparent", tabletAlias)
-	response := &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}
-	if request.WaitPosition != "" {
-		waitCtx, waitCancel := context.WithTimeout(ctx, waitTimeout)
-		err = tm.WaitForPosition(waitCtx, request.WaitPosition)
-		waitCancel()
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
-			log.Warn("PrepareEmergencyReparent failed to apply relay logs", tabletAlias, slog.Any("error", err))
-			response.WaitForPositionError = reparentPhaseError(err)
-		}
-	}
-
-	// The journal is read even when the wait fails, because the caller can still
-	// use the count as evidence in errant GTID detection.
-	journalCtx, journalCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	response.ReparentJournalLength, err = tm.ReadReparentJournalInfo(journalCtx)
-	journalCancel()
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		log.Warn("PrepareEmergencyReparent failed to read the reparent journal", tabletAlias, slog.Any("error", err))
-		response.ReadReparentJournalError = reparentPhaseError(err)
-	}
-	return response, nil
-}
-
 // PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	log.Info("PromoteReplica")

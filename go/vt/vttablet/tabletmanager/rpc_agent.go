@@ -160,8 +160,6 @@ type RPCTM interface {
 
 	StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error)
 
-	PrepareEmergencyReparent(ctx context.Context, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error)
-
 	ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
 	PromoteReplica(ctx context.Context, semiSync bool) (string, error)

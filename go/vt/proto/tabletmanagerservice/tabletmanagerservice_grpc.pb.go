@@ -103,7 +103,6 @@ const (
 	TabletManager_SetReplicationSource_FullMethodName            = "/tabletmanagerservice.TabletManager/SetReplicationSource"
 	TabletManager_ReplicaWasRestarted_FullMethodName             = "/tabletmanagerservice.TabletManager/ReplicaWasRestarted"
 	TabletManager_StopReplicationAndGetStatus_FullMethodName     = "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus"
-	TabletManager_PrepareEmergencyReparent_FullMethodName        = "/tabletmanagerservice.TabletManager/PrepareEmergencyReparent"
 	TabletManager_PromoteReplica_FullMethodName                  = "/tabletmanagerservice.TabletManager/PromoteReplica"
 	TabletManager_PromoteReplicaAndJournal_FullMethodName        = "/tabletmanagerservice.TabletManager/PromoteReplicaAndJournal"
 	TabletManager_Backup_FullMethodName                          = "/tabletmanagerservice.TabletManager/Backup"
@@ -221,8 +220,6 @@ type TabletManagerClient interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PrepareEmergencyReparent applies relay logs up to a position and reads the reparent journal
-	PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
@@ -894,16 +891,6 @@ func (c *tabletManagerClient) StopReplicationAndGetStatus(ctx context.Context, i
 	return out, nil
 }
 
-func (c *tabletManagerClient) PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(tabletmanagerdata.PrepareEmergencyReparentResponse)
-	err := c.cc.Invoke(ctx, TabletManager_PrepareEmergencyReparent_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *tabletManagerClient) PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(tabletmanagerdata.PromoteReplicaResponse)
@@ -1091,8 +1078,6 @@ type TabletManagerServer interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PrepareEmergencyReparent applies relay logs up to a position and reads the reparent journal
-	PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
 	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
@@ -1308,9 +1293,6 @@ func (UnimplementedTabletManagerServer) ReplicaWasRestarted(context.Context, *ta
 }
 func (UnimplementedTabletManagerServer) StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopReplicationAndGetStatus not implemented")
-}
-func (UnimplementedTabletManagerServer) PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PrepareEmergencyReparent not implemented")
 }
 func (UnimplementedTabletManagerServer) PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteReplica not implemented")
@@ -2521,24 +2503,6 @@ func _TabletManager_StopReplicationAndGetStatus_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TabletManager_PrepareEmergencyReparent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.PrepareEmergencyReparentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).PrepareEmergencyReparent(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: TabletManager_PrepareEmergencyReparent_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).PrepareEmergencyReparent(ctx, req.(*tabletmanagerdata.PrepareEmergencyReparentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _TabletManager_PromoteReplica_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.PromoteReplicaRequest)
 	if err := dec(in); err != nil {
@@ -2899,10 +2863,6 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopReplicationAndGetStatus",
 			Handler:    _TabletManager_StopReplicationAndGetStatus_Handler,
-		},
-		{
-			MethodName: "PrepareEmergencyReparent",
-			Handler:    _TabletManager_PrepareEmergencyReparent_Handler,
 		},
 		{
 			MethodName: "PromoteReplica",
