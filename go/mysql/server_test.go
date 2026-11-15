@@ -364,6 +364,63 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 	c.Close()
 }
 
+// handshakeCheckHandler refuses a client whose handshake collation is
+// latin1_swedish_ci (8).
+type handshakeCheckHandler struct {
+	testHandler
+}
+
+func (h *handshakeCheckHandler) CheckHandshake(c *Conn) error {
+	if c.CharacterSet == 8 {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable 'character_set_client' can't be set to the value of 'latin1'")
+	}
+	return nil
+}
+
+// TestHandshakeChecker covers a Handler that refuses a connection with
+// CheckHandshake: the client gets the error as an error packet before it is
+// authenticated, also with a wrong password, as MySQL refuses a ucs2 client.
+func TestHandshakeChecker(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	th := &handshakeCheckHandler{}
+
+	authServer := NewAuthServerStatic("", "", 0)
+	authServer.entries["user1"] = []*AuthServerStaticEntry{{
+		Password: "password1",
+		UserData: "userData1",
+	}}
+	defer authServer.close()
+
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err, "NewListener failed")
+	host, port := getHostPort(t, l.Addr())
+	params := &ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	go l.Accept()
+	defer cleanupListener(ctx, l, params)
+
+	c, err := Connect(ctx, params)
+	require.NoError(t, err)
+	c.Close()
+
+	for _, pass := range []string{"password1", "wrong"} {
+		refused := *params
+		refused.Charset = 8
+		refused.Pass = pass
+		_, err = Connect(ctx, &refused)
+		require.Error(t, err, pass)
+		var sqlErr *sqlerror.SQLError
+		require.ErrorAs(t, err, &sqlErr, pass)
+		assert.Equal(t, sqlerror.ERWrongValueForVar, sqlErr.Num, pass)
+		assert.Equal(t, sqlerror.SSClientError, sqlErr.State, pass)
+		assert.Equal(t, "Variable 'character_set_client' can't be set to the value of 'latin1'", sqlErr.Message, pass)
+	}
+}
+
 // TestConnectionWithProxyProtocol covers the MySQL listener with proxy protocol
 // support enabled: connections that open with a PROXY protocol header must have
 // their advertised source address honored, and connections without a header must
