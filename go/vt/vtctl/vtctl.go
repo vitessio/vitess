@@ -85,6 +85,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"sort"
@@ -2204,7 +2205,10 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	wrapError := func(wf *wrangler.VReplicationWorkflow, err error) error {
 		wr.Logger().Errorf("\n%s\n", err.Error())
-		log.Info(fmt.Sprintf("In wrapError wf is %+v", wf))
+		log.Info("In wrapError",
+			slog.String("keyspace", target),
+			slog.String("workflow", workflowName),
+			slog.String("workflow_details", wf.String()))
 		wr.Logger().Infof("Workflow Status: %s\n", wf.CurrentState())
 		if wf.Exists() {
 			printDetails()
@@ -2330,7 +2334,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 	vrwp.ShardSubset = *shards
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
-		log.Warn(fmt.Sprintf("NewVReplicationWorkflow returned error %+v", wf))
+		log.Warn("NewVReplicationWorkflow returned error",
+			slog.String("keyspace", target),
+			slog.String("workflow", workflowName),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	if !wf.Exists() && action != vReplicationWorkflowActionCreate {
@@ -2339,7 +2347,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 
 	if len(vrwp.ShardSubset) > 0 {
 		if workflowType == wrangler.MoveTablesWorkflow && action != vReplicationWorkflowActionCreate && wf.IsPartialMigration() {
-			log.Info(fmt.Sprintf("Subset of shards: %s have been specified for keyspace %s, workflow %s, for action %s", vrwp.ShardSubset, target, workflowName, action))
+			log.Info("Subset of shards have been specified for action",
+				slog.Any("shards", vrwp.ShardSubset),
+				slog.String("keyspace", target),
+				slog.String("workflow", workflowName),
+				slog.String("action", action))
 		} else {
 			return errors.New("The --shards option can only be specified for existing Partial MoveTables workflows")
 		}
@@ -2466,7 +2478,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				wr.Logger().Printf("Check the status using the 'Workflow %s show' client command for details.\n", ksWorkflow)
 				return errors.New("timed out waiting for workflow to start")
 			case err := <-errCh:
-				wr.Logger().Error(err)
+				wr.Logger().Error("failed to get the workflow's stream count",
+					slog.String("workflow", workflowName),
+					slog.String("keyspace", target),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				return err
 			case wfErrs := <-wfErrCh:
 				wr.Logger().Printf("Found problems with the streams created for this workflow:\n")
@@ -2491,7 +2507,13 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("found unsupported action %s", originalAction)
 	}
 	if err != nil {
-		log.Warn(fmt.Sprintf(" %s error: %v", originalAction, wf))
+		log.Warn("workflow action error",
+			slog.String("action", originalAction),
+			slog.String("keyspace", target),
+			slog.String("workflow", workflowName),
+			slog.String("workflow_details", wf.String()),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return wrapError(wf, err)
 	}
 	if *dryRun {
@@ -2611,7 +2633,11 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fl
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypesStr, *filteredReplicationWaitTime, *format,
 		*maxRows, *tables, *debugQuery, *onlyPks, *maxExtraRowsToCompare)
 	if err != nil {
-		log.Error(fmt.Sprintf("vdiff returning with error: %v", err))
+		log.Error("vdiff returning with error",
+			slog.String("keyspace", keyspace),
+			slog.String("workflow", workflow),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		if strings.Contains(err.Error(), "context deadline exceeded") {
 			return errors.New("vdiff timed out: you may want to increase it with the flag --filtered_replication_wait_time=<timeoutSeconds>")
 		}
@@ -3734,7 +3760,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		return errors.New(usage)
 	}
 	if len(*shards) > 0 {
-		log.Info(fmt.Sprintf("Subset of shards specified: %d, %v", len(*shards), strings.Join(*shards, ",")))
+		log.Info("Subset of shards specified", slog.Int("selected", len(*shards)), slog.Any("shards", *shards))
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))

@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -112,7 +113,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request, redactUIQuery bool)
 				io.WriteString(w, `<tr class="error">`)
 				io.WriteString(w, err.Error())
 				io.WriteString(w, "</tr>")
-				log.Error(fmt.Sprint(err))
+				log.Error("txlogz: unexpected value in transaction log stream", slog.Any("error", err))
 				continue
 			}
 			// not all StatefulConnections contain transactions
@@ -142,6 +143,6 @@ func writeTransactionData(w http.ResponseWriter, txc *StatefulConnection) {
 		ColorLevel string
 	}{txc, duration, level}
 	if err := txlogzTmpl.Execute(w, tmplData); err != nil {
-		log.Error(fmt.Sprintf("txlogz: couldn't execute template: %v", err))
+		log.Error("txlogz: couldn't execute template", slog.Any("error", err))
 	}
 }

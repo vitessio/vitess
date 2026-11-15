@@ -19,6 +19,7 @@ package buffer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -830,4 +832,43 @@ func TestParallelRangeIndex(t *testing.T) {
 			assert.ElementsMatch(t, got, tc.calls, "must call passed function with matching indexes")
 		})
 	}
+}
+
+func TestBufferingLogs(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		resetVariables()
+		logs := logtest.Capture(t, slog.LevelInfo)
+		now := time.Now()
+		cfg := NewDefaultConfig()
+		cfg.Enabled = true
+		cfg.now = func() time.Time { return now }
+		b := New(cfg)
+		fail(b, oldPrimary, keyspace, shard, now)
+
+		// NormalizeError drops everything from ", Sql:" on.
+		sqlErr := vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, failoverErr.Error()+", Sql: \"select 'buffer-sentinel'\"")
+		// issueRequest buffers failoverErr whatever error it is given.
+		stopped := make(chan error)
+		go func() {
+			retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, sqlErr)
+			if err != nil {
+				stopped <- err
+			}
+			if retryDone != nil {
+				retryDone()
+			}
+			close(stopped)
+		}()
+		sb := b.getOrCreateBuffer(keyspace, shard)
+		require.Eventually(t, func() bool { return sb.testGetSize() == 1 }, 30*time.Second, time.Millisecond)
+		record := logs.Record(t, "Starting buffering (a failover was detected by the seen error)")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, failoverErr.Error(), record["error"])
+		assert.NotContains(t, logs.String(), "buffer-sentinel")
+
+		now = now.Add(1 * time.Second)
+		fail(b, newPrimary, keyspace, shard, now)
+		require.NoError(t, <-stopped)
+		require.Eventually(t, func() bool { return sb.testGetState() == stateIdle }, 30*time.Second, time.Millisecond)
+	})
 }

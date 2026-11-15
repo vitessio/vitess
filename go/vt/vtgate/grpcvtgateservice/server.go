@@ -19,7 +19,7 @@ package grpcvtgateservice
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
@@ -329,7 +329,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 			})
 		})
 	if vtgErr != nil {
-		log.Info(fmt.Sprintf("VStream grpc error: %v", vtgErr))
+		log.Info("VStream grpc error", slog.Any("error", vtgErr), slog.String("error_code", vterrors.Code(vtgErr).String()))
 	}
 	return vterrors.ToGRPC(vtgErr)
 }

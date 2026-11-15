@@ -18,7 +18,7 @@ package messager
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -157,7 +157,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		if mm == nil {
 			continue
 		}
-		log.Info(fmt.Sprintf("Stopping messager for dropped/updated table: %v", name))
+		log.Info("Stopping messager for dropped/updated table", slog.String("table", name))
 		mm.Close()
 		delete(me.managers, name)
 	}
@@ -169,12 +169,12 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		}
 		if me.managers[name] != nil {
 			me.tsv.Stats().InternalErrors.Add("Messages", 1)
-			log.Error("Newly created table already exists in messages: " + name)
+			log.Error("Newly created table already exists in messages", slog.String("table", name))
 			continue
 		}
 		mm := newMessageManager(me.tsv, me.vs, t, me.postponeSema)
 		me.managers[name] = mm
-		log.Info(fmt.Sprintf("Starting messager for table: %v", name))
+		log.Info("Starting messager for table", slog.String("table", name))
 		mm.Open()
 	}
 }

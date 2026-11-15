@@ -320,7 +320,7 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	enabledKeepAlive := false
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		if err := setTcpConnProperties(tcpConn, listener.connKeepAlivePeriod); err != nil {
-			log.Error(fmt.Sprintf("error in setting tcp properties: %v", err))
+			log.Error("error in setting tcp properties", slog.Any("error", err))
 		} else {
 			enabledKeepAlive = true
 		}
@@ -1033,7 +1033,7 @@ func (c *Conn) WriteErrorAndLog(format string, args ...any) bool {
 
 func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
-		log.Error(fmt.Sprintf("Error writing error to %s: %v", c, err))
+		log.Error("Error writing error", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -1042,7 +1042,7 @@ func (c *Conn) writeErrorAndLog(errorCode sqlerror.ErrorCode, sqlState string, f
 func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 	werr := c.writeErrorPacketFromError(err)
 	if werr != nil {
-		log.Error(fmt.Sprintf("Error writing error to %s: %v", c, werr))
+		log.Error("Error writing error", slog.String("connection", c.String()), slog.Any("error", werr), slog.String("error_code", vterrors.Code(werr).String()))
 		return false
 	}
 	return true
@@ -1107,7 +1107,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam.
 		if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-			log.Error(fmt.Sprintf("Error reading packet from %s: %v", c, err))
+			log.Error("Error reading packet", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		return false
 	}
@@ -1184,7 +1184,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComRegisterReplica:
 		return c.handleComRegisterReplica(handler, data)
 	default:
-		log.Error(fmt.Sprintf("Got unhandled packet (default) from %s, returning error: %v", c, data))
+		log.Error("Got unhandled packet (default), returning error", slog.String("connection", c.String()), slog.String("packet", fmt.Sprintf("%v", data)))
 		c.recycleReadPacket()
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
@@ -1199,7 +1199,7 @@ func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue 
 
 	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
 	if err != nil {
-		log.Error(fmt.Sprintf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err))
+		log.Error("parseComRegisterReplica failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
@@ -1218,16 +1218,16 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 
 	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
-		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
+		log.Error("parseComBinlogDump failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
 	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
-		log.Error(fmt.Sprintf("conn %v: ComBinlogDump failed: %v", c.ID(), err))
+		log.Error("ComBinlogDump failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
@@ -1240,23 +1240,23 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 
 	logFile, logPos, position, flags, err := c.parseComBinlogDumpGTID(data)
 	if err != nil {
-		log.Error(fmt.Sprintf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err))
+		log.Error("parseComBinlogDumpGTID failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, flags); err != nil {
-		log.Error(fmt.Sprintf("conn %v: ComBinlogDumpGTID failed: %v", c.ID(), err))
+		log.Error("ComBinlogDumpGTID failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error(fmt.Sprintf("conn %v: failed to write error packet: %v", c.ID(), writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
@@ -1280,7 +1280,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	stmtID, ok := c.parseComStmtReset(data)
 	c.recycleReadPacket()
 	if !ok {
-		log.Error(fmt.Sprintf("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data))
+		log.Error("Got unhandled packet, returning error", slog.Int64("connection_id", c.ID()), slog.String("packet", fmt.Sprintf("%v", data)))
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
@@ -1288,7 +1288,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
-		log.Error(fmt.Sprintf("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data))
+		log.Error("Commands were executed in an improper order", slog.Int64("connection_id", c.ID()), slog.String("packet", fmt.Sprintf("%v", data)))
 		if !c.writeErrorAndLog(sqlerror.CRCommandsOutOfSync, sqlerror.SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
@@ -1302,7 +1302,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	delete(c.pendingLongDataIngressBytes, stmtID)
 
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Error(fmt.Sprintf("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err))
+		log.Error("Error writing ComStmtReset OK packet", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -1350,7 +1350,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
@@ -1441,7 +1441,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			// In this case the affectedRows and lastInsertID are always 0 since it
 			// was a read operation.
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				return false
 			}
 		}
@@ -1455,7 +1455,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
@@ -1466,11 +1466,11 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		queries, err := handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
-			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
+			log.Error("Error splitting query", slog.String("connection", c.String()), slog.Any("error", err))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		if len(queries) != 1 {
-			log.Error(fmt.Sprintf("Conn %v: can not prepare multiple statements", c))
+			log.Error("can not prepare multiple statements", slog.String("connection", c.String()))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 		query = queries[0]
@@ -1493,7 +1493,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.PrepareData[c.StatementID] = prepare
 
 	if err := c.writePrepare(fld, prepare); err != nil {
-		log.Error(fmt.Sprintf("Error writing prepare data to client %v: %v", c.ConnectionID, err))
+		log.Error("Error writing prepare data", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -1509,17 +1509,17 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		case 1:
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
-			log.Error(fmt.Sprintf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data))
+			log.Error("Got unhandled packet (ComSetOption default), returning error", slog.Int64("connection_id", c.ID()), slog.String("packet", fmt.Sprintf("%v", data)))
 			if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
 		if err := c.writeEndResult(false, 0, 0, 0); err != nil {
-			log.Error(fmt.Sprintf("Error writeEndResult error %v ", err))
+			log.Error("Error writeEndResult error", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return false
 		}
 	} else {
-		log.Error(fmt.Sprintf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data))
+		log.Error("Got unhandled packet (ComSetOption else), returning error", slog.Int64("connection_id", c.ID()), slog.String("packet", fmt.Sprintf("%v", data)))
 		if !c.writeErrorAndLog(sqlerror.ERUnknownComError, sqlerror.SSNetError, "error handling packet: %v", data) {
 			return false
 		}
@@ -1536,7 +1536,7 @@ func (c *Conn) handleComPing() bool {
 		}
 	} else {
 		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-			log.Error(fmt.Sprintf("Error writing ComPing result to %s: %v", c, err))
+			log.Error("Error writing ComPing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return false
 		}
 	}
@@ -1550,7 +1550,7 @@ func (c *Conn) handleComQueryMulti(handler Handler, data []byte) (kontinue bool)
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
@@ -1692,7 +1692,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	// If we haven't sent the final packet for the last query, we should send that too.
 	if needsEndPacket {
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return connErr
 		}
 	}
@@ -1717,7 +1717,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
 		if err := c.endWriterBuffering(); err != nil {
-			log.Error(fmt.Sprintf("conn %v: flush() failed: %v", c.ID(), err))
+			log.Error("flush() failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
 			kontinue = false
 		}
 	}()
@@ -1731,7 +1731,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	if c.Capabilities&CapabilityClientMultiStatements != 0 {
 		queries, err = handler.Env().Parser().SplitStatementToPieces(query)
 		if err != nil {
-			log.Error(fmt.Sprintf("Conn %v: Error splitting query: %v", c, err))
+			log.Error("Error splitting query", slog.String("connection", c.String()), slog.Any("error", err))
 			return c.writeErrorPacketFromErrorAndLog(err)
 		}
 	} else {
@@ -1856,7 +1856,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	// was a read operation.
 	if !sendFinished {
 		if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Error(fmt.Sprintf("Error writing result to %s: %v", c, err))
+			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return connErr
 		}
 	}

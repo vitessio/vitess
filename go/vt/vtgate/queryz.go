@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"time"
@@ -165,7 +166,7 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 	sort.Sort(&sorter)
 	for _, row := range sorter.rows {
 		if err := queryzTmpl.Execute(w, row); err != nil {
-			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
+			log.Error("queryz: couldn't execute template", slog.Any("error", err))
 		}
 	}
 }

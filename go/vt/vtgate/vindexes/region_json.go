@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -74,7 +75,7 @@ func newRegionJSON(name string, m map[string]string) (Vindex, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Loaded Region map from: " + rmPath)
+	log.Info("Loaded Region map", slog.String("path", rmPath))
 	err = json.Unmarshal(data, &rmap)
 	if err != nil {
 		return nil, err

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"sort"
@@ -3623,7 +3624,10 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	defer cancel()
 	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, s.Logger(), destKeyspace, destShard, destPrimaryPos, nil, true)
 	if !ok {
-		s.Logger().Error(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard: failed to reload schema on all replicas"))
+		s.Logger().Error("CopySchemaShard: failed to reload schema on all replicas",
+			slog.String("keyspace", destKeyspace),
+			slog.String("shard", destShard),
+			slog.String("error_code", vtrpcpb.Code_INTERNAL.String()))
 	}
 
 	return err
@@ -3799,7 +3803,12 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest, ts *trafficSwitcher, state *State) (err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) error {
-		ts.Logger().Error(err)
+		ts.Logger().Error("failed to mirror traffic",
+			slog.String("workflow", ts.workflow),
+			slog.String("keyspace", ts.targetKeyspace),
+			slog.String("reason", message),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 

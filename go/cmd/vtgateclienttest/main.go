@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/cmd/vtgateclienttest/cli"
@@ -31,7 +31,7 @@ func main() {
 
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Error(fmt.Sprintf("%s", err))
+		log.Error("command failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 }

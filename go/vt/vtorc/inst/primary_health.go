@@ -18,6 +18,7 @@ package inst
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -74,7 +75,7 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias *topodatapb.TabletAlias) bool {
 		go func() {
 			persisted, err := readPrimaryHealthState(tabletAliasString)
 			if err != nil {
-				log.Warn(fmt.Sprintf("failed to read primary health state for %s: %v", tabletAliasString, err))
+				log.Warn("failed to read primary health state", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 				return
 			}
 			if persisted == nil {
@@ -117,7 +118,7 @@ func IsPrimaryHealthCheckUnhealthy(tabletAlias *topodatapb.TabletAlias) bool {
 	if evict {
 		go func() {
 			if err := deletePrimaryHealthState(tabletAliasString); err != nil {
-				log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAliasString, err))
+				log.Warn("failed to delete primary health state", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 			}
 		}()
 		return false
@@ -152,12 +153,12 @@ func recordPrimaryHealthCheckAt(tabletAlias string, success bool, now time.Time)
 
 	if evict {
 		if err := deletePrimaryHealthState(tabletAlias); err != nil {
-			log.Warn(fmt.Sprintf("failed to delete primary health state for %s: %v", tabletAlias, err))
+			log.Warn("failed to delete primary health state", slog.String("tablet", tabletAlias), slog.Any("error", err))
 		}
 		return
 	}
 	if err := writePrimaryHealthState(tabletAlias, stateCopy); err != nil {
-		log.Warn(fmt.Sprintf("failed to write primary health state for %s: %v", tabletAlias, err))
+		log.Warn("failed to write primary health state", slog.String("tablet", tabletAlias), slog.Any("error", err))
 	}
 }
 

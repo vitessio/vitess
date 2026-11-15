@@ -30,17 +30,17 @@ type (
 	// It is implemented by vtadmin.API.
 	API interface {
 		vtadminpb.VTAdminServer
-		WithCluster(c *cluster.Cluster, id string) API
+		WithCluster(c *cluster.Cluster, id string) (API, error)
 		Handler() http.Handler
 	}
 
 	contextAPI interface {
 		API
-		WithClusterContext(ctx context.Context, c *cluster.Cluster, id string) API
+		WithClusterContext(ctx context.Context, c *cluster.Cluster, id string) (API, error)
 	}
 )
 
-func withCluster(ctx context.Context, api API, c *cluster.Cluster, id string) API {
+func withCluster(ctx context.Context, api API, c *cluster.Cluster, id string) (API, error) {
 	if api, ok := api.(contextAPI); ok {
 		return api.WithClusterContext(ctx, c, id)
 	}

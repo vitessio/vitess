@@ -21,19 +21,27 @@ package logutil
 
 import (
 	stdlog "log"
+	"log/slog"
+	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
+// stdlogPrefix marks lines written through the standard library's log
+// package. The shim logs those lines with the constant message
+// "standard library log" and the line, without the prefix, under "message".
+const stdlogPrefix = "log: "
+
 type logShim struct{}
 
 func (shim *logShim) Write(buf []byte) (n int, err error) {
-	log.Info(string(buf))
+	line := strings.TrimSuffix(strings.TrimPrefix(string(buf), stdlogPrefix), "\n")
+	log.Info("standard library log", slog.String("message", line))
 	return len(buf), nil
 }
 
 func init() {
-	stdlog.SetPrefix("log: ")
+	stdlog.SetPrefix(stdlogPrefix)
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(new(logShim))
 }
