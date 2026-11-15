@@ -454,6 +454,51 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.ErrorContains(t, err, "unsupported connection character set (collation 95)")
 }
 
+// TestConnectorWithRawResultCharset checks that a connector made with
+// WithRawResultCharset sets character_set_results to NULL in the session setup,
+// on every path of the setup, and that the connector it is made from does not.
+func TestConnectorWithRawResultCharset(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	params.Charset = collations.CollationUtf8mb4ID
+	connector := New(params)
+	raw := connector.WithRawResultCharset()
+	assert.False(t, connector.RawResultCharset())
+	assert.True(t, raw.RawResultCharset())
+
+	conn, err := raw.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	assert.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci")))
+	assert.Equal(t, 0, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	plain, err := connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(plain.Close)
+	assert.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci")))
+	assert.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// a server without the collation gets the character set alone, still with
+	// character_set_results = NULL
+	db.AddRejectedQuery(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci"),
+		sqlerror.NewSQLError(sqlerror.ERUnknownCollation, sqlerror.SSUnknownSQLState, "Unknown collation: 'utf8mb4_0900_ai_ci'"))
+	fallback, err := raw.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(fallback.Close)
+	assert.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "")))
+	db.DeleteRejectedQuery(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci"))
+
+	// a connection that asked for no character set restores the server's
+	// default, utf8mb4 for the fake server
+	noCharset := New(db.ConnParams()).WithRawResultCharset()
+	conn, err = noCharset.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	assert.Equal(t, 3, db.GetQueryCalledNum(sqlmode.SessionSetupQueryWithRawResults("utf8mb4", "utf8mb4_0900_ai_ci")))
+}
+
 // stallingHandler completes the handshake but never answers a query until released,
 // standing in for a backend that stalls after the connection is established.
 type stallingHandler struct {
