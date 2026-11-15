@@ -18,6 +18,7 @@ package engine
 
 import (
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -331,6 +332,78 @@ func TestLimitOffsetExecute(t *testing.T) {
 	assert.Truef(t, result.Equal(wantResult), "l.Execute:\n got %v, want\n%v", result, wantResult)
 }
 
+// TestLimitOffsetUpperLimitOverflow checks that count + offset does not wrap
+// around when the sum is larger than the largest int, and that unsigned values
+// above the largest int saturate instead of failing.
+func TestLimitOffsetUpperLimitOverflow(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"col1|col2",
+		"int64|varchar",
+	)
+
+	tests := []struct {
+		name   string
+		count  evalengine.Expr
+		offset evalengine.Expr
+		input  []string
+		want   []string
+	}{{
+		name:   "offset beyond empty input",
+		count:  evalengine.NewLiteralInt(1),
+		offset: evalengine.NewLiteralInt(math.MaxInt64),
+	}, {
+		name:   "count beyond input",
+		count:  evalengine.NewLiteralInt(math.MaxInt64),
+		offset: evalengine.NewLiteralInt(1),
+		input:  []string{"a|1", "b|2", "c|3"},
+		want:   []string{"b|2", "c|3"},
+	}, {
+		name:   "unsigned count above MaxInt64",
+		count:  evalengine.NewLiteralUint(math.MaxUint64),
+		offset: evalengine.NewLiteralInt(1),
+		input:  []string{"a|1", "b|2", "c|3"},
+		want:   []string{"b|2", "c|3"},
+	}, {
+		name:   "unsigned offset above MaxInt64",
+		count:  evalengine.NewLiteralInt(1),
+		offset: evalengine.NewLiteralUint(math.MaxUint64),
+		input:  []string{"a|1", "b|2", "c|3"},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wantLog := `__upper_limit: type:INT64 value:"9223372036854775807" false`
+			wantResult := sqltypes.MakeTestResult(fields, tt.want...)
+			l := &Limit{
+				Count:  tt.count,
+				Offset: tt.offset,
+			}
+
+			fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, tt.input...)}}
+			l.Input = fp
+			var result *sqltypes.Result
+			var err error
+			require.NotPanics(t, func() {
+				result, err = l.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false)
+			})
+			require.NoError(t, err)
+			fp.ExpectLog(t, []string{"Execute " + wantLog})
+			assert.Truef(t, result.Equal(wantResult), "l.Execute:\n got %v, want\n%v", result, wantResult)
+
+			fp = &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, tt.input...)}}
+			l.Input = fp
+			var rows [][]sqltypes.Value
+			err = l.TryStreamExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, false, func(qr *sqltypes.Result) error {
+				rows = append(rows, qr.Rows...)
+				return nil
+			})
+			require.NoError(t, err)
+			fp.ExpectLog(t, []string{"StreamExecute " + wantLog})
+			assert.Equal(t, wantResult.Rows, rows, "l.StreamExecute rows")
+		})
+	}
+}
+
 func TestLimitStreamExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
@@ -580,14 +653,14 @@ func TestLimitInvalidCount(t *testing.T) {
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
 	require.EqualError(t, err, "Cannot convert value to desired type")
 
-	l.Count = evalengine.NewLiteralUint(18446744073709551615)
+	l.Count = evalengine.NewLiteralInt(-1)
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
-	require.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
+	require.EqualError(t, err, "requested limit is out of range: -1")
 
 	// When going through the API, it should return the same error.
 	_, err = l.TryExecute(t.Context(), &noopVCursor{}, nil, false)
-	require.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
+	require.EqualError(t, err, "requested limit is out of range: -1")
 
 	err = l.TryStreamExecute(t.Context(), &noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil })
-	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
+	assert.EqualError(t, err, "requested limit is out of range: -1")
 }
