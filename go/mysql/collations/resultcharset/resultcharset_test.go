@@ -235,11 +235,27 @@ func TestToConnectionMeasured(t *testing.T) {
 			trusted(sqltypes.TypeJSON, `"M`+"\xC3\xBC"+`ller"`),
 		}},
 	}
-	got := ToConnection(raw.Fields, utf8mb40900AICI, true).Result(raw)
+	lengths := ConnectionLengths(raw.Fields, utf8mb40900AICI).Result(raw)
+	got := ToConnection(lengths.Fields, utf8mb40900AICI, true).Result(lengths)
 	for i := range want.Fields {
 		assert.Equal(t, want.Fields[i], got.Fields[i], "field %s", want.Fields[i].Name)
 		assert.Equal(t, want.Rows[0][i].Raw(), got.Rows[0][i].Raw(), "value of %s", want.Fields[i].Name)
 	}
+
+	// ConnectionLengths gives the utf8mb4 columns their length and changes
+	// nothing else; ToConnection alone leaves their length as it is.
+	assert.Equal(t, uint32(262140), lengths.Fields[2].ColumnLength)
+	assert.Equal(t, uint32(4294967292), lengths.Fields[8].ColumnLength)
+	assert.Equal(t, raw.Fields[0], lengths.Fields[0])
+	assert.Equal(t, raw.Rows, lengths.Rows)
+	alone := ToConnection(raw.Fields, utf8mb40900AICI, true).Result(raw)
+	assert.Equal(t, uint32(65535), alone.Fields[2].ColumnLength)
+	assert.Equal(t, uint32(4294967295), alone.Fields[8].ColumnLength)
+
+	// What MySQL sends with character_set_results = utf8mb4, which is what a
+	// vttablet without character_set_results = NULL returns, does not change.
+	conv := ToConnection(want.Fields, utf8mb40900AICI, true)
+	assert.True(t, conv.IsNoOp())
 
 	// With character_set_results = latin1 MySQL converts the text of the
 	// JSON column and the names of the fields as well. For
