@@ -165,6 +165,110 @@ func TestToConnection(t *testing.T) {
 	})
 }
 
+// TestToConnectionMeasured converts a row as MySQL 8.0.46 and 8.4.13 send it
+// with character_set_results = NULL, and compares it with what they send for
+// the same row with character_set_results = utf8mb4, field by field. The table
+// is
+//
+//	create table t (lb varchar(10) charset latin1 collate latin1_bin,
+//	  g text charset gb2312, u text charset utf8mb4, uc text charset ucs2,
+//	  ll longtext charset latin1, w varchar(10) charset swe7,
+//	  s varchar(5) charset ucs2, j json)
+//
+// with ('Müller', '中', 'é', 'Ü', 'x', 'Ä', _ucs2 x'D800', '{"a": "Müller"}'),
+// and the query is select lb, g, u, uc, ll, w, s, j, j->'$.a' from t.
+func TestToConnectionMeasured(t *testing.T) {
+	const (
+		latin1Bin     = collations.ID(47)
+		swe7SwedishCI = collations.ID(10)
+	)
+	trusted := func(typ querypb.Type, hex string) sqltypes.Value {
+		return sqltypes.MakeTrusted(typ, []byte(hex))
+	}
+	flagged := func(f *querypb.Field, flags uint32, decimals uint32) *querypb.Field {
+		f.Flags, f.Decimals = flags, decimals
+		return f
+	}
+	raw := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			flagged(field("lb", sqltypes.VarBinary, latin1Bin, 10), 128, 0),
+			flagged(field("g", sqltypes.Text, gb2312ChineseCI, 65535), 16, 0),
+			flagged(field("u", sqltypes.Text, utf8mb40900AICI, 65535), 16, 0),
+			flagged(field("uc", sqltypes.Text, ucs2GeneralCI, 65535), 16, 0),
+			flagged(field("ll", sqltypes.Text, latin1SwedishCI, 4294967295), 16, 0),
+			flagged(field("w", sqltypes.VarChar, swe7SwedishCI, 10), 0, 0),
+			flagged(field("s", sqltypes.VarChar, ucs2GeneralCI, 10), 0, 0),
+			flagged(field("j", sqltypes.TypeJSON, binaryCollation, 4294967295), 144, 0),
+			flagged(field("j->'$.a'", sqltypes.TypeJSON, utf8mb4Bin, 4294967295), 128, 31),
+		},
+		Rows: []sqltypes.Row{{
+			trusted(sqltypes.VarBinary, "M\xFCller"),
+			trusted(sqltypes.Text, "\xD6\xD0"),
+			trusted(sqltypes.Text, "\xC3\xA9"),
+			trusted(sqltypes.Text, "\x00\xDC"),
+			trusted(sqltypes.Text, "x"),
+			trusted(sqltypes.VarChar, "\x5B"),
+			trusted(sqltypes.VarChar, "\xD8\x00"),
+			trusted(sqltypes.TypeJSON, `{"a": "M`+"\xC3\xBC"+`ller"}`),
+			trusted(sqltypes.TypeJSON, `"M`+"\xC3\xBC"+`ller"`),
+		}},
+	}
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			flagged(field("lb", sqltypes.VarBinary, utf8mb40900AICI, 40), 128, 0),
+			flagged(field("g", sqltypes.Text, utf8mb40900AICI, 262140), 16, 0),
+			flagged(field("u", sqltypes.Text, utf8mb40900AICI, 262140), 16, 0),
+			flagged(field("uc", sqltypes.Text, utf8mb40900AICI, 131068), 16, 0),
+			flagged(field("ll", sqltypes.Text, utf8mb40900AICI, 4294967295), 16, 0),
+			flagged(field("w", sqltypes.VarChar, utf8mb40900AICI, 40), 0, 0),
+			flagged(field("s", sqltypes.VarChar, utf8mb40900AICI, 20), 0, 0),
+			flagged(field("j", sqltypes.TypeJSON, binaryCollation, 4294967295), 144, 0),
+			flagged(field("j->'$.a'", sqltypes.TypeJSON, utf8mb40900AICI, 4294967292), 128, 31),
+		},
+		Rows: []sqltypes.Row{{
+			trusted(sqltypes.VarBinary, "M\xC3\xBCller"),
+			trusted(sqltypes.Text, "\xE4\xB8\xAD"),
+			trusted(sqltypes.Text, "\xC3\xA9"),
+			trusted(sqltypes.Text, "\xC3\x9C"),
+			trusted(sqltypes.Text, "x"),
+			trusted(sqltypes.VarChar, "\xC3\x84"),
+			trusted(sqltypes.VarChar, "\xED\xA0\x80"),
+			trusted(sqltypes.TypeJSON, `{"a": "M`+"\xC3\xBC"+`ller"}`),
+			trusted(sqltypes.TypeJSON, `"M`+"\xC3\xBC"+`ller"`),
+		}},
+	}
+	got := ToConnection(raw.Fields, utf8mb40900AICI, true).Result(raw)
+	for i := range want.Fields {
+		assert.Equal(t, want.Fields[i], got.Fields[i], "field %s", want.Fields[i].Name)
+		assert.Equal(t, want.Rows[0][i].Raw(), got.Rows[0][i].Raw(), "value of %s", want.Fields[i].Name)
+	}
+
+	// With character_set_results = latin1 MySQL converts the text of the
+	// JSON column and the names of the fields as well. For
+	// select j, lb as `Ü`, g from t on a latin1 connection the name is
+	// C3 83 C5 93 with NULL, the latin1 text "Ãœ" in utf8mb3, and C3 9C
+	// with latin1.
+	raw = &sqltypes.Result{
+		Fields: []*querypb.Field{
+			field("j", sqltypes.TypeJSON, binaryCollation, 4294967295),
+			field("\xC3\x83\xC5\x93", sqltypes.VarBinary, latin1Bin, 10),
+			field("g", sqltypes.Text, gb2312ChineseCI, 65535),
+		},
+		Rows: []sqltypes.Row{{
+			trusted(sqltypes.TypeJSON, `{"a": "M`+"\xC3\xBC"+`ller"}`),
+			trusted(sqltypes.VarBinary, "M\xFCller"),
+			trusted(sqltypes.Text, "\xD6\xD0"),
+		}},
+	}
+	got = ToConnection(raw.Fields, latin1SwedishCI, true).Result(raw)
+	assert.Equal(t, field("j", sqltypes.TypeJSON, binaryCollation, 4294967295), got.Fields[0])
+	assert.Equal(t, field("\xC3\x9C", sqltypes.VarBinary, latin1SwedishCI, 10), got.Fields[1])
+	assert.Equal(t, field("g", sqltypes.Text, latin1SwedishCI, 65535), got.Fields[2])
+	assert.Equal(t, `{"a": "M`+"\xFC"+`ller"}`, got.Rows[0][0].ToString())
+	assert.Equal(t, "M\xFCller", got.Rows[0][1].ToString())
+	assert.Equal(t, "?", got.Rows[0][2].ToString())
+}
+
 // connectionResult is a result with all text in utf8mb4, as vtgate holds it.
 func connectionResult() *sqltypes.Result {
 	return &sqltypes.Result{
