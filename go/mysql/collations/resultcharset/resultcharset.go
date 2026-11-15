@@ -68,7 +68,7 @@ type column struct {
 	ascii bool
 	// ucs2 is true for a conversion from ucs2 to utf8mb3 or utf8mb4, which
 	// MySQL does for every code unit, surrogates included (see
-	// ucs2ToUTF8).
+	// appendUCS2AsUTF8).
 	ucs2 bool
 }
 
@@ -684,6 +684,9 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 	var out []sqltypes.Row
 	for r, row := range rows {
 		var newRow sqltypes.Row
+		// buf holds the converted values of the row, one after the other,
+		// so that a row costs one allocation and not one for each value.
+		var buf []byte
 		for i, value := range row {
 			if i >= len(c.columns) {
 				break
@@ -699,16 +702,18 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 			// The error says that a character has no form in the
 			// target character set. The converted text has "?" in
 			// its place, which is what MySQL sends.
-			var converted []byte
-			if col.ucs2 {
-				converted = ucs2ToUTF8(raw)
-			} else {
-				converted, _ = charset.Convert(nil, col.to, raw, col.from)
-			}
 			if newRow == nil {
 				newRow = make(sqltypes.Row, len(row))
 				copy(newRow, row)
+				buf = make([]byte, 0, c.rowBufferSize(row[i:], i))
 			}
+			start := len(buf)
+			if col.ucs2 {
+				buf = appendUCS2AsUTF8(buf, raw)
+			} else {
+				buf, _ = charset.Convert(buf, col.to, raw, col.from)
+			}
+			converted := buf[start:len(buf):len(buf)]
 			newRow[i] = sqltypes.MakeTrusted(value.Type(), converted)
 		}
 		if newRow == nil {
@@ -726,15 +731,33 @@ func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
 	return out
 }
 
-// ucs2ToUTF8 converts ucs2 text to utf8mb3, which is utf8mb4 as well, the
-// way MySQL does it for character_set_results.
+// rowBufferSize returns the size of the buffer for the converted values of
+// the columns of a row from the column first on: twice their length, which
+// is enough for latin1 text as utf8mb4, and for utf8mb4 text in any character
+// set but utf16 and utf32. charset.Convert makes the buffer larger when it
+// has to.
+func (c *Conversion) rowBufferSize(values sqltypes.Row, first int) int {
+	size := 0
+	for i, value := range values {
+		if first+i >= len(c.columns) {
+			break
+		}
+		if c.columns[first+i].from != nil {
+			size += value.Len()
+		}
+	}
+	// charset.Convert needs a buffer that is not empty to make it larger.
+	return 2*size + 4
+}
+
+// appendUCS2AsUTF8 appends ucs2 text as utf8mb3, which is utf8mb4 as well,
+// the way MySQL converts it for character_set_results.
 //
 // MySQL writes each 2-byte code unit as UTF-8, and a surrogate as well: a
 // ucs2 column with D8 00 arrives as ED A0 80 for character_set_results =
 // utf8mb4, where charset.Convert writes "?". It drops a last byte that has
 // no second byte.
-func ucs2ToUTF8(src []byte) []byte {
-	dst := make([]byte, 0, len(src)/2*3)
+func appendUCS2AsUTF8(dst, src []byte) []byte {
 	for ; len(src) >= 2; src = src[2:] {
 		r := uint16(src[0])<<8 | uint16(src[1])
 		switch {
