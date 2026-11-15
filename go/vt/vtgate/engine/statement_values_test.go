@@ -566,3 +566,57 @@ func TestUpdateStatementValues(t *testing.T) {
 		})
 	}
 }
+
+// TestVindexLookupStatementValues checks how a lookup by a vindex with
+// batch_lookup matches the rows of the lookup query to the values it looks up:
+// by the value of their first column, which is compared with a value of the
+// query, in the connection character set. With --convert-result-charset the
+// lookup table returns 'Müller' of a latin1 column in latin1, and it is
+// converted to match 'Müller' of the query, so that the row is routed to its
+// keyspace ID. Without the flag the tablet returns utf8mb4.
+func TestVindexLookupStatementValues(t *testing.T) {
+	vdx, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{
+		"table":        "lkp",
+		"from":         "l",
+		"to":           "keyspace_id",
+		"batch_lookup": "true",
+	})
+	require.NoError(t, err)
+	planable := vdx.(vindexes.LookupPlanable)
+	_, args := planable.Query()
+
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			from := []byte("Müller")
+			charset := uint32(255)
+			if convert {
+				from = []byte("M\xFCller")
+				charset = 8
+			}
+			lookup := &fakePrimitive{results: []*sqltypes.Result{{
+				Fields: []*querypb.Field{
+					{Name: "l", Type: sqltypes.VarChar, Charset: charset, ColumnLength: 10},
+					{Name: "keyspace_id", Type: sqltypes.VarBinary, Charset: 63},
+				},
+				Rows: []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, from), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("\x10"))}},
+			}}}
+			vl := &VindexLookup{
+				Opcode:    EqualUnique,
+				Keyspace:  ks,
+				Vindex:    planable,
+				Arguments: args,
+				Values:    []evalengine.Expr{evalengine.NewLiteralString([]byte("Müller"), collations.SystemCollation)},
+				Lookup:    lookup,
+				SendTo:    NewRoute(ByDestination, ks, "dummy_select", "dummy_select_field"),
+			}
+			vc := &loggingVCursor{convertResultCharset: convert, shards: []string{"-20", "20-"}, results: []*sqltypes.Result{{}}}
+
+			_, err := vl.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			vc.ExpectLog(t, []string{
+				fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.StringBindVariable("Müller")),
+				`ExecuteMultiShard ks.-20: dummy_select {} false false`,
+			})
+		})
+	}
+}
