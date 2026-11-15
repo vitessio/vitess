@@ -302,6 +302,10 @@ func (v *Viper) SetDefault(key string, value any) {
 // AdaptGetter wraps a get function (matching the signature of
 // viperutil.Options.GetFunc) to be threadsafe with the passed-in synced Viper.
 //
+// The getter runs while holding v's read lock, so it must not call another
+// getter adapted to v, or v.AllSettings. If a writer is waiting, the nested
+// read lock blocks forever, and so does every other read of v.
+//
 // It must be called prior to starting a watch on the synced Viper; it will
 // panic if a watch has already been established.
 //
