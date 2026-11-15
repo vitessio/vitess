@@ -216,6 +216,11 @@ type Conn struct {
 	// it via SQL and update this field accordingly.
 	CharacterSet collations.ID
 
+	// ErrorMessage, when it is set, returns the text of an error message as
+	// the server sends it to the client. vtgate sets it to send error
+	// messages in the character_set_results of the session.
+	ErrorMessage func(message string) string
+
 	// Packet encoding variables.
 	sequence uint8
 
@@ -1074,10 +1079,19 @@ func (c *Conn) writeErrorPacket(errorCode sqlerror.ErrorCode, sqlState string, f
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
 	if se, ok := err.(*sqlerror.SQLError); ok {
-		return c.writeErrorPacket(se.Num, se.State, "%v", se.Message)
+		return c.writeErrorPacket(se.Num, se.State, "%v", c.errorMessage(se.Message))
 	}
 
-	return c.writeErrorPacket(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "unknown error: %v", err)
+	return c.writeErrorPacket(sqlerror.ERUnknownError, sqlerror.SSUnknownSQLState, "%v", c.errorMessage(fmt.Sprintf("unknown error: %v", err)))
+}
+
+// errorMessage returns the text of an error message as it is sent, see
+// ErrorMessage.
+func (c *Conn) errorMessage(message string) string {
+	if c.ErrorMessage == nil {
+		return message
+	}
+	return c.ErrorMessage(message)
 }
 
 // WriteErrorPacketFromError is the exported version of writeErrorPacketFromError

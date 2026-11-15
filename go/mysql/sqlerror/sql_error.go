@@ -347,6 +347,9 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CTERecursiveForbiddenJoinOrder:      {num: ERCTERecursiveForbiddenJoinOrder, state: SSUnknownSQLState},
 	vterrors.CTEMaxRecursionDepth:                {num: ERCTEMaxRecursionDepth, state: SSUnknownSQLState},
 	vterrors.UnsupportedSQLMode:                  {num: ERUnsupportedSQLMode, state: SSUnknownSQLState},
+	vterrors.UnknownCharacterSet:                 {num: ERUnknownCharacterSet, state: SSClientError},
+	vterrors.UnknownCollation:                    {num: ERUnknownCollation, state: SSUnknownSQLState},
+	vterrors.CollationCharsetMismatch:            {num: ERCollationCharsetMismatch, state: SSClientError},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {

@@ -246,6 +246,11 @@ type (
 		SetReadAfterWriteTimeout(float64)
 		SetSessionTrackGTIDs(bool)
 
+		// SetResultCharset sets the character_set_results of the session:
+		// a collation ID, 0 for the default connection collation of vtgate,
+		// or NULL when null is true.
+		SetResultCharset(collation collations.ID, null bool)
+
 		// HasCreatedTempTable will mark the session as having created temp tables
 		HasCreatedTempTable()
 		GetWarnings() []*querypb.QueryWarning

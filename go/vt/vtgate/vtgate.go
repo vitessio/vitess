@@ -34,6 +34,8 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/internal/ingress"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -622,6 +624,9 @@ func (vtg *VTGate) Execute(
 		safeSession := econtext.NewSafeSession(session)
 		qr, err = vtg.executor.Execute(ctx, mysqlCtx, "Execute", safeSession, sql, bindVariables, prepared)
 		safeSession.RemoveInternalSavepoint()
+		if err == nil && qr != nil && convertResultCharset {
+			qr = vtg.toClient(safeSession)(qr.Fields).Result(qr)
+		}
 	}
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
@@ -692,6 +697,29 @@ func allocateBatchIngressBytes(total uint64, sqlList []string, bindVariablesList
 		}
 	}
 	return ingress.SplitBytesByWeight(total, weights)
+}
+
+// toClient returns the conversion of results to the character_set_results of
+// a session, for --convert-result-charset. Execute, StreamExecute and Prepare
+// use it for every result and every list of fields that they return, and
+// nothing else returns results to a client: ExecuteMulti, ExecuteBatch and
+// StreamExecuteMulti call Execute and StreamExecute. The executor runs the
+// statements that vtgate itself sends, such as those of a vindex, without
+// them, so that their results stay in the connection character set.
+//
+// The text in a result is in the connection collation of vtgate, and the
+// session's 0 stands for the default connection collation: utf8mb4_0900_ai_ci
+// with MySQL 8.
+//
+// The session is read when the fields arrive, after the statement ran.
+func (vtg *VTGate) toClient(session *econtext.SafeSession) func(fields []*querypb.Field) *resultcharset.Conversion {
+	return func(fields []*querypb.Field) *resultcharset.Conversion {
+		results, null := session.ResultCharset()
+		if results == collations.Unknown {
+			results = vtg.executor.env.CollationEnv().DefaultConnectionCharset()
+		}
+		return resultcharset.ToClient(fields, vtg.executor.vConfig.Collation, results, null)
+	}
 }
 
 // ExecuteMulti executes multiple non-streaming queries.
@@ -778,6 +806,13 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
 	} else {
+		if convertResultCharset {
+			stream := resultcharset.NewStream(vtg.toClient(safeSession))
+			send := callback
+			callback = func(reply *sqltypes.Result) error {
+				return send(stream.Result(reply))
+			}
+		}
 		err = vtg.executor.StreamExecute(
 			ctx,
 			mysqlCtx,
@@ -864,8 +899,12 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
-	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
+	safeSession := econtext.NewSafeSession(session)
+	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", safeSession, sql)
 	if err == nil {
+		if convertResultCharset {
+			fld = vtg.toClient(safeSession)(fld).Fields(fld)
+		}
 		return session, fld, paramsCount, nil
 	}
 

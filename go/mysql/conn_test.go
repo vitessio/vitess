@@ -367,6 +367,33 @@ func TestBasicPackets(t *testing.T) {
 	assert.True(cConn.isEOFPacket(data), "expected EOF")
 }
 
+// TestErrorMessageHook covers Conn.ErrorMessage, with which vtgate sends error
+// messages in the character_set_results of a session: the error packet has
+// the text that the hook returns.
+func TestErrorMessageHook(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	t.Cleanup(func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	})
+
+	sConn.ErrorMessage = func(message string) string {
+		return strings.ReplaceAll(message, "ü", "\xFC")
+	}
+	for _, err := range []error{
+		sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry 'Müller' for key 'uk'"),
+		errors.New("Müller"),
+	} {
+		require.NoError(t, sConn.writeErrorPacketFromError(err))
+		data, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		sqlErr := ParseErrorPacket(data).(*sqlerror.SQLError)
+		assert.NotContains(t, sqlErr.Message, "ü")
+		assert.Contains(t, sqlErr.Message, "M\xFCller")
+	}
+}
+
 func TestBytesReadCountsSinglePacketHeaderAndPayload(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer listener.Close()

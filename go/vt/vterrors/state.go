@@ -129,6 +129,11 @@ const (
 
 	UnsupportedSQLMode
 
+	// character sets and collations named in a SET statement
+	UnknownCharacterSet
+	UnknownCollation
+	CollationCharsetMismatch
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )
