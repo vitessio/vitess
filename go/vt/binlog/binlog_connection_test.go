@@ -141,3 +141,108 @@ func TestNewBinlogConnectionContextCancellationDuringSetup(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond)
 	require.ErrorIs(t, connectErr, context.Canceled)
 }
+
+// TestStartBinlogDumpFromBinlogBeforeTimestampCancellationDuringShowBinaryLogs
+// checks that cancelling the caller stops a SHOW BINARY LOGS that the server
+// never answers.
+func TestStartBinlogDumpFromBinlogBeforeTimestampCancellationDuringShowBinaryLogs(t *testing.T) {
+	const checksumQuery = "SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum"
+
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQuery(checksumQuery, &sqltypes.Result{})
+	queryStarted := make(chan struct{})
+	releaseQuery := make(chan struct{})
+	t.Cleanup(func() { close(releaseQuery) })
+	db.AddQuery("SHOW BINARY LOGS", &sqltypes.Result{})
+	db.SetBeforeFunc("SHOW BINARY LOGS", func() {
+		close(queryStarted)
+		<-releaseQuery
+	})
+
+	bc, err := NewBinlogConnection(dbconfigs.New(db.ConnParams()))
+	require.NoError(t, err)
+	t.Cleanup(bc.Close)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := bc.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, time.Now().Unix())
+		errCh <- err
+	}()
+	receive(t, queryStarted)
+	cancel()
+	require.ErrorIs(t, receive(t, errCh), context.Canceled)
+}
+
+// TestStartBinlogDumpFromBinlogBeforeTimestampCancellationDuringFirstEvent
+// checks that cancelling the caller stops the wait for the first event of a
+// binlog that the server never sends.
+func TestStartBinlogDumpFromBinlogBeforeTimestampCancellationDuringFirstEvent(t *testing.T) {
+	const checksumQuery = "SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum"
+
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQuery(checksumQuery, &sqltypes.Result{})
+	db.AddQuery("SHOW BINARY LOGS", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Log_name|File_size", "varchar|int64"),
+		"binlog.000001|4",
+	))
+
+	handler := &signalBinlogDumpDB{DB: db, dumped: make(chan struct{}, 1)}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), handler, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	t.Cleanup(listener.Close)
+	go listener.Accept()
+
+	bc, err := NewBinlogConnection(dbconfigs.New(&mysql.ConnParams{
+		Host:  "127.0.0.1",
+		Port:  listener.Addr().(*net.TCPAddr).Port,
+		Uname: "user1",
+		Pass:  "password1",
+	}))
+	require.NoError(t, err)
+	t.Cleanup(bc.Close)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := bc.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, time.Now().Unix())
+		errCh <- err
+	}()
+	receive(t, handler.dumped)
+	cancel()
+	require.ErrorIs(t, receive(t, errCh), context.Canceled)
+}
+
+// signalBinlogDumpDB answers a binlog dump without sending any events, and
+// reports that the dump arrived.
+type signalBinlogDumpDB struct {
+	*fakesqldb.DB
+	dumped chan struct{}
+}
+
+func (db *signalBinlogDumpDB) ComBinlogDump(*mysql.Conn, string, uint32) error {
+	select {
+	case db.dumped <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+// receive waits for a value on ch.
+func receive[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	var v T
+	require.Eventually(t, func() bool {
+		select {
+		case v = <-ch:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+	return v
+}

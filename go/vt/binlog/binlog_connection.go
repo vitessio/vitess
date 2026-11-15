@@ -244,8 +244,14 @@ func (bc *BinlogConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context
 }
 
 func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timestamp int64) (filename string, err error) {
-	// List the binlogs.
+	// List the binlogs. Closing the connection when ctx ends stops a stalled
+	// server from holding the caller.
+	stopClose := context.AfterFunc(ctx, bc.Conn.Close)
 	binlogs, err := bc.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
+	stopClose()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to SHOW BINARY LOGS: %v", err)
 	}
@@ -282,8 +288,15 @@ func (bc *BinlogConnection) getBinlogTimeStamp(ctx context.Context, filename str
 		return 0, err
 	}
 	defer conn.Close()
+	// Closing the connection when ctx ends stops a server that never sends
+	// the first event from holding the caller.
+	stopClose := context.AfterFunc(ctx, conn.Close)
+	defer stopClose()
 
 	if err := conn.WriteComBinlogDump(bc.serverID, filename, 4, 0); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return 0, ctxErr
+		}
 		return 0, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 	}
 
@@ -293,6 +306,9 @@ func (bc *BinlogConnection) getBinlogTimeStamp(ctx context.Context, filename str
 	for {
 		event, err := conn.ReadBinlogEvent()
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return 0, ctxErr
+			}
 			return 0, fmt.Errorf("error reading binlog event %v: %v", filename, err)
 		}
 		if !event.IsValid() {
