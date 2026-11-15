@@ -86,6 +86,12 @@ func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 			ctx = cache.NewIncomingRefreshContext(ctx)
 		}
 
+		// Only reads stop when the client goes away. A browser reload or a proxy
+		// timeout must not stop a write part way, such as a PRS mid-demotion.
+		if r.Method != http.MethodGet {
+			ctx = context.WithoutCancel(ctx)
+		}
+
 		// Transform any ?cluster query params to ?cluster_id.
 		deprecateQueryParam(r, "cluster_id", "cluster")
 
