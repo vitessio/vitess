@@ -1285,9 +1285,10 @@ func (tm *TabletManager) promoteReplicaLocked(ctx context.Context, semiSync bool
 }
 
 // PromoteReplicaAndJournal promotes the tablet and then writes its reparent
-// journal row, so a reparent needs one round trip instead of two. Promotion
-// stops when the caller gives up, but once the tablet is writable the journal
-// write runs to completion or to populate_reparent_journal_timeout.
+// journal row, so a reparent needs one round trip instead of two. Like
+// PromoteReplica, promotion is bounded by the caller's deadline and stops when
+// the caller gives up, but once the tablet is writable the journal write runs
+// to completion or to populate_reparent_journal_timeout.
 func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
 	if request == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
@@ -1316,12 +1317,10 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	log.Info("PromoteReplicaAndJournal", tabletAlias)
 	response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}
 
-	prePromotionCtx, prePromotionCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-	err = tm.waitForGrantsToHaveApplied(prePromotionCtx)
+	err = tm.waitForGrantsToHaveApplied(ctx)
 	if err == nil {
-		err = tm.lock(prePromotionCtx)
+		err = tm.lock(ctx)
 	}
-	prePromotionCancel()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -1334,9 +1333,7 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	// release the shard lock) never leaves this tablet going read-write later.
 	response.Position, err = func() (string, error) {
 		defer tm.unlock()
-		promoteCtx, promoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
-		defer promoteCancel()
-		return tm.promoteReplicaLocked(promoteCtx, request.SemiSync)
+		return tm.promoteReplicaLocked(ctx, request.SemiSync)
 	}()
 	if err != nil {
 		log.Warn("PromoteReplicaAndJournal failed to promote the replica", tabletAlias, slog.String("position", response.Position), slog.Any("error", err))

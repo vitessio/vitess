@@ -157,22 +157,11 @@ type (
 		executeDeadline chan time.Time
 	}
 
-	deadlineSignalContext struct {
-		context.Context
-		once    sync.Once
-		entered chan struct{}
-	}
-
 	promoteResult struct {
 		response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
 		err      error
 	}
 )
-
-func (ctx *deadlineSignalContext) Deadline() (time.Time, bool) {
-	ctx.once.Do(func() { close(ctx.entered) })
-	return ctx.Context.Deadline()
-}
 
 func recordDeadline(ctx context.Context) time.Time {
 	deadline, _ := ctx.Deadline()
@@ -1825,61 +1814,18 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 		// Longer than the remote operation timeout, as PRS asks for its whole wait_replicas_timeout.
 		journalTimeout := topo.RemoteOperationTimeout * 2
 		request.PopulateReparentJournalTimeout = protoutil.DurationToProto(journalTimeout)
+		// Promotion takes the caller's deadline, like PromoteReplica, even when it is
+		// longer than the tablet's remote operation timeout.
+		callerDeadline := time.Now().Add(topo.RemoteOperationTimeout * 3)
+		ctx, cancel := context.WithDeadline(t.Context(), callerDeadline)
+		defer cancel()
 		started := time.Now()
 
-		_, err := tm.PromoteReplicaAndJournal(t.Context(), request)
+		_, err := tm.PromoteReplicaAndJournal(ctx, request)
 
 		require.NoError(t, err)
-		assert.WithinDuration(t, started.Add(topo.RemoteOperationTimeout), receive(t, daemon.promoteDeadline), 2*time.Second)
+		assert.Equal(t, callerDeadline, receive(t, daemon.promoteDeadline))
 		assert.WithinDuration(t, started.Add(journalTimeout), receive(t, daemon.executeDeadline), 2*time.Second)
-	})
-
-	t.Run("action lock wait does not consume promotion deadline", func(t *testing.T) {
-		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
-		topo.RemoteOperationTimeout = 30 * time.Second
-		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
-
-		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
-		fakeMysqlDaemon.PromoteResult = promotionPosition
-		daemon := &deadlineRecordingMysqlDaemon{
-			FakeMysqlDaemon: fakeMysqlDaemon,
-			promoteDeadline: make(chan time.Time, 1),
-			executeDeadline: make(chan time.Time, 1),
-		}
-		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
-		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
-		}
-		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
-		lockHeld := true
-		t.Cleanup(func() {
-			if lockHeld {
-				tm.actionSema.Release(1)
-			}
-		})
-		ctx := &deadlineSignalContext{
-			Context: t.Context(),
-			entered: make(chan struct{}),
-		}
-		resultCh := make(chan promoteResult, 1)
-		request := newRequest()
-		go func() {
-			response, err := tm.PromoteReplicaAndJournal(ctx, request)
-			resultCh <- promoteResult{response: response, err: err}
-		}()
-
-		receive(t, ctx.entered)
-		time.Sleep(2 * time.Second)
-		lockReleased := time.Now()
-		tm.actionSema.Release(1)
-		lockHeld = false
-
-		deadline := receive(t, daemon.promoteDeadline)
-		assert.True(t, deadline.After(lockReleased.Add(topo.RemoteOperationTimeout-time.Second)))
-
-		result := receive(t, resultCh)
-		require.NoError(t, result.err)
-		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
 	})
 
 	t.Run("promotion failure prevents journal write", func(t *testing.T) {
