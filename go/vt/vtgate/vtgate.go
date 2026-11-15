@@ -371,6 +371,7 @@ func Init(
 	// we can't go on much further, so we exit the process.
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
+	gw.SetConnectionCollation(env.CollationEnv().DefaultConnectionCharset())
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		log.Error("tabletGateway.WaitForTablets failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
