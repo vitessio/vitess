@@ -19,6 +19,7 @@ package vtbench
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -275,6 +277,44 @@ func TestBenchClientLoopContinueOnError(t *testing.T) {
 	assert.Equal(t, int64(5), calls.Load(), "all iterations should run with ContinueOnError")
 	assert.Equal(t, int64(5), b.Errors.Counts()[vtrpcpb.Code_ALREADY_EXISTS.String()])
 	assert.Empty(t, b.Errors.Counts()[vtrpcpb.Code_UNKNOWN.String()], "SQLError must not be bucketed as UNKNOWN")
+}
+
+// TestBenchClientLoopLogsQueryError checks the level a failed query is logged
+// at: V(1) for each failure when the loop continues on error, so not at the
+// default verbosity, and ERROR when it stops. It also checks that error_code
+// comes from vtbench's classification, which maps a MySQL error's code.
+func TestBenchClientLoopLogsQueryError(t *testing.T) {
+	queryErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, "23000", "duplicate entry")
+	conn := &fakeClientConn{
+		execFn: func(ctx context.Context) (*sqltypes.Result, error) {
+			return nil, queryErr
+		},
+	}
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	b := newBenchForTest(1, 2)
+	b.ContinueOnError = true
+	runClientLoop(t.Context(), b, conn)
+	assert.Empty(t, logs.Records(t))
+
+	logs = logtest.Capture(t, slog.Level(-1))
+	b = newBenchForTest(1, 2)
+	b.ContinueOnError = true
+	runClientLoop(t.Context(), b, conn)
+
+	records := logs.Records(t)
+	require.Len(t, records, 2)
+	for _, record := range records {
+		assert.Equal(t, "query error", record["msg"])
+		assert.Equal(t, "INFO", record["level"])
+	}
+
+	logs.Reset()
+	runClientLoop(t.Context(), newBenchForTest(1, 2), conn)
+
+	record := logs.Record(t, "query error")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "ALREADY_EXISTS", record["error_code"])
 }
 
 func TestBenchClientLoopContinueOnErrorStopsOnContextCancel(t *testing.T) {

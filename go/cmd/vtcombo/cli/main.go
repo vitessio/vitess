@@ -24,6 +24,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -187,7 +188,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("unable to initialize env: %v", err))
+		log.Error("unable to initialize env", slog.Any("error", err))
 		os.Exit(1)
 	}
 

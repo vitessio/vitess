@@ -18,7 +18,7 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -34,7 +34,7 @@ func (sw *shardWatcher) active() bool {
 }
 
 func (sw *shardWatcher) start(ts *topo.Server, keyspace, shard string) error {
-	log.Info(fmt.Sprintf("Starting shard watch of %v/%v", keyspace, shard))
+	log.Info("Starting shard watch", slog.String("keyspace", keyspace), slog.String("shard", shard))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	_, c, err := ts.WatchShard(ctx, keyspace, shard)

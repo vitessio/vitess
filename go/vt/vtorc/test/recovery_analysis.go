@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 type InfoForRecoveryAnalysis struct {
@@ -149,6 +150,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	res, _ := prototext.Marshal(info.TabletInfo)
 	currentType := info.CurrentTabletType
 	rowMap["current_tablet_type"] = sqlutils.CellData{String: strconv.Itoa(currentType), Valid: true}
+	rowMap["alias"] = sqlutils.CellData{String: topoproto.TabletAliasString(info.TabletInfo.Alias), Valid: true}
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	rowMap["is_disk_stalled"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.IsStalledDisk), 10), Valid: true}
 	return rowMap

@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"text/template"
@@ -43,7 +44,7 @@ import (
 // helper method to asynchronously diff a schema
 func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanagerdatapb.SchemaDefinition, primaryTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Info(fmt.Sprintf("Gathering schema for %v", topoproto.TabletAliasString(alias)))
+	log.Info("Gathering schema", slog.String("tablet", topoproto.TabletAliasString(alias)))
 	req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: excludeTables, IncludeViews: includeViews}
 	replicaSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, alias, req)
 	if err != nil {
@@ -51,7 +52,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanager
 		return
 	}
 
-	log.Info(fmt.Sprintf("Diffing schema for %v", topoproto.TabletAliasString(alias)))
+	log.Info("Diffing schema", slog.String("tablet", topoproto.TabletAliasString(alias)))
 	diffEnv := schemadiff.NewEnv(wr.env, wr.env.CollationEnv().DefaultConnectionCharset())
 	tmutils.DiffSchemaWithEnvironment(
 		diffEnv,
@@ -74,7 +75,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	if !si.HasPrimary() {
 		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
-	log.Info(fmt.Sprintf("Gathering schema for primary %v", topoproto.TabletAliasString(si.PrimaryAlias)))
+	log.Info("Gathering schema for primary", slog.String("primary_tablet", topoproto.TabletAliasString(si.PrimaryAlias)))
 	req := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: excludeTables, IncludeViews: includeViews}
 	primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, req)
 	if err != nil {

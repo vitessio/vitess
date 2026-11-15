@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -206,7 +207,11 @@ func initConfig(tabletAlias *topodatapb.TabletAlias, collationEnv *collations.En
 		}
 	}
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Info(fmt.Sprintf("Loaded config file %s successfully:\n%s", tabletConfig, gotBytes))
+	attrs := []slog.Attr{slog.String("config", string(gotBytes))}
+	if tabletConfig != "" {
+		attrs = append(attrs, slog.String("path", tabletConfig))
+	}
+	log.Info("Loaded config file successfully", attrs...)
 
 	var (
 		mycnf      *mysqlctl.Mycnf

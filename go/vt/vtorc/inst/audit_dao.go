@@ -18,6 +18,7 @@ package inst
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -45,14 +46,14 @@ func AuditOperation(auditType string, tabletAlias *topodatapb.TabletAlias, messa
 		go func() {
 			f, err := os.OpenFile(config.GetAuditFileLocation(), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o640)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error("Failed to open audit file", slog.String("path", config.GetAuditFileLocation()), slog.Any("error", err))
 				return
 			}
 
 			defer f.Close()
 			text := fmt.Sprintf("%s\t%s\t%s\t[%s:%s]\t%s\t\n", time.Now().Format("2006-01-02 15:04:05"), auditType, tabletAliasString, keyspace, shard, message)
 			if _, err = f.WriteString(text); err != nil {
-				log.Error(err.Error())
+				log.Error("Failed to write audit file", slog.String("path", config.GetAuditFileLocation()), slog.Any("error", err))
 			}
 		}()
 	}
@@ -80,7 +81,7 @@ func AuditOperation(auditType string, tabletAlias *topodatapb.TabletAlias, messa
 			message,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to write audit to backend", slog.String("audit_type", auditType), slog.Any("error", err))
 			return err
 		}
 	}
@@ -89,7 +90,22 @@ func AuditOperation(auditType string, tabletAlias *topodatapb.TabletAlias, messa
 		auditWrittenToFile = true
 	}
 	if !auditWrittenToFile {
-		log.Info(logMessage)
+		attrs := []slog.Attr{slog.String("audit_type", auditType)}
+		if tabletAlias != nil {
+			attrs = append(attrs, slog.String("tablet", tabletAliasString))
+		}
+		// The keyspace and shard are empty when the tablet isn't in the
+		// backend, for example after it was forgotten.
+		if keyspace != "" {
+			attrs = append(attrs, slog.String("keyspace", keyspace))
+		}
+		if shard != "" {
+			attrs = append(attrs, slog.String("shard", shard))
+		}
+		if message != "" {
+			attrs = append(attrs, slog.String("message", message))
+		}
+		log.Info("Audit operation", attrs...)
 	}
 	auditOperationCounter.Add(1)
 

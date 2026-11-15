@@ -24,7 +24,7 @@ package dbconfigs
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -131,7 +131,7 @@ func init() {
 func GetCredentialsServer() CredentialsServer {
 	cs, ok := AllCredentialsServers[dbCredentialsServer]
 	if !ok {
-		log.Error(fmt.Sprintf("Invalid credential server: %v", dbCredentialsServer))
+		log.Error("Invalid credential server", slog.String("db_credentials_server", dbCredentialsServer))
 		os.Exit(1)
 	}
 	return cs
@@ -177,12 +177,12 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 
 		data, err := os.ReadFile(dbCredentialsFile)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to read dbCredentials file: %v", dbCredentialsFile))
+			log.Warn("Failed to read dbCredentials file", slog.String("path", dbCredentialsFile))
 			return "", "", err
 		}
 
 		if err = json.Unmarshal(data, &fcs.dbCredentials); err != nil {
-			log.Warn(fmt.Sprintf("Failed to parse dbCredentials file: %v", dbCredentialsFile))
+			log.Warn("Failed to parse dbCredentials file", slog.String("path", dbCredentialsFile))
 			return "", "", err
 		}
 	}
@@ -213,7 +213,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 
 	if vcs.cacheValid.Load() && vcs.dbCredsCache != nil {
 		if vcs.dbCredsCache[user] == nil {
-			log.Error(fmt.Sprintf("Vault cache is valid, but user %s unknown in cache, will retry", user))
+			log.Error("Vault cache is valid, but user unknown in cache, will retry", slog.String("db_user", user))
 			return "", "", ErrUnknownUser
 		}
 		return user, vcs.dbCredsCache[user][0], nil
@@ -269,7 +269,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		var err error
 		vcs.vaultClient, err = vaultapi.NewClient(config)
 		if err != nil || vcs.vaultClient == nil {
-			log.Error(fmt.Sprintf("Error in vault client initialization, will retry: %v", err))
+			log.Error("Error in vault client initialization, will retry", slog.Any("error", err))
 			vcs.vaultClient = nil
 			return "", "", ErrUnknownUser
 		}
@@ -277,7 +277,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 
 	secret, err := vcs.vaultClient.GetSecret(vaultPath)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error in Vault server params: %v", err))
+		log.Error("Error in Vault server params", slog.Any("error", err))
 		return "", "", ErrUnknownUser
 	}
 
@@ -292,10 +292,10 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		return "", "", ErrUnknownUser
 	}
 	if dbCreds[user] == nil {
-		log.Warn(fmt.Sprintf("Vault lookup for user not found: %v\n", user))
+		log.Warn("Vault lookup for user not found", slog.String("db_user", user))
 		return "", "", ErrUnknownUser
 	}
-	log.Info("Vault client status: " + vcs.vaultClient.GetStatus())
+	log.Info("Vault client status", slog.String("vault_status", vcs.vaultClient.GetStatus()))
 
 	vcs.dbCredsCache = dbCreds
 	vcs.cacheValid.Store(true)

@@ -19,9 +19,11 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -40,7 +42,13 @@ type VDiffOutput struct {
 func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, action vdiff2.VDiffAction, actionArg, uuid string,
 	options *tabletmanagerdata.VDiffOptions,
 ) (*VDiffOutput, error) {
-	log.Info(fmt.Sprintf("VDiff2 called with %s, %s, %s, %s, %s, %+v", keyspace, workflowName, action, actionArg, uuid, options))
+	log.Info("VDiff2 called",
+		slog.String("keyspace", keyspace),
+		slog.String("workflow", workflowName),
+		slog.String("action", string(action)),
+		slog.String("action_arg", actionArg),
+		slog.String("uuid", uuid),
+		slog.String("vdiff_options", fmt.Sprintf("%+v", options)))
 
 	req := &tabletmanagerdata.VDiffRequest{
 		Keyspace:  keyspace,
@@ -73,7 +81,12 @@ func (wr *Wrangler) VDiff2(ctx context.Context, keyspace, workflowName string, a
 		return err
 	})
 	if output.Err != nil {
-		log.Error(fmt.Sprintf("Error executing action %s: %v", action, output.Err))
+		log.Error("Error executing action",
+			slog.String("keyspace", keyspace),
+			slog.String("workflow", workflowName),
+			slog.String("action", string(action)),
+			slog.Any("error", output.Err),
+			slog.String("error_code", vterrors.Code(output.Err).String()))
 		return nil, output.Err
 	}
 

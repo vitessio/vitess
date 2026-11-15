@@ -32,6 +32,7 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
@@ -54,7 +55,7 @@ func IsRecoveryDisabled() (disabled bool, err error) {
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("recovery.IsRecoveryDisabled(): %v", err)
-		log.Error(errMsg)
+		log.Error("recovery.IsRecoveryDisabled() failed", slog.Any("error", err))
 		err = errors.New(errMsg)
 	}
 	return disabled, err
