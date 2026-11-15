@@ -44,7 +44,7 @@ import (
 //		// log error. if desired, lookup the existing cluster with ID: `id`
 //	}
 //	// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
-//	dynamicAPI, err := api.WithCluster(c, id)
+//	dynamicAPI, err := api.WithCluster(ctx, c, id)
 //	if err != nil {
 //		// neither `c` nor an existing cluster with ID: `id` is available.
 //	}

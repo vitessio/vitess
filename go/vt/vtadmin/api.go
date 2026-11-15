@@ -19,7 +19,6 @@ package vtadmin
 import (
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -291,7 +290,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					log.Warn("failed to extract valid cluster from cookie; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 				}
 
-				dynamicAPI, err = api.WithClusterContext(r.Context(), c, id)
+				dynamicAPI, err = api.WithCluster(r.Context(), c, id)
 				if err != nil {
 					vtadminhttp.NewJSONResponse(nil, &errors.ErrInvalidCluster{Err: err}).Write(w)
 					return
@@ -305,13 +304,8 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dynamicAPI.Handler().ServeHTTP(w, r)
 }
 
-// WithCluster preserves the original no-context API for callers outside request paths.
-func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
-	return api.WithClusterContext(context.Background(), c, id)
-}
-
-// WithClusterContext returns a dynamic API with the given cluster. If `c` is non-nil,
-// WithClusterContext takes ownership of it and selects the cluster registered under
+// WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
+// WithCluster takes ownership of it and selects the cluster registered under
 // the given id afterwards:
 //   - If no cluster is registered under the id, `c` is registered.
 //   - If a different cluster is registered under the id, that cluster is
@@ -324,7 +318,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 //
 // If the cluster is nil, then a cluster with the given id is retrieved from
 // the API and used in the dynamic API. If the cluster is nil and the API has
-// no cluster with the given id, WithClusterContext returns a NOT_FOUND error.
+// no cluster with the given id, WithCluster returns a NOT_FOUND error.
 //
 // Callers must ensure that:
 // 1. If c is non-nil, c.ID == id.
@@ -332,7 +326,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 //
 // Note that using dynamic.ClusterFromString ensures both of these
 // preconditions.
-func (api *API) WithClusterContext(ctx context.Context, c *cluster.Cluster, id string) (dynamic.API, error) {
+func (api *API) WithCluster(ctx context.Context, c *cluster.Cluster, id string) (dynamic.API, error) {
 	api.clusterMu.Lock()
 	var rejectedCluster *cluster.Cluster
 	defer func() {
@@ -361,7 +355,7 @@ func (api *API) WithClusterContext(ctx context.Context, c *cluster.Cluster, id s
 			comparisonErr := ctx.Err()
 			var isEqual bool
 			if comparisonErr == nil {
-				isEqual, comparisonErr = existingCluster.EqualContext(ctx, c)
+				isEqual, comparisonErr = existingCluster.Equal(ctx, c)
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					comparisonErr = ctxErr
 				}
@@ -371,10 +365,8 @@ func (api *API) WithClusterContext(ctx context.Context, c *cluster.Cluster, id s
 					slog.String("existing_cluster_id", existingCluster.ID),
 					slog.String("cluster_id", id),
 					slog.Any("error", comparisonErr))
-				if stderrors.Is(comparisonErr, context.Canceled) || stderrors.Is(comparisonErr, context.DeadlineExceeded) {
-					if c != existingCluster {
-						rejectedCluster = c
-					}
+				if ctx.Err() != nil {
+					rejectedCluster = c
 				} else {
 					shouldAddCluster = true
 				}

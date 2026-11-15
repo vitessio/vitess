@@ -64,7 +64,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
-		dynamicAPI, err := withCluster(ss.Context(), api, c, id)
+		dynamicAPI, err := api.WithCluster(ss.Context(), c, id)
 		if err != nil {
 			return vterrors.ToGRPC(err)
 		}
@@ -104,7 +104,7 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
-		dynamicAPI, err := withCluster(ctx, api, c, id)
+		dynamicAPI, err := api.WithCluster(ctx, c, id)
 		if err != nil {
 			return nil, vterrors.ToGRPC(err)
 		}

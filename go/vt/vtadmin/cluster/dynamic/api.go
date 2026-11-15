@@ -25,24 +25,10 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-type (
-	// API is the interface dynamic APIs must implement.
-	// It is implemented by vtadmin.API.
-	API interface {
-		vtadminpb.VTAdminServer
-		WithCluster(c *cluster.Cluster, id string) (API, error)
-		Handler() http.Handler
-	}
-
-	contextAPI interface {
-		API
-		WithClusterContext(ctx context.Context, c *cluster.Cluster, id string) (API, error)
-	}
-)
-
-func withCluster(ctx context.Context, api API, c *cluster.Cluster, id string) (API, error) {
-	if api, ok := api.(contextAPI); ok {
-		return api.WithClusterContext(ctx, c, id)
-	}
-	return api.WithCluster(c, id)
+// API is the interface dynamic APIs must implement.
+// It is implemented by vtadmin.API.
+type API interface {
+	vtadminpb.VTAdminServer
+	WithCluster(ctx context.Context, c *cluster.Cluster, id string) (API, error)
+	Handler() http.Handler
 }

@@ -170,7 +170,7 @@ type panickingAPI struct {
 	vtadminpb.UnimplementedVTAdminServer
 }
 
-func (api *panickingAPI) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
+func (api *panickingAPI) WithCluster(_ context.Context, c *cluster.Cluster, id string) (dynamic.API, error) {
 	if c != nil {
 		_ = c.Close()
 	}
@@ -206,7 +206,7 @@ type panickingWithClusterAPI struct {
 	panickingAPI
 }
 
-func (api *panickingWithClusterAPI) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
+func (api *panickingWithClusterAPI) WithCluster(_ context.Context, c *cluster.Cluster, id string) (dynamic.API, error) {
 	if c != nil {
 		_ = c.Close()
 	}

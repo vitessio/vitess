@@ -71,7 +71,7 @@ func TestEqualPropagatesCancellation(t *testing.T) {
 	cancel()
 
 	c := &Cluster{Discovery: &contextCheckingDiscovery{}}
-	_, err := c.EqualContext(ctx, &Cluster{Discovery: &contextCheckingDiscovery{}})
+	_, err := c.Equal(ctx, &Cluster{Discovery: &contextCheckingDiscovery{}})
 	require.ErrorIs(t, err, context.Canceled)
 }
 
