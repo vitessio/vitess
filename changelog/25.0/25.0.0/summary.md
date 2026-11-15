@@ -627,7 +627,8 @@ With `--convert-result-charset`:
 - `SET character_set_results` is the way to get results in another character set, and accepts every character set that MySQL 8 has, including the ones that [cannot be connection character sets](#vttablet-connection-charsets-restricted): it only changes what VTGate sends.
 - With tablets that have `--queryserver-config-raw-result-charset`, VTGate sorts, groups and compares the text of a column that is not `utf8mb4` in the collation of the column when it knows it. With tablets that do not, and without `--convert-result-charset`, it compares the `utf8mb4` bytes that it gets as if they were text of the column's character set, as before: for example a `latin1` column with `é` sorts before `d` when VTGate merges the rows of several shards.
 - From tablets without `--queryserver-config-raw-result-charset` VTGate gets `utf8mb4`, and returns that for `character_set_results = NULL` and `binary`.
-- VStream results and gRPC error messages are not converted.
+- The `VSTREAM` statement returns the text of a row in the `character_set_results` of the session. Without the flag it returns each column in the character set of the column, as before.
+- The events of the VStream gRPC API, which have each column in the character set of the column, and gRPC error messages are not converted.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
