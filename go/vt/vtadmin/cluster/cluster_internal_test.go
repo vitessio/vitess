@@ -49,16 +49,18 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-type vtctldProxy struct {
-	vtctldclient.VtctldClient
-	dialErr error
-}
+type (
+	vtctldProxy struct {
+		vtctldclient.VtctldClient
+		dialErr error
+	}
+
+	contextCheckingDiscovery struct {
+		discovery.Discovery
+	}
+)
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
-
-type contextCheckingDiscovery struct {
-	discovery.Discovery
-}
 
 func (d *contextCheckingDiscovery) DiscoverVTGateAddrs(ctx context.Context, _ []string) ([]string, error) {
 	return nil, ctx.Err()
