@@ -270,13 +270,15 @@ func TestConvertResultCharset(t *testing.T) {
 	})
 
 	t.Run("NULL", func(t *testing.T) {
-		// A column of latin1_german2_ci, whose text vtgate holds in
-		// utf8mb4, goes out in latin1 with the length of the column.
+		// A column of latin1_german2_ci arrives from a tablet with
+		// --queryserver-config-raw-result-charset as MySQL sends it with
+		// character_set_results = NULL. vtgate holds its text in utf8mb4
+		// and sends it out in latin1 again, with the length of the column.
 		session, _, err := vtg.Execute(ctx, nil, resultCharsetSession(), "set character_set_results = null", nil, false)
 		require.NoError(t, err)
 		sbc.SetResults([]*sqltypes.Result{{
-			Fields: []*querypb.Field{{Name: "Ä", Type: sqltypes.VarChar, Charset: 31, ColumnLength: 40}},
-			Rows:   []sqltypes.Row{{sqltypes.NewVarChar("Müller")}},
+			Fields: []*querypb.Field{{Name: "Ä", Type: sqltypes.VarChar, Charset: 31, ColumnLength: 10}},
+			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}},
 		}})
 		_, qr, err := vtg.Execute(ctx, nil, session, "select l from t1", nil, false)
 		require.NoError(t, err)
