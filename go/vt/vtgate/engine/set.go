@@ -117,7 +117,14 @@ var _ Primitive = (*Set)(nil)
 
 // TryExecute implements the Primitive interface method.
 func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	input, err := vcursor.ExecutePrimitive(ctx, s.Input, bindVars, false)
+	// The input evaluates on a shard the expressions that vtgate cannot
+	// evaluate itself, such as a subquery, and the evaluation engine takes
+	// their values as untyped columns, in the connection character set. With
+	// --convert-result-charset a value is in the character set of its column
+	// instead: SET @x = (SELECT l FROM t) with 'Müller' of a latin1 column
+	// stored its latin1 bytes in the user-defined variable, which becomes a
+	// bind variable. So the row is converted by the fields of the input.
+	input, err := vcursor.ExecutePrimitive(ctx, s.Input, bindVars, vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +132,7 @@ func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[stri
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	env.Row = input.Rows[0]
+	env.Row = newStatementValues(vcursor, input.Fields).row(input.Rows[0])
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(ctx, vcursor, env)
 		if err != nil {
@@ -376,7 +383,8 @@ func (svs *SysVarReservedConn) evaluateOnShard(ctx context.Context, vcursor VCur
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
 		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result evaluating %s: %d rows", svs.Name, len(qr.Rows))
 	}
-	return qr.Rows[0][0], nil
+	// The value goes into the text of a SET statement, see sysVarValue.
+	return sysVarValue(vcursor, qr), nil
 }
 
 func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, env *evalengine.ExpressionEnv, value string) error {
@@ -419,7 +427,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	} else {
 		changed = len(qr.Rows) > 0
 		if changed {
-			value = qr.Rows[0][0]
+			value = sysVarValue(vcursor, qr)
 		}
 	}
 	if !changed {
@@ -451,6 +459,16 @@ func sqlModeJudgmentQuery(expr string) string {
 // sqlmode.Validate). Validation runs before the change detection, so an invalid or
 // unsupported value is rejected even when the assignment would not change the value —
 // name lists, numeric bitmasks, and combination modes like ANSI included.
+// sysVarValue returns the value of a system variable that a shard evaluated,
+// the first column of the first row of qr, for the text of a SET statement and
+// for the session, which replays it in such a statement. With
+// --convert-result-charset it is in the character set of its expression, such
+// as latin1 for _latin1 x'E9', and it is converted to the connection character
+// set of the statement by the fields of qr.
+func sysVarValue(vcursor VCursor, qr *sqltypes.Result) sqltypes.Value {
+	return newStatementValues(vcursor, qr.Fields).value(0, qr.Rows[0][0])
+}
+
 func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value, error) {
 	if len(qr.Fields) != 2 || len(qr.Rows) != 1 || len(qr.Rows[0]) != 2 {
 		// the verification query selects exactly two columns of one row; anything else

@@ -27,7 +27,9 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -617,6 +619,76 @@ func TestVindexLookupStatementValues(t *testing.T) {
 				fmt.Sprintf(`ResolveDestinations ks [%v] Destinations:DestinationKeyspaceID(10)`, sqltypes.StringBindVariable("Müller")),
 				`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 			})
+		})
+	}
+}
+
+// TestSysVarReservedConnStatementValues checks the value of a system variable
+// that a shard evaluates, and that goes into the text of a SET statement and
+// into the session, which replays it in a SET statement. With --convert-result-charset a tablet returns the value
+// of _latin1 x'E9' as E9, with the collation latin1_swedish_ci, as MySQL 8.0.46
+// and 8.4.13 send it with character_set_results = NULL, and the value has to be
+// 'é' in utf8mb4 in the statement.
+func TestSysVarReservedConnStatementValues(t *testing.T) {
+	ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
+	evaluated := func() *sqltypes.Result {
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "v", Type: sqltypes.VarChar, Charset: 8, ColumnLength: 1}},
+			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xE9"))}},
+		}
+	}
+	for _, convert := range []bool{true, false} {
+		want := "'\xE9'"
+		if convert {
+			want = "'é'"
+		}
+		for _, targeted := range []bool{false, true} {
+			t.Run(fmt.Sprintf("convert %v, targeted %v", convert, targeted), func(t *testing.T) {
+				op := &SysVarReservedConn{Name: "x", Keyspace: ks, Expr: "_latin1 x'E9'"}
+				if targeted {
+					op.TargetDestination = key.DestinationAnyShard{}
+				}
+				set := &Set{Ops: []SetOp{op}, Input: &SingleRow{}}
+				vc := &loggingVCursor{
+					convertResultCharset: convert,
+					shards:               []string{"-20"},
+					results:              []*sqltypes.Result{evaluated(), {}},
+					shardSession:         []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+				}
+				_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+				require.NoError(t, err)
+				// An untargeted SET sends its expression to the shards, and the
+				// session replays the value on the next reserved connections.
+				if targeted {
+					assert.Contains(t, vc.log, fmt.Sprintf("ExecuteMultiShard ks.-20: set x = %s {} false false", want))
+				}
+				assert.Contains(t, vc.log, fmt.Sprintf("SysVar set with (x,%s)", want))
+			})
+		}
+	}
+}
+
+// TestSetUserDefinedVariableStatementValues checks the value that SET @x =
+// (SELECT l FROM t) stores in a user-defined variable, which becomes a bind
+// variable of the statements that use @x. The shard evaluates the subquery,
+// and the evaluation engine takes its value as an untyped column, in the
+// connection character set. With --convert-result-charset 'Müller' of a
+// latin1 column has to be stored in utf8mb4.
+func TestSetUserDefinedVariableStatementValues(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			input := latin1Result()
+			input.Fields = input.Fields[1:]
+			input.Rows[0] = input.Rows[0][1:]
+			set := &Set{
+				Ops:   []SetOp{&UserDefinedVariable{Name: "x", Expr: evalengine.NewColumn(0, evalengine.Type{}, nil)}},
+				Input: &fakePrimitive{results: []*sqltypes.Result{input}},
+			}
+			vc := &loggingVCursor{convertResultCharset: convert}
+
+			_, err := set.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			vc.ExpectLog(t, []string{fmt.Sprintf("UDV set with (x,%v)", sqltypes.NewVarChar(wantStatementValue(convert)))})
 		})
 	}
 }
