@@ -340,19 +340,13 @@ func convertNames(field *querypb.Field, to charset.Charset, newField func() *que
 	}
 }
 
-// isASCIIIdentical reports whether every byte below 0x80 is the same ASCII
-// character in cs. It is false for swe7, and for ucs2, utf16, utf16le and
-// utf32, where ASCII needs more than one byte.
+// isASCIIIdentical is charset.IsASCIIIdentical, which a conversion asks for
+// every column of every result, kept by the name of the character set.
 func isASCIIIdentical(cs charset.Charset) bool {
 	if v, ok := asciiIdentical.Load(cs.Name()); ok {
 		return v.(bool)
 	}
-	identical := true
-	var buf [4]byte
-	for b := 0; b < 0x80 && identical; b++ {
-		r, width, ok := cs.DecodeRune([]byte{byte(b)})
-		identical = ok && width == 1 && r == rune(b) && cs.EncodeRune(buf[:], rune(b)) == 1 && buf[0] == byte(b)
-	}
+	identical := charset.IsASCIIIdentical(cs)
 	asciiIdentical.Store(cs.Name(), identical)
 	return identical
 }

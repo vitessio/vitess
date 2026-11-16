@@ -35,6 +35,26 @@ func Slice(charset Charset, input []byte, from, to int) []byte {
 	return input[start : len(input)-len(iter)]
 }
 
+// IsASCIIIdentical reports whether text of the characters of ASCII has the
+// bytes of ASCII in charset, and those bytes are that text: each of the bytes
+// 0x00 to 0x7F is the character of that code point, and the other way round.
+// Text that is all such bytes then needs no conversion from or to charset.
+//
+// It is false for ucs2, utf16, utf16le and utf32, where a character of ASCII
+// has more than one byte, for swe7, which has Ä at the byte of "[" and eight
+// more letters in place of ASCII punctuation, and for sjis, where MySQL
+// writes a backslash as 81 5F.
+func IsASCIIIdentical(charset Charset) bool {
+	var buf [4]byte
+	for b := range byte(0x80) {
+		r, width, ok := charset.DecodeRune([]byte{b})
+		if !ok || width != 1 || r != rune(b) || charset.EncodeRune(buf[:], r) != 1 || buf[0] != b {
+			return false
+		}
+	}
+	return true
+}
+
 func Validate(charset Charset, input []byte) bool {
 	if charset, ok := charset.(interface{ Validate([]byte) bool }); ok {
 		return charset.Validate(input)
