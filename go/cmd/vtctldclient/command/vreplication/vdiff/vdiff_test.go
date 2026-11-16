@@ -879,6 +879,7 @@ func TestUpdateCommandFlags(t *testing.T) {
 		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
 		t.Cleanup(func() {
 			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			update.Flags().Lookup("clear-source-cells").Changed = false
 			updateOptions.ClearSourceCells = false
 		})
 		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
@@ -890,7 +891,9 @@ func TestUpdateCommandFlags(t *testing.T) {
 		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
 		t.Cleanup(func() {
 			require.NoError(t, update.Flags().Set("source-cells", ""))
+			update.Flags().Lookup("source-cells").Changed = false
 			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			update.Flags().Lookup("clear-source-cells").Changed = false
 			updateOptions.ClearSourceCells = false
 			updateOptions.SourceCells = nil
 		})
