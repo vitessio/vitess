@@ -2277,10 +2277,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
-			// On etcd, a lock with a TTL expires after it even while it is held.
-			calls := env.topoFactory.GetCallStats().Counts()
-			require.NotZero(t, calls["Lock"])
-			require.Zero(t, calls["LockWithTTL"], "SwitchTraffic took a lock with a TTL")
+			// SwitchReads, and SwitchWrites when it runs, lock the source and target
+			// keyspaces with a TTL.
+			wantTTLLocks := int64(2)
+			if slices.Contains(tc.req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+				wantTTLLocks += 2
+			}
+			require.Equal(t, wantTTLLocks, env.topoFactory.GetCallStats().Counts()["LockWithTTL"], "keyspace locks taken with a TTL")
 
 			if tc.wantRefreshWarnings {
 				refreshed := make(map[string]bool)

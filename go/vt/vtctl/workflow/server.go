@@ -3068,9 +3068,18 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// For switching reads, we need to lock both source and target keyspaces.
 	// The target lock is needed because we update denied tables when removing
 	// mirror rules.
+	// A vtctld that stops renewing the keyspace locks keeps them for the command
+	// timeout.
+	ksLockTTL, set, err := protoutil.DurationFromProto(req.GetTimeout())
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
+	}
+	if !set {
+		ksLockTTL = DefaultTimeout
+	}
 
 	// Lock source keyspace first.
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads")
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
@@ -3080,7 +3089,7 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// For reshard operations, source and target keyspaces are the same.
 	var targetUnlock func(*error)
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchReads")
+		ctx, targetUnlock, lockErr = sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchReads", topo.WithTTL(ksLockTTL))
 		if lockErr != nil {
 			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
@@ -3191,21 +3200,26 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// postJournalTimeout bounds the detached post-journal tail.
+	// A vtctld that stops renewing the keyspace locks keeps them for longer than
+	// waitTimeout*X -- where X is the number of sub-steps where the waitTimeout
+	// value is used: stopping existing streams, waiting for replication to catch
+	// up, initializing the target sequences, and completing the detached
+	// post-journal tail, which runs without checking the locks.
 	postJournalTimeout := max(waitTimeout, 30*time.Second)
+	ksLockTTL := waitTimeout*3 + postJournalTimeout
 	startPostJournalCtx := func(ctx context.Context) (context.Context, context.CancelFunc) {
 		return context.WithTimeout(context.WithoutCancel(ctx), postJournalTimeout)
 	}
 
 	// Need to lock both source and target keyspaces.
-	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites")
+	ctx, sourceUnlock, lockErr := sw.lockKeyspace(ctx, ts.SourceKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
 	if lockErr != nil {
 		return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.SourceKeyspaceName()), lockErr)
 	}
 	defer sourceUnlock(&err)
 
 	if ts.TargetKeyspaceName() != ts.SourceKeyspaceName() {
-		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites")
+		lockCtx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.TargetKeyspaceName(), "SwitchWrites", topo.WithTTL(ksLockTTL))
 		if lockErr != nil {
 			return handleError(fmt.Sprintf("failed to lock the %s keyspace", ts.TargetKeyspaceName()), lockErr)
 		}
