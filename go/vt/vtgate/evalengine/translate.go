@@ -211,6 +211,7 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (IR, error) {
 	}
 
 	column := NewColumn(col.V, typ, col.Original)
+	ast.fieldCharsets = ast.fieldCharsets || column.convertsText()
 	if !column.typed() {
 		column.dynamicTypeOffset = len(ast.untyped)
 		ast.untyped = append(ast.untyped, column)
@@ -235,6 +236,7 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (IR, error)
 	}
 
 	column := NewColumn(idx, typ, colname)
+	ast.fieldCharsets = ast.fieldCharsets || column.convertsText()
 
 	if !column.typed() {
 		column.dynamicTypeOffset = len(ast.untyped)
@@ -556,6 +558,9 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (IR, error) {
 type astCompiler struct {
 	cfg     *Config
 	untyped []typedIR
+	// fieldCharsets is true when the expression has a column whose text
+	// has to be converted before it is evaluated, see NeedsFieldCharsets.
+	fieldCharsets bool
 }
 
 type (
@@ -600,15 +605,39 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 
 	if len(ast.untyped) == 0 && !cfg.NoCompilation {
 		comp := compiler{collation: cfg.Collation, env: cfg.Environment, sqlmode: cfg.SQLMode}
-		return comp.compile(expr)
+		compiled, err := comp.compile(expr)
+		if err != nil {
+			return nil, err
+		}
+		compiled.fieldCharsets = ast.fieldCharsets
+		return compiled, nil
 	}
 
 	return &UntypedExpr{
-		env:       cfg.Environment,
-		ir:        expr,
-		collation: cfg.Collation,
-		needTypes: ast.untyped,
+		env:           cfg.Environment,
+		ir:            expr,
+		collation:     cfg.Collation,
+		needTypes:     ast.untyped,
+		fieldCharsets: ast.fieldCharsets,
 	}, nil
+}
+
+// NeedsFieldCharsets reports whether expr, an expression of Translate, has a
+// column that is evaluated in a collation of another character set than the
+// one that a tablet sends text in, utf8mb4. The text of such a column has to
+// be converted before it is evaluated, which an evaluation does when it has
+// the fields of its rows, see ExpressionEnv.FieldCharsets. An expression of
+// utf8mb4 columns needs no fields.
+func NeedsFieldCharsets(expr Expr) bool {
+	switch expr := expr.(type) {
+	case *CompiledExpr:
+		return expr.fieldCharsets
+	case *UntypedExpr:
+		return expr.fieldCharsets
+	case *Column:
+		return expr.convertsText()
+	}
+	return false
 }
 
 // typedExpr is a lazily compiled expression from an UntypedExpr. This expression
@@ -654,6 +683,8 @@ type UntypedExpr struct {
 	// be statically typed. The dynamicTypeOffset field on each node is the offset of
 	// the node in this slice.
 	needTypes []typedIR
+	// fieldCharsets is what NeedsFieldCharsets returns.
+	fieldCharsets bool
 
 	mu sync.Mutex
 	// typed contains the lazily compiled versions of ir for every type set

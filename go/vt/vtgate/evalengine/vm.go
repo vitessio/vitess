@@ -44,6 +44,8 @@ type CompiledExpr struct {
 	typed ctype
 	stack int
 	ir    IR
+	// fieldCharsets is what NeedsFieldCharsets returns.
+	fieldCharsets bool
 }
 
 func (c *CompiledExpr) IR() IR {

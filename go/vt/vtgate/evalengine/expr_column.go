@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -57,7 +58,22 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	value := env.Row[c.Offset]
+	if env.FieldCharsets && sqltypes.IsText(value.Type()) {
+		value = sqltypes.MakeTrusted(value.Type(), env.columnText(c.Offset, value.Raw(), c.Collation.Collation))
+	}
+	return valueToEval(value, c.Collation, c.Values)
+}
+
+// convertsText reports whether the column is evaluated in a collation of
+// another character set than utf8mb4, so that text that a tablet sent in
+// utf8mb4 has to be converted before it is evaluated.
+func (c *Column) convertsText() bool {
+	if !c.typed() || !sqltypes.IsText(c.Type) {
+		return false
+	}
+	_, _, converts := colldata.TextConversion(c.Collation.Collation, collations.CollationUtf8mb4ID)
+	return converts
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
