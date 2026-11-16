@@ -192,7 +192,7 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/, false /*untilUnlock*/)
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/, true /*untilUnlock*/)
 }
 
 // LockName is part of the topo.Conn interface.
@@ -203,8 +203,7 @@ func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.L
 // lock is used by Lock(), LockWithTTL(), LockName(), TryLock() and primary election.
 // If wait is false, it returns a topo.NodeExists error instead of
 // waiting for older lock files to go away. With untilUnlock, the
-// lease's KeepAlive runs until Unlock. Otherwise it runs only as long as ctx, so
-// that a lock with an explicit TTL expires ttl after its last check.
+// lease's KeepAlive runs until Unlock. Otherwise it runs only as long as ctx.
 func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait, untilUnlock bool) (topo.LockDescriptor, error) {
 	nodePath := path.Join(s.root, dirPath, locksPath)
 

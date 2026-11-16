@@ -592,10 +592,6 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 		taken, err := tryLock()
 		return taken || err != nil
 	}
-	taken := func() bool {
-		taken, err := tryLock()
-		return taken && err == nil
-	}
 	// assert.Never and assert.Eventually can return while a probe still runs.
 	// joined's stop waits for that probe and keeps later ones from probing, so
 	// that no probe takes the lock after the unlock or uses the client after
@@ -630,13 +626,14 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 		require.NoError(t, unlockErr)
 	}
 
-	// An explicit TTL still releases the lock after it, without an unlock.
+	// A lock with an explicit TTL is kept alive until the unlock too.
 	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
 	require.NoError(t, err)
-	cond, stop := joined(taken)
-	assert.Eventually(t, cond, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
+	cond, stop := joined(takenOrFailed)
+	assert.Never(t, cond, 5*time.Second, 250*time.Millisecond, "the lock with an explicit TTL expired while still held")
 	stop()
 	unlock(&unlockErr)
+	require.NoError(t, unlockErr)
 }
 
 // startRestartableEtcd starts etcd on free ports, and returns its client
