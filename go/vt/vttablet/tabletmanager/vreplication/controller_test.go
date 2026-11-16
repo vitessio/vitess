@@ -916,7 +916,7 @@ func TestControllerSetMessageDoesNotOverwriteParkedState(t *testing.T) {
 	blpStats := binlogplayer.NewStats()
 	defer blpStats.Stop()
 	ct := &controller{id: 1, blpStats: blpStats}
-	dbClient.ExpectRequest("update _vt.vreplication set message='Picked source tablet: zone1-0000000100' where id=1 and state not in ('Stopped', 'Error')", testDMLResponse, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set message='Picked source tablet: zone1-0000000100' where id=1 and state not in ('Stopped', 'Error') and (message = '' or message like 'Picked source tablet%' or message like 'Error picking tablet%' or message like 'Error creating tablet picker%')", testDMLResponse, nil)
 	require.NoError(t, ct.setMessage(dbClient, "Picked source tablet: zone1-0000000100"))
 	dbClient.Wait()
 }

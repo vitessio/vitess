@@ -629,6 +629,13 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	// setState(Running, "") is called on every retry with a brand-new
+	// vreplicator (vr.state is still the zero value). Without this, the
+	// empty message clears a retryable apply error even though the row
+	// is already Running. A real transition into this state still clears.
+	if message == "" {
+		query += fmt.Sprintf(" and (state != %v or message = '')", encodeString(state.String()))
+	}
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {

@@ -79,6 +79,17 @@ var notParkedPredicate = "state not in (" +
 	encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String()) + ", " +
 	encodeString(binlogdatapb.VReplicationWorkflowState_Error.String()) + ")"
 
+// informationalMessagePredicate restricts controller.setMessage (tablet-picker
+// notices) to rows whose current message is empty or is itself a picker
+// notice. A retryable apply error leaves state=Running, so notParkedPredicate
+// alone does not protect it; this keeps "Picked source tablet" from replacing
+// that error. Do not add this predicate to vreplicator.setMessage: apply
+// errors must still be able to replace a picker notice.
+var informationalMessagePredicate = "(message = '' or message like " +
+	encodeString("Picked source tablet%") + " or message like " +
+	encodeString("Error picking tablet%") + " or message like " +
+	encodeString("Error creating tablet picker%") + ")"
+
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
@@ -424,9 +435,10 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Time:    time.Now(),
 		Message: message,
 	})
-	// Never overwrite the stop/error reason of a parked stream.
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v and %s",
-		encodeString(binlogplayer.MessageTruncate(message)), ct.id, notParkedPredicate)
+	// Never overwrite the stop/error reason of a parked stream, or a
+	// retryable apply error still sitting on a Running row.
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v and %s and %s",
+		encodeString(binlogplayer.MessageTruncate(message)), ct.id, notParkedPredicate, informationalMessagePredicate)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
