@@ -267,6 +267,12 @@ func (c *Collation_gb18030_chinese_ci) next(src []byte) (weight uint32, width in
 // Two strings with the same weights are equal also when their lengths in
 // bytes differ: "à" is two bytes in gb18030 (A8 A4) and its upper case "À"
 // is four (81 30 86 38), and 'à' = 'À' is true.
+//
+// Collate does not follow MySQL where such a pair has other characters after
+// it, because MySQL has no order there: 'àA' = 'À' is true, and
+// STRCMP('àAA', 'À') is 1 while STRCMP('À', 'àAA') is 0. Collate compares the
+// weights of the characters, which is the order of WEIGHT_STRING() in MySQL:
+// 'àA' is after 'À', and 'À' is before 'àAA'.
 func (c *Collation_gb18030_chinese_ci) Collate(left, right []byte, isPrefix bool) int {
 	for len(left) > 0 && len(right) > 0 {
 		lWeight, lWidth, lMultibyte := c.next(left)
