@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // TestTIS620ThaiCI checks tis620_thai_ci against values measured on MySQL
@@ -95,4 +96,75 @@ func TestTIS620ThaiCI(t *testing.T) {
 			assert.Equal(t, tc.match, pattern.Match(tis620(tc.input)), "%q LIKE %q", tc.input, tc.pattern)
 		}
 	})
+}
+
+// TestTIS620ThaiCIZeroByte checks tis620_thai_ci for strings with a zero
+// byte against values measured on MySQL 8.4.13 and 8.0.46. MySQL compares
+// the bytes after a zero byte as well: STRCMP(x'00E7', x'E700') is -1. Its
+// weight string ends at the zero byte, so it does not have that order.
+func TestTIS620ThaiCIZeroByte(t *testing.T) {
+	coll := testcollation(t, "tis620_thai_ci")
+	decode := func(s string) []byte {
+		decoded, err := hex.DecodeString(s)
+		require.NoError(t, err)
+		return decoded
+	}
+
+	comparisons := []struct {
+		left, right string
+		cmp         int
+	}{
+		// The mark E7 has another byte at the second place of a string
+		// than at the first.
+		{"00E7", "E700", -1},
+		{"0061E7", "00E761", -1},
+		{"6100E7", "61E700", -1},
+		{"6100A1E7", "6100E7A1", -1},
+		// The letters after a zero byte compare as the ones before it:
+		// without case, and a leading vowel after its consonant.
+		{"0061", "0041", 0},
+		{"610061", "610041", 0},
+		{"00E0A1", "00A1E0", 0},
+		{"6100E0A1", "6100A1E0", 0},
+		// The zero byte is before every other byte.
+		{"00", "01", -1},
+		{"6100", "6120", -1},
+		{"6101", "6100", 1},
+		// The first of two marks is lost, also when a zero byte is
+		// between them.
+		{"E700E8", "E900E8", 0},
+		// The mark of the left string moves behind its zero byte.
+		{"E7610062", "610063", -1},
+	}
+	for _, tc := range comparisons {
+		left, right := decode(tc.left), decode(tc.right)
+		got := coll.Collate(left, right, false)
+		assert.Equal(t, tc.cmp, min(max(got, -1), 1), "STRCMP(x'%s', x'%s')", tc.left, tc.right)
+		reverse := coll.Collate(right, left, false)
+		assert.Equal(t, -tc.cmp, min(max(reverse, -1), 1), "STRCMP(x'%s', x'%s')", tc.right, tc.left)
+
+		// What MySQL has no function for: strings that are equal have
+		// one hash, and the short weight of the smaller string is not
+		// the greater one.
+		var leftHash, rightHash vthash.Hasher
+		coll.Hash(&leftHash, left, 0)
+		coll.Hash(&rightHash, right, 0)
+		tiny := coll.(TinyWeightCollation)
+		switch tc.cmp {
+		case 0:
+			assert.Equal(t, leftHash.Sum128(), rightHash.Sum128(), "hash of x'%s' and x'%s'", tc.left, tc.right)
+		case -1:
+			assert.LessOrEqual(t, tiny.TinyWeightString(left), tiny.TinyWeightString(right), "short weight of x'%s' and x'%s'", tc.left, tc.right)
+		case 1:
+			assert.GreaterOrEqual(t, tiny.TinyWeightString(left), tiny.TinyWeightString(right), "short weight of x'%s' and x'%s'", tc.left, tc.right)
+		}
+	}
+
+	// WEIGHT_STRING() has spaces from the zero byte on.
+	for input, weights := range map[string]string{
+		"00E7": "2020",
+		"E700": "FA20",
+	} {
+		assert.Equal(t, decode(weights), coll.WeightString(nil, decode(input), 0), "WEIGHT_STRING(x'%s')", input)
+	}
 }

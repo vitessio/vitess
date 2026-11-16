@@ -128,29 +128,19 @@ func (c *Collation_tis620_thai_ci) sortable(src []byte) []byte {
 	return buf
 }
 
-// Collate compares the sortable forms of left and right up to the first zero
-// byte.
+// Collate compares the sortable forms of left and right byte by byte. A zero
+// byte is a character as every other, as in MySQL: STRCMP(x'00E7', x'E700')
+// is -1, because the mark E7 gets another byte at the second place of a
+// string (F2) than at the first (FA).
+//
+// The weight string of MySQL ends at the first zero byte, see WeightString,
+// so it does not have the order of Collate for such strings: those two
+// strings have the weight strings 20 20 and FA 20.
 func (c *Collation_tis620_thai_ci) Collate(left, right []byte, rightIsPrefix bool) int {
 	if rightIsPrefix && len(left) > len(right) {
 		left = left[:len(right)]
 	}
-	l, r := c.sortable(left), c.sortable(right)
-
-	for i := 0; ; i++ {
-		var lb, rb byte
-		if i < len(l) {
-			lb = l[i]
-		}
-		if i < len(r) {
-			rb = r[i]
-		}
-		if lb != rb {
-			return int(lb) - int(rb)
-		}
-		if lb == 0 {
-			return 0
-		}
-	}
+	return bytes.Compare(c.sortable(left), c.sortable(right))
 }
 
 // weights returns the weight string of src without padding: the sortable form
@@ -162,9 +152,12 @@ func (c *Collation_tis620_thai_ci) weights(src []byte) []byte {
 	return c.sortable(src)
 }
 
+// TinyWeightString returns the first four bytes of the sortable form of src,
+// which is what Collate compares. It is not the start of the weight string
+// when src has a zero byte.
 func (c *Collation_tis620_thai_ci) TinyWeightString(src []byte) uint32 {
 	var w32 [4]byte
-	copy(w32[:], c.weights(src))
+	copy(w32[:], c.sortable(src))
 	return uint32(w32[0])<<24 | uint32(w32[1])<<16 | uint32(w32[2])<<8 | uint32(w32[3])
 }
 
@@ -189,15 +182,20 @@ func (c *Collation_tis620_thai_ci) WeightString(dst, src []byte, numCodepoints i
 	return weightStringPadingSimple(' ', dst, numCodepoints-len(weights), padToMax)
 }
 
+// Hash hashes the sortable form of src, which is what Collate compares, so
+// that two strings that Collate finds equal have one hash. The weight string
+// would not do: x'E700E8' and x'E900E8' are equal, because the first of two
+// marks is lost, and their weight strings FA 20 20 and FC 20 20 end before
+// the second mark.
 func (c *Collation_tis620_thai_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	if numCodepoints == 0 {
 		numCodepoints = len(src)
 	}
-	weights := c.weights(src[:min(len(src), numCodepoints)])
+	sortable := c.sortable(src[:min(len(src), numCodepoints)])
 
 	hasher.Write64(uint64(c.id))
-	hasher.Write(weights)
-	for i := len(weights); i < numCodepoints; i++ {
+	hasher.Write(sortable)
+	for i := len(sortable); i < numCodepoints; i++ {
 		hasher.Write8(' ')
 	}
 }
