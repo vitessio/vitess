@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -291,7 +292,10 @@ func TestEtcd2Topo(t *testing.T) {
 
 	// Run etcd-specific tests.
 	ts := newServer()
-	testKeyspaceLock(t, ts)
+	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{clientAddr}})
+	require.NoError(t, err)
+	t.Cleanup(func() { cli.Close() })
+	testKeyspaceLock(t, ts, cli)
 	ts.Close()
 }
 
@@ -546,7 +550,7 @@ func TestEtcd2TopoTryLockWithoutLeases(t *testing.T) {
 // testKeyspaceLock tests etcd-specific heartbeat (TTL).
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.
-func testKeyspaceLock(t *testing.T, ts *topo.Server) {
+func testKeyspaceLock(t *testing.T, ts *topo.Server, cli *clientv3.Client) {
 	ctx := t.Context()
 	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
 	if err := ts.CreateKeyspace(ctx, "test_keyspace", &topodatapb.Keyspace{}); err != nil {
@@ -632,6 +636,21 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	cond, stop := joined(takenOrFailed)
 	assert.Never(t, cond, 5*time.Second, 250*time.Millisecond, "the lock with an explicit TTL expired while still held")
 	stop()
+	unlock(&unlockErr)
+	require.NoError(t, unlockErr)
+
+	// A lock with an explicit TTL gets a lease with that TTL, not leaseTTL.
+	_, unlock, err = ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl value", topo.WithTTL(10*time.Second))
+	require.NoError(t, err)
+	locks, err := conn.ListDir(ctx, path.Join(keyspacePath, locksPath), false /*full*/)
+	require.NoError(t, err)
+	require.Len(t, locks, 1)
+	// The lock file is named after its lease.
+	leaseID, err := strconv.ParseInt(locks[0].Name, 10, 64)
+	require.NoError(t, err)
+	lease, err := cli.TimeToLive(ctx, clientv3.LeaseID(leaseID))
+	require.NoError(t, err)
+	assert.EqualValues(t, 10, lease.GrantedTTL, "the lock's lease was not granted its explicit TTL")
 	unlock(&unlockErr)
 	require.NoError(t, unlockErr)
 }
