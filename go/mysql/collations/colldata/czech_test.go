@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // TestCzechCollations checks latin2_czech_cs and cp1250_czech_cs against
@@ -116,5 +117,59 @@ func TestCzechCollations(t *testing.T) {
 				assert.Equal(t, like.match, pattern.Match(encode(like.input)), "%q LIKE %q", like.input, like.pattern)
 			}
 		})
+	}
+}
+
+// TestCP1250CzechCSTrailingSpaces checks that cp1250_czech_cs does not look
+// at the spaces at the end of a string, against values measured on MySQL
+// 8.4.13 and 8.0.46: 'a' = 'a ' is true, and x'6119' is after 'a ' although
+// the byte 19 has a lower value than the space.
+func TestCP1250CzechCSTrailingSpaces(t *testing.T) {
+	coll := testcollation(t, "cp1250_czech_cs")
+	decode := func(s string) []byte {
+		decoded, err := hex.DecodeString(s)
+		require.NoError(t, err)
+		return decoded
+	}
+
+	for _, tc := range []struct {
+		left, right string
+		cmp         int
+	}{
+		{"61", "6120", 0},
+		{"20", "", 0},
+		{"611920", "6119", 0},
+		// x'6119' is after 'a', and after 'a ' as well.
+		{"6119", "61", 1},
+		{"6119", "6120", 1},
+		{"19", "20", 1},
+		// A space that is not at the end is a character: the byte 19
+		// is before it.
+		{"611962", "612062", -1},
+		// Only a space is left out: 'a' with a zero byte is after 'a'.
+		{"6100", "61", 1},
+	} {
+		left, right := decode(tc.left), decode(tc.right)
+		got := coll.Collate(left, right, false)
+		assert.Equal(t, tc.cmp, min(max(got, -1), 1), "STRCMP(x'%s', x'%s')", tc.left, tc.right)
+		reverse := coll.Collate(right, left, false)
+		assert.Equal(t, -tc.cmp, min(max(reverse, -1), 1), "STRCMP(x'%s', x'%s')", tc.right, tc.left)
+
+		// What MySQL has no function for: strings that are equal have
+		// one hash.
+		if tc.cmp == 0 {
+			var leftHash, rightHash vthash.Hasher
+			coll.Hash(&leftHash, left, 0)
+			coll.Hash(&rightHash, right, 0)
+			assert.Equal(t, leftHash.Sum128(), rightHash.Sum128(), "hash of x'%s' and x'%s'", tc.left, tc.right)
+		}
+	}
+
+	// WEIGHT_STRING() has the values of the space at the end.
+	for input, weights := range map[string]string{
+		"61":   "A402",
+		"6120": "A4820201",
+	} {
+		assert.Equal(t, decode(weights), coll.WeightString(nil, decode(input), 0), "WEIGHT_STRING(x'%s')", input)
 	}
 }
