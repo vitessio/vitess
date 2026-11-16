@@ -673,7 +673,7 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	span.Annotate("clear_target_cells", req.ClearTargetCells)
 
 	if err := uuid.Validate(req.Uuid); err != nil {
-		return nil, vterrors.Wrapf(err, "invalid UUID provided: %s", req.Uuid)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid UUID provided: %s: %v", req.Uuid, err)
 	}
 	if req.ClearSourceCells && len(req.SourceCells) > 0 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both source_cells and clear_source_cells")

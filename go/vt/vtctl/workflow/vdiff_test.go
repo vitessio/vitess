@@ -863,7 +863,8 @@ func TestVDiffUpdate(t *testing.T) {
 				Uuid:           "not-a-uuid",
 				TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 			},
-			wantErr: "invalid UUID provided: not-a-uuid",
+			wantErr:  "invalid UUID provided: not-a-uuid",
+			wantCode: vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 		{
 			name: "invalid tablet type",
