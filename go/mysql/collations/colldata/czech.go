@@ -316,10 +316,20 @@ func (s *cp1250CzechScanner) next() byte {
 }
 
 // Collate compares the values of left and right, see
-// Collation_cp1250_czech_cs.
+// Collation_cp1250_czech_cs. MySQL does not look at the spaces at the end of
+// either string: 'a' = 'a ' is true, and x'6119' is after 'a ' although the
+// byte 19 has a lower value than the space, as it is after 'a'. A space
+// inside a string is a character as every other.
+//
+// A weight string has the values of the spaces at the end, also in MySQL, so
+// it does not have the order of Collate for such strings.
 func (c *Collation_cp1250_czech_cs) Collate(left, right []byte, rightIsPrefix bool) int {
-	if rightIsPrefix && len(left) > len(right) {
-		left = left[:len(right)]
+	if rightIsPrefix {
+		if len(left) > len(right) {
+			left = left[:len(right)]
+		}
+	} else {
+		left, right = bytes.TrimRight(left, " "), bytes.TrimRight(right, " ")
 	}
 	l, r := cp1250CzechScanner{src: left}, cp1250CzechScanner{src: right}
 	for {
@@ -363,12 +373,14 @@ func (c *Collation_cp1250_czech_cs) WeightString(dst, src []byte, numCodepoints 
 	return dst
 }
 
+// Hash hashes the values of src without the spaces at its end, which Collate
+// does not look at either.
 func (c *Collation_cp1250_czech_cs) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	if numCodepoints > 0 {
 		src = src[:min(len(src), numCodepoints)]
 	}
 	hasher.Write64(uint64(c.id))
-	hasher.Write(c.weights(nil, src))
+	hasher.Write(c.weights(nil, bytes.TrimRight(src, " ")))
 }
 
 // WeightStringLen returns two values for each character, one in each pass.
