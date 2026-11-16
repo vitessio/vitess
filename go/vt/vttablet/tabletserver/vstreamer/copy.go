@@ -81,7 +81,11 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	go func() {
 		uvs.stopPos = replication.Position{} // reset stopPos which was potentially set during fastforward
 		startPos := replication.EncodePosition(uvs.pos)
-		vs := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", uvs.options)
+		vs, err := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", uvs.options)
+		if err != nil {
+			errch <- err
+			return
+		}
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
@@ -374,7 +378,10 @@ func (uvs *uvstreamer) fastForward(stopPos string) error {
 		slog.String("stop_position", stopPos),
 	)
 	uvs.stopPos, _ = replication.DecodePosition(stopPos)
-	vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", uvs.options)
+	vs, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", uvs.options)
+	if err != nil {
+		return err
+	}
 	uvs.setVs(vs)
 	return vs.Stream()
 }
