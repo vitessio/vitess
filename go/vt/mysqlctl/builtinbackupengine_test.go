@@ -607,21 +607,25 @@ func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds maximum allowed value")
 }
 
+// TestExecuteBackupRejectsUnalignedChunkSize checks that chunk sizes above the minimum must be a
+// multiple of 1MiB, including ones that are a multiple of the O_DIRECT alignment.
 func TestExecuteBackupRejectsUnalignedChunkSize(t *testing.T) {
-	oldThreshold := backupFileChunkThreshold
-	oldSize := backupFileChunkSize
-	t.Cleanup(func() {
-		backupFileChunkThreshold = oldThreshold
-		backupFileChunkSize = oldSize
-	})
+	for _, size := range []uint64{1_000_000_000, 5*1024*1024 + directIOAlignment} {
+		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
+			oldThreshold := backupFileChunkThreshold
+			oldSize := backupFileChunkSize
+			t.Cleanup(func() {
+				backupFileChunkThreshold = oldThreshold
+				backupFileChunkSize = oldSize
+			})
+			backupFileChunkThreshold = 2_000_000_000
+			backupFileChunkSize = size
 
-	// Above the minimum chunk size, but not a multiple of the O_DIRECT alignment.
-	backupFileChunkThreshold = 2_000_000_000
-	backupFileChunkSize = 1_000_000_000
-
-	be := &BuiltinBackupEngine{}
-	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
-	require.ErrorContains(t, err, "must be a multiple of 4096")
+			be := &BuiltinBackupEngine{}
+			_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
+			require.ErrorContains(t, err, "must be a multiple of 1048576")
+		})
+	}
 }
 
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
@@ -779,19 +783,22 @@ func backupWithManyChunks(t *testing.T, backupRoot string) (string, uint32) {
 		chunkSize = 64 * 1024        // 64KiB → 256 chunks
 	)
 
-	// Override the minimum chunk size so we can use 64KiB chunks without
-	// hitting the 4MiB production floor validation in ExecuteBackup.
+	// Override the minimum chunk size and the multiple of chunk sizes so we can use 64KiB chunks
+	// without hitting the 4MiB production floor and the 1MiB multiple validation in ExecuteBackup.
 	oldThreshold := backupFileChunkThreshold
 	oldSize := backupFileChunkSize
 	oldMin := minBackupFileChunkSize
+	oldMultiple := backupFileChunkSizeMultiple
 	t.Cleanup(func() {
 		backupFileChunkThreshold = oldThreshold
 		backupFileChunkSize = oldSize
 		minBackupFileChunkSize = oldMin
+		backupFileChunkSizeMultiple = oldMultiple
 	})
 	backupFileChunkThreshold = chunkSize
 	backupFileChunkSize = chunkSize
 	minBackupFileChunkSize = chunkSize
+	backupFileChunkSizeMultiple = chunkSize
 
 	// Create a single 16MiB file filled with random (incompressible) data.
 	filebackupstorage.FileBackupStorageRoot = backupRoot

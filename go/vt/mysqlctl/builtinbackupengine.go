@@ -121,6 +121,12 @@ var (
 	backupFileChunkSize      uint64 = 1 * 1024 * 1024 * 1024 // 1 GiB
 	minBackupFileChunkSize   uint64 = 4 * 1024 * 1024        // 4 MiB minimum to prevent the accidental allocation of a huge amount of files
 
+	// backupFileChunkSizeMultiple is what chunk sizes must be a multiple of, so that chunks start at
+	// offsets that restores can write with O_DIRECT. It is larger than directIOAlignment so that the
+	// last bytes of a file, which are written through the page cache, never share a memory page with
+	// the previous chunk, which another worker writes with O_DIRECT, whatever the page size is.
+	backupFileChunkSizeMultiple uint64 = 1024 * 1024
+
 	errRestoreFatal = errors.New("fatal restore error")
 )
 
@@ -283,7 +289,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
-	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore. Must be a multiple of 4096, so that every chunk can be restored with --builtinbackup-restore-write-mode=direct.")
+	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore. Must be a multiple of 1MiB (1048576), so that every chunk can be restored with --builtinbackup-restore-write-mode=direct.")
 	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before the existing data is removed. Incremental backups are always restored buffered.")
 }
 
@@ -367,10 +373,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
 	}
-	// Chunks start at multiples of the chunk size, and restores can only write them with O_DIRECT when
-	// those offsets are aligned.
-	if backupFileChunkThreshold > 0 && backupFileChunkSize%directIOAlignment != 0 {
-		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be a multiple of %d", directIOAlignment)
+	// Chunks start at multiples of the chunk size, see backupFileChunkSizeMultiple.
+	if backupFileChunkThreshold > 0 && backupFileChunkSize%backupFileChunkSizeMultiple != 0 {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be a multiple of %d", backupFileChunkSizeMultiple)
 	}
 	if backupFileChunkThreshold > 0 && backupFileChunkSize > math.MaxInt64 {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size exceeds maximum allowed value of %d", int64(math.MaxInt64))

@@ -842,7 +842,7 @@ The builtin backup engine now supports splitting large files into chunks for par
 Two new flags control chunking behavior:
 
 - `--builtinbackup-file-chunk-threshold` (default `0`, chunking disabled): files larger than this size in bytes are split into chunks during backup.
-- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk. It must be a multiple of 4096, so that chunks can be restored with `O_DIRECT`.
+- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk. It must be a multiple of 1 MiB (`1048576`), so that chunks can be restored with `O_DIRECT`.
 
 A third flag controls how chunks are written to disk during restores:
 
