@@ -15666,12 +15666,12 @@ type VDiffUpdateRequest struct {
 	// is left unchanged unless clear_target_cells is true.
 	TargetCells []string `protobuf:"bytes,8,rep,name=target_cells,json=targetCells,proto3" json:"target_cells,omitempty"`
 	// When true, reset picker_options.source_cell to every cell in the
-	// topology (the same default as vdiff create). Mutually exclusive
-	// with a non-empty source_cells list.
+	// source cluster's topology (for Mount/Migrate workflows, the external
+	// cluster's). Mutually exclusive with a non-empty source_cells list.
 	ClearSourceCells bool `protobuf:"varint,9,opt,name=clear_source_cells,json=clearSourceCells,proto3" json:"clear_source_cells,omitempty"`
 	// When true, reset picker_options.target_cell to every cell in the
-	// topology (the same default as vdiff create). Mutually exclusive
-	// with a non-empty target_cells list.
+	// local topology. Mutually exclusive with a non-empty target_cells
+	// list.
 	ClearTargetCells bool `protobuf:"varint,10,opt,name=clear_target_cells,json=clearTargetCells,proto3" json:"clear_target_cells,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache

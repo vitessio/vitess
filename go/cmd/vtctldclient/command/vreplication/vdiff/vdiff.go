@@ -286,8 +286,9 @@ If a shard rejects the update, the command fails and other shards may already
 have been updated. It is safe to rerun the update after stopping the remaining
 shards.
 
-Use --clear-source-cells / --clear-target-cells to reset cells to all cells
-(the same default as create).`,
+Use --clear-source-cells to reset source cells to all cells in the source
+cluster (for Mount/Migrate workflows, the external cluster), and
+--clear-target-cells to reset target cells to all cells in the local cluster.`,
 		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer update a037a9e2-5628-11ee-8c99-0242ac120002 --tablet-types PRIMARY --tablet-types-in-preference-order`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Update"},
@@ -874,8 +875,8 @@ func registerCommands(root *cobra.Command) {
 
 	update.Flags().StringSliceVar(&updateOptions.SourceCells, "source-cells", nil, "The source cell(s) to compare from. When omitted, the existing value is left unchanged.")
 	update.Flags().StringSliceVar(&updateOptions.TargetCells, "target-cells", nil, "The target cell(s) to compare with. When omitted, the existing value is left unchanged.")
-	update.Flags().BoolVar(&updateOptions.ClearSourceCells, "clear-source-cells", false, "Reset source cells to all cells (the same default as create). Cannot be combined with --source-cells.")
-	update.Flags().BoolVar(&updateOptions.ClearTargetCells, "clear-target-cells", false, "Reset target cells to all cells (the same default as create). Cannot be combined with --target-cells.")
+	update.Flags().BoolVar(&updateOptions.ClearSourceCells, "clear-source-cells", false, "Reset source cells to all cells in the source cluster (for Mount/Migrate workflows, the external cluster). Cannot be combined with --source-cells.")
+	update.Flags().BoolVar(&updateOptions.ClearTargetCells, "clear-target-cells", false, "Reset target cells to all cells in the local cluster. Cannot be combined with --target-cells.")
 	update.Flags().Var((*topoprotopb.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "Tablet types to use on the source and target (PRIMARY, REPLICA, RDONLY). When omitted, the existing value is left unchanged.")
 	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
 	update.Flags().StringSliceVar(&updateOptions.TargetShards, "target-shards", nil, "The target shards to update the vdiff on; default is all shards.")
