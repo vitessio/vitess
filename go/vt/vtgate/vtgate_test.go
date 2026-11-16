@@ -57,6 +57,20 @@ var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
+// tabletExecuteOptions are the options a tablet gets for a session with
+// executeOptions: vtgate asks the tablet for all the field metadata, and
+// strips the result to what the session asked for itself.
+var tabletExecuteOptions = &querypb.ExecuteOptions{
+	IncludedFields: querypb.ExecuteOptions_ALL,
+}
+
+// typeOnlyFields are the fields of sandboxconn.SingleRowResult that a session
+// with executeOptions gets.
+var typeOnlyFields = []*querypb.Field{
+	{Type: sqltypes.Int32},
+	{Type: sqltypes.VarChar},
+}
+
 func TestVTGateExecute(t *testing.T) {
 	vtg, sbc, ctx := createVtgateEnv(t)
 	counts := vtg.timings.Counts()
@@ -76,9 +90,10 @@ func TestVTGateExecute(t *testing.T) {
 	require.NoError(t, err)
 
 	want := *sandboxconn.SingleRowResult
+	want.Fields = typeOnlyFields
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &want, qr)
-	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	assert.Truef(t, proto.Equal(sbc.Options[0], tabletExecuteOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], tabletExecuteOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -140,9 +155,8 @@ func TestVTGatePrepare(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, paramsCount)
 
-	want := sandboxconn.SingleRowResult.Fields
-	utils.MustMatch(t, want, qr)
-	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	utils.MustMatch(t, typeOnlyFields, qr)
+	assert.Truef(t, proto.Equal(sbc.Options[0], tabletExecuteOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], tabletExecuteOptions)
 
 	newCounts := vtg.timings.Counts()
 	require.Contains(t, newCounts, "All")
@@ -201,6 +215,11 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	)
 	require.NoError(t, err)
 	wantQr := *sandboxconn.SingleRowResult
+	// A session without options gets the name and the type of a field.
+	wantQr.Fields = []*querypb.Field{
+		{Name: "id", Type: sqltypes.Int32},
+		{Name: "value", Type: sqltypes.VarChar},
+	}
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &wantQr, qr)
 
@@ -268,13 +287,13 @@ func TestVTGateStreamExecute(t *testing.T) {
 	)
 	require.NoError(t, err)
 	want := []*sqltypes.Result{{
-		Fields: sandboxconn.StreamRowResult.Fields,
+		Fields: typeOnlyFields,
 	}, {
-		Fields: sandboxconn.StreamRowResult.Fields,
+		Fields: typeOnlyFields,
 		Rows:   sandboxconn.StreamRowResult.Rows,
 	}}
 	utils.MustMatch(t, want, qrs)
-	assert.Truef(t, proto.Equal(sbc.Options[0], executeOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	assert.Truef(t, proto.Equal(sbc.Options[0], tabletExecuteOptions), "got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], tabletExecuteOptions)
 }
 
 func TestVTGateBindVarError(t *testing.T) {

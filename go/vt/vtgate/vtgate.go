@@ -618,7 +618,7 @@ func (vtg *VTGate) Execute(
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		vtg.queryTextCharsProcessed.Add(statsKey, int64(len(sql)))
-		return session, qr, nil
+		return session, qr.StripMetadata(includedFields(session)), nil
 	}
 
 	query := map[string]any{
@@ -628,6 +628,20 @@ func (vtg *VTGate) Execute(
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute, vtg.executor.vm.parser)
 	return session, nil, err
+}
+
+// includedFields returns the field metadata that the session asked for
+// (included_fields): all of it, the name and the type, or the type only. It
+// is the name and the type for a session without options.
+//
+// vtgate asks the tablets for all of it, see tabletOptions, and reduces a
+// result to what the session asked for when the result leaves vtgate.
+// Execute, StreamExecute and Prepare do that, and the other entry points go
+// through those. The fields that vtgate makes itself are reduced with the
+// others: a session that asked for the type only used to get the name of a
+// count(*) that vtgate summed over the shards, and of no other column.
+func includedFields(session *vtgatepb.Session) querypb.ExecuteOptions_IncludedFields {
+	return sqltypes.IncludeFieldsOrDefault(session.GetOptions())
 }
 
 func queryIngressBytesForStatements(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, queries []string) []uint64 {
@@ -765,6 +779,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	safeSession := econtext.NewSafeSession(session)
+	included := includedFields(session)
 	var err error
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
@@ -780,7 +795,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
-				return callback(reply)
+				return callback(reply.StripMetadata(included))
 			})
 		safeSession.RemoveInternalSavepoint()
 	}
@@ -857,6 +872,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 
 	fld, paramsCount, err = vtg.executor.Prepare(ctx, "Prepare", econtext.NewSafeSession(session), sql)
 	if err == nil {
+		fld = (&sqltypes.Result{Fields: fld}).StripMetadata(includedFields(session)).Fields
 		return session, fld, paramsCount, nil
 	}
 

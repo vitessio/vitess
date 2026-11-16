@@ -19,6 +19,8 @@ limitations under the License.
 package columncollation
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"testing"
 
@@ -28,8 +30,10 @@ import (
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttest"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
@@ -143,5 +147,67 @@ func TestVtgateEvaluatesColumnCollations(t *testing.T) {
 		assert.ElementsMatch(t,
 			[]string{"1-1", "2-2", "3-3", "4-4", "4-5", "5-4", "5-5", "6-6"},
 			column("select concat(a.id, '-', b.id) from (select id, l from sorted order by id limit 10) as a join (select id, l from sorted order by id limit 10) as b on a.l = b.l", 0), workload)
+	}
+
+	// A gRPC session chooses how much of the field metadata it gets
+	// (included_fields), and gets the name and the type when it does not
+	// choose. vtgate asks the tablets for all of it whatever the session
+	// chose, because the fields say which character set the text it compares
+	// is in, and strips the result for the session itself. The rows with
+	// 'Müller' and with 'MUELLER' are on different shards, so it is vtgate
+	// that makes one group of them.
+	gconn, err := vtgateconn.Dial(t.Context(), fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc")))
+	require.NoError(t, err)
+	t.Cleanup(gconn.Close)
+
+	for _, tt := range []struct {
+		name    string
+		options *querypb.ExecuteOptions
+		fields  []*querypb.Field
+	}{{
+		name:   "no options",
+		fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar}, {Name: "count(*)", Type: sqltypes.Int64}},
+	}, {
+		name:    "type and name",
+		options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_AND_NAME},
+		fields:  []*querypb.Field{{Name: "l", Type: sqltypes.VarChar}, {Name: "count(*)", Type: sqltypes.Int64}},
+	}, {
+		name:    "type only",
+		options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY},
+		fields:  []*querypb.Field{{Type: sqltypes.VarChar}, {Type: sqltypes.Int64}},
+	}} {
+		t.Run("grpc/"+tt.name, func(t *testing.T) {
+			const query = "select l, count(*) from sorted group by l order by l"
+			counts := func(rows []sqltypes.Row) []string {
+				var counts []string
+				for _, row := range rows {
+					counts = append(counts, row[1].ToString())
+				}
+				return counts
+			}
+
+			qr, err := gconn.Session("ks", tt.options).Execute(t.Context(), query, nil, false)
+			require.NoError(t, err)
+			assert.Equal(t, []string{"1", "1", "1", "2", "1"}, counts(qr.Rows))
+			assert.Truef(t, sqltypes.FieldsEqual(tt.fields, qr.Fields), "got fields %v, want %v", qr.Fields, tt.fields)
+
+			stream, err := gconn.Session("ks", tt.options).StreamExecute(t.Context(), query, nil)
+			require.NoError(t, err)
+			var fields []*querypb.Field
+			var rows []sqltypes.Row
+			for {
+				qr, err := stream.Recv()
+				if err == io.EOF {
+					break
+				}
+				require.NoError(t, err)
+				if len(qr.Fields) != 0 {
+					fields = qr.Fields
+				}
+				rows = append(rows, qr.Rows...)
+			}
+			assert.Equal(t, []string{"1", "1", "1", "2", "1"}, counts(rows))
+			assert.Truef(t, sqltypes.FieldsEqual(tt.fields, fields), "got fields %v, want %v", fields, tt.fields)
+		})
 	}
 }

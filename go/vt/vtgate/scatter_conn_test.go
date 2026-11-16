@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,6 +36,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
@@ -149,36 +151,35 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 		initialSessionOpts *querypb.ExecuteOptions
 		fetchLastInsertID  bool
 		expectSessionNil   bool
-		expectFetchLastID  *bool // nil means checkLastOptionNil, otherwise checkLastOption(*bool)
+		expectFetchLastID  bool
 	}{
 		{
 			name:               "no session options, fetchLastInsertID = false",
 			initialSessionOpts: nil,
 			fetchLastInsertID:  false,
 			expectSessionNil:   true,
-			expectFetchLastID:  nil,
+			expectFetchLastID:  false,
 		},
 		{
 			name:               "no session options, fetchLastInsertID = true",
 			initialSessionOpts: nil,
 			fetchLastInsertID:  true,
 			expectSessionNil:   true,
-
-			expectFetchLastID: new(true),
+			expectFetchLastID:  true,
 		},
 		{
 			name:               "session options set, fetchLastInsertID = false",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  false,
 			expectSessionNil:   false,
-			expectFetchLastID:  new(false),
+			expectFetchLastID:  false,
 		},
 		{
 			name:               "session options set, fetchLastInsertID = true",
 			initialSessionOpts: &querypb.ExecuteOptions{},
 			fetchLastInsertID:  true,
 			expectSessionNil:   false,
-			expectFetchLastID:  new(true),
+			expectFetchLastID:  true,
 		},
 	}
 
@@ -190,12 +191,10 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 			checkLastOption := func(expected bool) {
 				require.Len(t, sbc0.Options, 1)
 				options := sbc0.Options[0]
+				// A tablet always gets options: they ask it for all the
+				// field metadata (see tabletOptions).
+				require.NotNil(t, options)
 				assert.Equal(t, expected, options.FetchLastInsertId)
-				sbc0.Options = nil
-			}
-			checkLastOptionNil := func() {
-				require.Len(t, sbc0.Options, 1)
-				assert.Nil(t, sbc0.Options[0])
 				sbc0.Options = nil
 			}
 
@@ -211,12 +210,86 @@ func TestFetchLastInsertIDResets(t *testing.T) {
 				assert.False(t, session.Options.FetchLastInsertId)
 			}
 
-			if tt.expectFetchLastID == nil {
-				checkLastOptionNil()
-			} else {
-				checkLastOption(*tt.expectFetchLastID)
-			}
+			checkLastOption(tt.expectFetchLastID)
 		})
+	}
+}
+
+func TestScatterConnAsksTabletsForAllFields(t *testing.T) {
+	// vtgate reads the collation, the length and the flags of a column from
+	// the fields of a tablet's result, so it asks the tablet for all the field
+	// metadata, whatever the session asked for. The session's own options keep
+	// what the client asked for: vtgate strips the result with them.
+	ks := "TestScatterConnAsksTabletsForAllFields"
+	ctx := utils.LeakCheckContext(t)
+
+	createSandbox(ks)
+	hc := discovery.NewFakeHealthCheck(nil)
+	sc := newTestScatterConn(ctx, hc, newSandboxForCells(ctx, []string{"aa"}), "aa")
+	sbc := hc.AddTestTablet("aa", "0", 1, ks, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+
+	rss := []*srvtopo.ResolvedShard{{
+		Target: &querypb.Target{
+			Keyspace:   ks,
+			Shard:      "0",
+			TabletType: topodatapb.TabletType_PRIMARY,
+		},
+		Gateway: sbc,
+	}}
+	query := &querypb.BoundQuery{Sql: "query"}
+
+	calls := []struct {
+		name string
+		call func(session *econtext.SafeSession) error
+	}{{
+		name: "execute",
+		call: func(session *econtext.SafeSession) error {
+			_, errs := sc.ExecuteMultiShard(ctx, nil, rss, []*querypb.BoundQuery{query}, session, true /*autocommit*/, false, nullResultsObserver{}, false)
+			return vterrors.Aggregate(errs)
+		},
+	}, {
+		name: "stream",
+		call: func(session *econtext.SafeSession) error {
+			errs := sc.StreamExecuteMulti(ctx, nil, query.Sql, rss, []map[string]*querypb.BindVariable{nil}, session, true /*autocommit*/, func(*sqltypes.Result) error {
+				return nil
+			}, nullResultsObserver{}, false)
+			return vterrors.Aggregate(errs)
+		},
+	}, {
+		name: "lock",
+		call: func(session *econtext.SafeSession) error {
+			_, err := sc.ExecuteLock(ctx, rss[0], query, session, sqlparser.IsFreeLock)
+			return err
+		},
+	}}
+	sessions := []struct {
+		name    string
+		options *querypb.ExecuteOptions
+	}{{
+		name: "no options",
+	}, {
+		name:    "type and name",
+		options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_AND_NAME},
+	}, {
+		name:    "type only",
+		options: &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_TYPE_ONLY},
+	}}
+
+	for _, call := range calls {
+		for _, tt := range sessions {
+			t.Run(call.name+"/"+tt.name, func(t *testing.T) {
+				sbc.ClearOptions()
+				session := econtext.NewSafeSession(nil)
+				session.Options = tt.options.CloneVT()
+
+				require.NoError(t, call.call(session))
+
+				sent := sbc.GetOptions()
+				require.Len(t, sent, 1)
+				assert.Equal(t, querypb.ExecuteOptions_ALL, sent[0].GetIncludedFields())
+				assert.Truef(t, proto.Equal(tt.options, session.Options), "the session options changed: got %v, want %v", session.Options, tt.options)
+			})
+		}
 	}
 }
 

@@ -618,7 +618,9 @@ MySQL compares a column in the collation of the column. VTGate gets the text of 
 
 VTGate now converts the text to the character set of the column for the comparison, and returns what MySQL returns. The rows themselves are returned as before.
 
-**Impact**: the order, the groups and the rows of queries on text columns that are not `utf8mb4`, and that VTGate evaluates itself, can change for text that is not ASCII. Queries on `utf8mb4` and `utf8mb3` columns are not affected, and in most character sets neither is text that is all ASCII. During a rolling upgrade, VTGates of both versions can return such rows in a different order. A session that asks for reduced field metadata through the gRPC API (`included_fields` other than `ALL`) keeps the previous behavior, because the tablet then does not say which character set it sent.
+**Impact**: the order, the groups and the rows of queries on text columns that are not `utf8mb4`, and that VTGate evaluates itself, can change for text that is not ASCII. Queries on `utf8mb4` and `utf8mb3` columns are not affected, and in most character sets neither is text that is all ASCII. During a rolling upgrade, VTGates of both versions can return such rows in a different order.
+
+To know which character set the text of a result is in, VTGate now asks the tablets for the full field metadata for every session, and applies the `included_fields` setting of a gRPC session itself. Such a session gets the fields it got before, with one exception: the fields of columns that VTGate computes are reduced as well. With `TYPE_ONLY`, the field of a `count(*)` that VTGate summed over the shards used to keep its name. The responses of the tablets to VTGate are larger for such a session, by the metadata of each column once per result.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

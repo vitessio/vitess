@@ -138,6 +138,35 @@ const (
 	newQS
 )
 
+// tabletOptions returns the execute options to send to a tablet for a query
+// of the session. They are the session's options, except that they ask the
+// tablet for all the field metadata, whatever the session asked for
+// (included_fields).
+//
+// vtgate reads the character set of the text, the length and the flags of a
+// column from the fields of a tablet's result. A session that asked for the
+// name and the type only, which a gRPC session does unless it says otherwise,
+// left vtgate without them: it took the utf8mb4 text of a latin1_german2_ci
+// column for latin1 text, and grouped 'Müller' and 'MUELLER' of two shards
+// into two groups where MySQL has one. The session gets the metadata it asked
+// for when the result leaves vtgate, see includedFields.
+//
+// The options are a copy, because concurrent calls share those of the
+// session: a caller can set a field of them for its own call.
+func tabletOptions(session *econtext.SafeSession) *querypb.ExecuteOptions {
+	var options *querypb.ExecuteOptions
+	// The explicit session.Session selector spells out why the nil check
+	// on the embedded session is needed.
+	//nolint:staticcheck // QF1008
+	if session != nil && session.Session != nil && session.Session.Options != nil {
+		options = session.Session.Options.CloneVT()
+	} else {
+		options = &querypb.ExecuteOptions{}
+	}
+	options.IncludedFields = querypb.ExecuteOptions_ALL
+	return options
+}
+
 // ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 //
@@ -234,14 +263,8 @@ func (stc *ScatterConn) executeMultiShard(
 	// FetchLastInsertId. Mutating the shared session options in place races
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
-	var callOptions *querypb.ExecuteOptions
-	// The explicit session.Session selector spells out why the nil check
-	// on the embedded session is needed.
-	//nolint:staticcheck // QF1008
-	if session != nil && session.Session != nil && session.Session.Options != nil {
-		callOptions = session.Session.Options.CloneVT()
-		callOptions.FetchLastInsertId = fetchLastInsertID
-	}
+	callOptions := tabletOptions(session)
+	callOptions.FetchLastInsertId = fetchLastInsertID
 
 	return stc.multiGoTransaction(
 		ctx,
@@ -261,10 +284,6 @@ func (stc *ScatterConn) executeMultiShard(
 			reservedID := info.reservedID
 
 			opts = callOptions
-
-			if opts == nil && fetchLastInsertID {
-				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
-			}
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
@@ -466,14 +485,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	// FetchLastInsertId. Mutating the shared session options in place races
 	// with concurrent sources marshalling them (e.g. a streamed UNION runs
 	// each source through its own StreamExecuteMulti against the same session).
-	var callOptions *querypb.ExecuteOptions
-	// The explicit session.Session selector spells out why the nil check
-	// on the embedded session is needed.
-	//nolint:staticcheck // QF1008
-	if session != nil && session.Session != nil && session.Session.Options != nil {
-		callOptions = session.Session.Options.CloneVT()
-		callOptions.FetchLastInsertId = fetchLastInsertID
-	}
+	callOptions := tabletOptions(session)
+	callOptions.FetchLastInsertId = fetchLastInsertID
 
 	allErrors := stc.multiGoTransaction(
 		ctx,
@@ -492,10 +505,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			reservedID := info.reservedID
 
 			opts = callOptions
-
-			if opts == nil && fetchLastInsertID {
-				opts = &querypb.ExecuteOptions{FetchLastInsertId: fetchLastInsertID}
-			}
 
 			if autocommit {
 				// As this is auto-commit, the transactionID is supposed to be zero.
@@ -841,7 +850,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		return nil, vterrors.VT13001("session cannot be nil")
 	}
 
-	opts = session.Options
+	opts = tabletOptions(session)
 	info, err := lockInfo(rs.Target, session, lockFuncType)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.
