@@ -744,6 +744,98 @@ func TestHandleUpdateActionSerializesWithControllerStartup(t *testing.T) {
 	require.Contains(t, err.Error(), "has a live controller")
 }
 
+// TestHandleResumeActionSerializesWithUpdate confirms that a resume does
+// not read the vdiff record (and with it the options) while the engine
+// mutex is held, as it is by an update across its state check and options
+// write. The resume moves the vdiff to pending before taking the mutex, so
+// without it the resume could read the old options and start a controller
+// with them while the update reports success.
+func TestHandleResumeActionSerializesWithUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	vdiffenv := newTestVDiffEnv(t)
+	defer vdiffenv.close()
+
+	vduuid := uuid.New().String()
+	// The options as written by an update while the mutex is held.
+	updatedJSON := `{"picker_options":{"tablet_types":"in_order:primary","source_cell":"zone1","target_cell":"zone1"},"core_options":{},"report_options":{}}`
+	record := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
+		// The record is reported as stopped so that the controller's run
+		// loop exits right away without diffing anything.
+		fmt.Sprintf("1|%s|wf|ks|0|%s|stopped|%s|", vduuid, vdiffDBName, updatedJSON),
+	)
+	idQuery := "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(vduuid) + " and db_name = " + encodeString(vdiffDBName)
+	resumeQuery := fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(vduuid), encodeString(vdiffDBName))
+	byIDQuery := "select * from _vt.vdiff where id = 1 and db_name = " + encodeString(vdiffDBName)
+	vdiffenv.dbClient.ExpectRequest(idQuery, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"), nil)
+	vdiffenv.dbClient.ExpectRequest(resumeQuery, singleRowAffected, nil)
+	vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // resume
+	vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // controller run
+	dbClient := &queryNotifyingDBClient{MockDBClient: vdiffenv.dbClient, queried: make(chan string, 10)}
+
+	vdiffenv.vde.mu.Lock()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vdiffenv.vde.handleCreateResumeAction(ctx, dbClient, ResumeAction, &tabletmanagerdatapb.VDiffRequest{
+			Action:    string(ResumeAction),
+			VdiffUuid: vduuid,
+			Keyspace:  "ks",
+			Workflow:  "wf",
+		}, &tabletmanagerdatapb.VDiffResponse{})
+	}()
+
+	// The id lookup and the move to pending happen before the mutex is
+	// taken, so they are expected while it is held.
+	for _, want := range []string{"select id as id from _vt.vdiff", "update _vt.vdiff as vd"} {
+		select {
+		case q := <-dbClient.queried:
+			if !strings.HasPrefix(q, want) {
+				vdiffenv.vde.mu.Unlock()
+				require.FailNow(t, "unexpected query while the engine mutex was held", "query: %s", q)
+			}
+		case err := <-errCh:
+			vdiffenv.vde.mu.Unlock()
+			require.FailNow(t, "resume returned before moving the vdiff to pending", "err: %v", err)
+		case <-ctx.Done():
+			vdiffenv.vde.mu.Unlock()
+			require.FailNow(t, "timed out waiting for the resume to move the vdiff to pending")
+		}
+	}
+
+	select {
+	case q := <-dbClient.queried:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "resume read the vdiff record while the engine mutex was held", "query: %s", q)
+	case err := <-errCh:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "resume returned while the engine mutex was held", "err: %v", err)
+	case <-time.After(250 * time.Millisecond):
+	}
+	vdiffenv.vde.mu.Unlock()
+
+	require.NoError(t, <-errCh)
+	vdiffenv.dbClient.Wait()
+
+	vdiffenv.vde.mu.Lock()
+	defer vdiffenv.vde.mu.Unlock()
+	ct := vdiffenv.vde.controllers[1]
+	require.NotNil(t, ct)
+	t.Cleanup(func() {
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, ct.id)
+	})
+	select {
+	case <-ct.done:
+	case <-ctx.Done():
+		require.FailNow(t, "timed out waiting for the controller to finish")
+	}
+	require.Equal(t, "in_order:primary", ct.options.GetPickerOptions().GetTabletTypes())
+}
+
 // TestResumeUsesFreshOptions confirms that each resumed controller gets
 // its own options value, so resuming one vdiff does not change the
 // options of a vdiff that was resumed earlier on the same tablet.
