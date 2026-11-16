@@ -94,6 +94,38 @@ func (cached *multibyteWildcard) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *textConversion) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field to vitess.io/vitess/go/mysql/collations/colldata.Charset
+	if cc, ok := cached.to.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
+func (cached *textPattern) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field text vitess.io/vitess/go/mysql/collations/colldata.textConversion
+	size += cached.text.CachedSize(false)
+	// field pattern vitess.io/vitess/go/mysql/collations/colldata.WildcardPattern
+	if cc, ok := cached.pattern.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
 func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -170,7 +170,7 @@ func Lookup(id collations.ID) Collation {
 	}
 	// The ID of a collation of ForText is larger than every ID of MySQL.
 	if id&textCollationFlag != 0 {
-		return textCollations.lookup(id)
+		return lookupTextCollation(id)
 	}
 	return nil
 }

@@ -38,6 +38,7 @@ const (
 	latin1SwedishCI collations.ID = 8
 	swe7SwedishCI   collations.ID = 10
 	ucs2GeneralCI   collations.ID = 35
+	big5ChineseCI   collations.ID = 1
 )
 
 // TestForTextComparesInTheCollation checks the collation of ForText with what
@@ -108,25 +109,15 @@ func TestForTextComparesInTheCollation(t *testing.T) {
 	assert.Zero(t, coll.Collate([]byte("中"), []byte("?"), false))
 }
 
-// TestForTextOtherCharsets checks ForText between character sets of which
-// neither is utf8mb4. In MySQL 8.0.46 '中' in gbk is D6D0 and '波' is B2A8, and
-// in gbk_chinese_ci '波' sorts before '中', where the bytes of their utf8mb4
-// text, E4 B8 AD and E6 B3 A2, sort the other way. 'Ä' in latin1 is C4 and
-// equals 'a' in utf8mb4_0900_ai_ci.
+// TestForTextOtherCharsets checks ForText for other character sets than
+// latin1. In MySQL 8.0.46 '中' in gbk is D6D0 and '波' is B2A8, and in
+// gbk_chinese_ci '波' sorts before '中', where the bytes of their utf8mb4
+// text, E4 B8 AD and E6 B3 A2, sort the other way.
 func TestForTextOtherCharsets(t *testing.T) {
 	gbk := Lookup(ForText(gbkChineseCI, utf8mb40900AICI))
 	require.NotNil(t, gbk)
 	assert.Negative(t, gbk.Collate([]byte("波"), []byte("中"), false))
 	assert.Positive(t, Lookup(gbkChineseCI).Collate([]byte("波"), []byte("中"), false))
-
-	// Rows in latin1 that are compared in a utf8mb4 collation.
-	id := ForText(utf8mb40900AICI, latin1German2CI)
-	require.NotEqual(t, utf8mb40900AICI, id)
-	utf8 := Lookup(id)
-	require.NotNil(t, utf8)
-	assert.Equal(t, "latin1", utf8.Charset().Name())
-	assert.Zero(t, utf8.Collate([]byte("\xc4"), []byte("a"), false))
-	assert.NotZero(t, Lookup(utf8mb40900AICI).Collate([]byte("\xc4"), []byte("a"), false))
 
 	// ASCII text is not the same bytes in ucs2.
 	ucs2 := Lookup(ForText(ucs2GeneralCI, utf8mb40900AICI))
@@ -140,6 +131,16 @@ func TestForTextOtherCharsets(t *testing.T) {
 	require.NotNil(t, swe7)
 	assert.Zero(t, swe7.Collate([]byte("Ä"), []byte("ä"), false))
 	assert.NotZero(t, swe7.Collate([]byte("Ä"), []byte("["), false))
+
+	// Text of utf8mb3 is text of utf8mb4.
+	assert.Equal(t, ForText(gbkChineseCI, utf8mb40900AICI), ForText(gbkChineseCI, utf8mb3GeneralC))
+
+	// Text of another character set is not what a tablet sends, and has no
+	// collation of ForText, though it would have to be converted.
+	assert.Equal(t, utf8mb40900AICI, ForText(utf8mb40900AICI, latin1German2CI))
+	_, _, converts := TextConversion(utf8mb40900AICI, latin1German2CI)
+	assert.True(t, converts)
+	assert.Equal(t, gbkChineseCI, ForText(gbkChineseCI, latin1German2CI))
 }
 
 // TestForTextASCII checks ASCII text in a character set where it does not have
@@ -182,6 +183,8 @@ func TestForTextKeepsTheCollation(t *testing.T) {
 		{"the same collation", latin1German2CI, latin1German2CI},
 		{"another collation of the character set", latin1German2CI, latin1SwedishCI},
 		{"utf8mb3 text in a utf8mb4 collation", utf8mb40900AICI, utf8mb3GeneralC},
+		// The text of a utf8mb3 column is the same bytes as utf8mb4.
+		{"utf8mb4 text in a utf8mb3 collation", utf8mb3GeneralC, utf8mb40900AICI},
 		{"binary text", latin1German2CI, collations.CollationBinaryID},
 		{"the binary collation", collations.CollationBinaryID, utf8mb40900AICI},
 		{"no collation", collations.Unknown, utf8mb40900AICI},
@@ -197,9 +200,6 @@ func TestForTextKeepsTheCollation(t *testing.T) {
 		})
 	}
 
-	// utf8mb4 text can have a character that utf8mb3 does not have.
-	assert.NotEqual(t, utf8mb3GeneralC, ForText(utf8mb3GeneralC, utf8mb4GeneralC))
-
 	// A collation of ForText is not wrapped again.
 	id := ForText(latin1German2CI, utf8mb40900AICI)
 	assert.Equal(t, id, ForText(id, utf8mb40900AICI))
@@ -210,25 +210,27 @@ func TestForTextKeepsTheCollation(t *testing.T) {
 }
 
 // TestForTextIsOneCollation checks that ForText returns one ID for a
-// collation and a character set, for every collation of the character set and
-// from every goroutine, and another for another character set.
+// collation, for every collation of utf8mb4 that the text can have, and that
+// Lookup returns one collation for it from every goroutine.
 func TestForTextIsOneCollation(t *testing.T) {
 	want := ForText(latin1German2CI, utf8mb40900AICI)
 	assert.Equal(t, want, ForText(latin1German2CI, utf8mb4GeneralC))
-	assert.NotEqual(t, want, ForText(latin1German2CI, gbkChineseCI))
 	assert.NotEqual(t, want, ForText(latin1SwedishCI, utf8mb40900AICI))
 
 	var wg sync.WaitGroup
 	ids := make([]collations.ID, 16)
+	colls := make([]Collation, len(ids))
 	for i := range ids {
 		wg.Go(func() {
-			ids[i] = ForText(gbkChineseCI, latin1SwedishCI)
-			assert.NotNil(t, Lookup(ids[i]))
+			ids[i] = ForText(big5ChineseCI, utf8mb40900AICI)
+			colls[i] = Lookup(ids[i])
 		})
 	}
 	wg.Wait()
-	for _, id := range ids {
+	for i, id := range ids {
 		assert.Equal(t, ids[0], id)
+		require.NotNil(t, colls[i])
+		assert.Same(t, colls[0], colls[i])
 	}
 }
 

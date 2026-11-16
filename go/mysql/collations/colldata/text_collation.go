@@ -29,9 +29,13 @@ import (
 // has. MySQL and MariaDB have no collation ID with it.
 const textCollationFlag collations.ID = 0x8000
 
+// Every ID of MySQL fits below the flag.
+var _ [int(textCollationFlag) - len(collationsById)]struct{}
+
 // ForText returns the ID of a collation that has the rules of the collation
-// id for text that is in the character set of the collation from. Lookup
-// returns that collation.
+// id for text that is in the character set of the collation from, when that
+// is utf8mb4 or utf8mb3, the character sets that a tablet sends text in.
+// Lookup returns that collation.
 //
 // MySQL compares, sorts and groups a column in the collation of the column,
 // whatever character set it sends the text in. vtgate has to do with that
@@ -44,21 +48,28 @@ const textCollationFlag collations.ID = 0x8000
 // wrong collation for a column gives a wrong order, and never other text.
 //
 // It returns id itself when the text is in the character set of id already,
-// when id or from is the binary collation, and when Vitess does not have one
-// of the two. An ID that ForText returned is valid in this process only.
+// when the text is in another character set than utf8mb4 and utf8mb3, when
+// id or from is the binary collation, and when Vitess does not have one of
+// the two. An ID that ForText returned is id with one more bit, and is valid
+// in this process only.
 func ForText(id, from collations.ID) collations.ID {
-	to, src, ok := TextConversion(id, from)
+	_, src, ok := TextConversion(id, from)
 	if !ok {
 		return id
 	}
-	return textCollations.id(Lookup(id), to, src)
+	if isUTF8(src) {
+		return id | textCollationFlag
+	}
+	return id
 }
 
 // TextConversion returns the character set of the collation id and the one
 // of the collation from, and whether text of from has to be converted before
 // the collation id is given it. It does not when the text is in the character
 // set of id already, when id or from is the binary collation, and when Vitess
-// does not have one of the two.
+// does not have one of the two. It does not between utf8mb3 and utf8mb4
+// either: the text of a utf8mb3 column has the same bytes when a tablet sends
+// it as utf8mb4.
 func TextConversion(id, from collations.ID) (to, src Charset, ok bool) {
 	if id == from || id&textCollationFlag != 0 || from&textCollationFlag != 0 {
 		return nil, nil, false
@@ -74,90 +85,61 @@ func TextConversion(id, from collations.ID) (to, src Charset, ok bool) {
 	if _, binary := src.(charset.Charset_binary); binary {
 		return nil, nil, false
 	}
-	// utf8mb3 text is utf8mb4 text, and ASCII text is text of most
-	// character sets. The other way a character that id does not have
-	// becomes "?", as it does in MySQL.
-	if to.Name() == src.Name() || to.IsSuperset(src) {
+	if to.Name() == src.Name() || to.IsSuperset(src) || (isUTF8(to) && isUTF8(src)) {
 		return nil, nil, false
 	}
 	return to, src, true
 }
 
-// textCollationKey names one collation of ForText.
-type textCollationKey struct {
-	collation collations.ID
-	charset   string
+// isUTF8 reports whether cs is utf8mb4 or utf8mb3.
+func isUTF8(cs Charset) bool {
+	switch cs.(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
+		return true
+	}
+	return false
 }
 
-// textCollationRegistry has the collations that ForText returned an ID for.
-type textCollationRegistry struct {
-	mu  sync.Mutex
-	ids map[textCollationKey]collations.ID
-	// byID has the collation of the ID textCollationFlag|i at i. Lookup
-	// reads it without the lock, so it is replaced and never changed.
-	byID atomic.Pointer[[]Collation]
-}
+// textCollations has the collation of ForText for the collation of each ID,
+// made when it is first looked up.
+var textCollations [len(collationsById)]atomic.Pointer[Collation]
 
-var textCollations textCollationRegistry
-
-func (r *textCollationRegistry) id(coll Collation, to, src Charset) collations.ID {
-	key := textCollationKey{collation: coll.ID(), charset: src.Name()}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if id, ok := r.ids[key]; ok {
-		return id
-	}
-	var all []Collation
-	if p := r.byID.Load(); p != nil {
-		all = *p
-	}
-	if len(all) >= int(textCollationFlag) {
-		// There are fewer pairs of a collation and a character set than IDs.
-		return coll.ID()
-	}
-	id := textCollationFlag | collations.ID(len(all))
-	text := &textCollation{
-		Collation: coll,
-		id:        id,
-		from:      src,
-		ascii:     charset.IsASCIIIdentical(src) && charset.IsASCIIIdentical(to),
-	}
-	var wrapped Collation = text
-	if tiny, ok := coll.(TinyWeightCollation); ok {
-		wrapped = &tinyTextCollation{textCollation: text, tiny: tiny}
-	}
-	next := make([]Collation, len(all)+1)
-	copy(next, all)
-	next[len(all)] = wrapped
-	r.byID.Store(&next)
-	if r.ids == nil {
-		r.ids = make(map[textCollationKey]collations.ID)
-	}
-	r.ids[key] = id
-	return id
-}
-
-func (r *textCollationRegistry) lookup(id collations.ID) Collation {
-	p := r.byID.Load()
-	if p == nil {
-		return nil
-	}
+// lookupTextCollation returns the collation of an ID of ForText.
+func lookupTextCollation(id collations.ID) Collation {
 	i := int(id &^ textCollationFlag)
-	if i >= len(*p) {
+	if i >= len(collationsById) || collationsById[i] == nil {
 		return nil
 	}
-	return (*p)[i]
+	if coll := textCollations[i].Load(); coll != nil {
+		return *coll
+	}
+	inner := collationsById[i]
+	text := &textCollation{
+		Collation: inner,
+		id:        id,
+		to:        inner.Charset(),
+		ascii:     charset.IsASCIIIdentical(inner.Charset()),
+	}
+	var coll Collation = text
+	if tiny, ok := inner.(TinyWeightCollation); ok {
+		coll = &tinyTextCollation{textCollation: text, tiny: tiny}
+	}
+	textCollations[i].CompareAndSwap(nil, &coll)
+	return *textCollations[i].Load()
 }
 
 // textCollation is a collation of ForText: the embedded collation for text
-// in the character set from.
+// in utf8mb4.
 type textCollation struct {
 	Collation
-	id   collations.ID
-	from Charset
-	// ascii is true when ASCII text has the same bytes in both character
-	// sets.
+	textConversion
+	id collations.ID
+}
+
+// textConversion converts utf8mb4 text to the character set to.
+type textConversion struct {
+	to Charset
+	// ascii is true when ASCII text has the same bytes in to.
 	ascii bool
 }
 
@@ -169,12 +151,12 @@ func (c *textCollation) ID() collations.ID {
 // Charset implements Collation. It is the character set of the text that the
 // collation is given.
 func (c *textCollation) Charset() Charset {
-	return c.from
+	return charset.Charset_utf8mb4{}
 }
 
-// unchanged reports whether src has the same bytes in the character set of
-// the embedded collation, which ASCII text has in most character sets.
-func (c *textCollation) unchanged(src []byte) bool {
+// unchanged reports whether src has the same bytes in the character set to,
+// which ASCII text has in most character sets.
+func (c textConversion) unchanged(src []byte) bool {
 	if !c.ascii {
 		return false
 	}
@@ -186,12 +168,12 @@ func (c *textCollation) unchanged(src []byte) bool {
 	return true
 }
 
-// convert appends src in the character set of the embedded collation to dst,
-// which has capacity. A character that the character set does not have
-// becomes "?", as in a conversion in MySQL.
-func (c *textCollation) convert(dst, src []byte) []byte {
+// convert appends src in the character set to to dst, which has capacity. A
+// character that the character set does not have becomes "?", as in a
+// conversion in MySQL.
+func (c textConversion) convert(dst, src []byte) []byte {
 	// The error says that a character became "?".
-	converted, _ := charset.Convert(dst, c.Collation.Charset(), src, c.from)
+	converted, _ := charset.Convert(dst, c.to, src, charset.Charset_utf8mb4{})
 	return converted
 }
 
@@ -207,10 +189,9 @@ var textBuffers = sync.Pool{New: func() any {
 // maxTextBuffer is the largest buffer that goes back to textBuffers.
 const maxTextBuffer = 64 * 1024
 
-// buffered returns src in the character set of the embedded collation, in a
-// buffer of textBuffers that release takes back. The text is not kept after
-// release.
-func (c *textCollation) buffered(src []byte) (buf *[]byte, text []byte) {
+// buffered returns src in the character set to, in a buffer of textBuffers
+// that release takes back. The text is not kept after release.
+func (c textConversion) buffered(src []byte) (buf *[]byte, text []byte) {
 	buf = textBuffers.Get().(*[]byte)
 	return buf, c.convert((*buf)[:0], src)
 }
@@ -273,21 +254,21 @@ func (c *textCollation) Wildcard(pat []byte, matchOne, matchMany, escape rune) W
 	if !c.unchanged(pat) {
 		pat = c.convert(make([]byte, 0, len(pat)+1), pat)
 	}
-	return &textPattern{collation: c, pattern: c.Collation.Wildcard(pat, matchOne, matchMany, escape)}
+	return &textPattern{text: c.textConversion, pattern: c.Collation.Wildcard(pat, matchOne, matchMany, escape)}
 }
 
 // textPattern is a pattern of a textCollation.
 type textPattern struct {
-	collation *textCollation
-	pattern   WildcardPattern
+	text    textConversion
+	pattern WildcardPattern
 }
 
 // Match implements WildcardPattern.
 func (p *textPattern) Match(in []byte) bool {
-	if p.collation.unchanged(in) {
+	if p.text.unchanged(in) {
 		return p.pattern.Match(in)
 	}
-	buf, text := p.collation.buffered(in)
+	buf, text := p.text.buffered(in)
 	matched := p.pattern.Match(text)
 	release(buf, text, in)
 	return matched
