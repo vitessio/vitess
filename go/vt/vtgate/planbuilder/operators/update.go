@@ -1059,7 +1059,7 @@ func buildChangedVindexesValues(
 		vindexValueMap := make(map[string]evalengine.Expr)
 		var compExprs []sqlparser.Expr
 		for _, vcol := range vindex.Columns {
-			subQueriesArgOnChangedVindex, compExprs = createAssignmentExpressions(ctx, assignments, vcol, vindex.Owned, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
+			subQueriesArgOnChangedVindex, compExprs = createAssignmentExpressions(ctx, assignments, vcol, subQueriesArgOnChangedVindex, vindexValueMap, compExprs)
 		}
 		if len(vindexValueMap) == 0 {
 			// Vindex not changing, continue
@@ -1113,7 +1113,6 @@ func createAssignmentExpressions(
 	ctx *plancontext.PlanningContext,
 	assignments []SetExpr,
 	vcol sqlparser.IdentifierCI,
-	owned bool,
 	subQueriesArgOnChangedVindex []string,
 	vindexValueMap map[string]evalengine.Expr,
 	compExprs []sqlparser.Expr,
@@ -1133,11 +1132,9 @@ func createAssignmentExpressions(
 			for _, sq := range subqueries {
 				subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
 			}
-			if owned {
-				// These subqueries cannot merge into the update route. Expand their row
-				// arguments now, before compiling the expression for the lookup update.
-				expr, _ = expandRowSubqueryArgs(ctx, subqueries, expr)
-			}
+			// These subqueries cannot merge into the update route. Expand their row
+			// arguments before compiling the expression for vindex maintenance.
+			expr, _ = expandRowSubqueryArgs(ctx, subqueries, expr)
 		}
 		pv, err := evalengine.Translate(expr, &evalengine.Config{
 			ResolveType: ctx.TypeForExpr,

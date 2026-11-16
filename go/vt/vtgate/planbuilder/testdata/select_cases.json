@@ -7687,6 +7687,167 @@
     }
   },
   {
+    "comment": "order by a row comparison with a value subquery",
+    "query": "select id from user order by (col, name) = (select user_id, col from music where user_id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user order by (col, name) = (select user_id, col from music where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1_0",
+              "__sq1_1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, col from music where 1 != 1",
+                "Query": "select user_id, col from music where user_id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1), weight_string((col, `name`) = (:__sq1_0, :__sq1_1)) from `user` where 1 != 1",
+                "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1), weight_string((col, `name`) = (:__sq1_0, :__sq1_1)) from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "order by a grouped row comparison with a value subquery",
+    "query": "select col, count(*) from user group by col order by (col, count(*)) = (select user_id, col from music where user_id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col, count(*) from user group by col order by (col, count(*)) = (select user_id, col from music where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(2|4) ASC",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq2_0",
+              "__sq2_1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, col from music where 1 != 1",
+                "Query": "select user_id, col from music where user_id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":0 as col",
+                  ":1 as count(*)",
+                  "(col, count(*)) = (:__sq2_0, :__sq2_1) as (col, count(*)) = (select user_id, col from music where user_id = 5)",
+                  "(col, count(*)) = (:__sq2_0, :__sq2_1) as (col, count(*)) = (:__sq2_0, :__sq2_1)",
+                  "weight_string((col, count(*)) = (:__sq2_0, :__sq2_1)) as weight_string((col, count(*)) = (:__sq2_0, :__sq2_1))"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "Aggregates": "sum_count_star(1) AS count(*), sum_count_star(2) AS count(*), any_value(3) AS (select user_id, col from music where user_id = 5)",
+                    "GroupBy": "0",
+                    "Inputs": [
+                      {
+                        "OperatorType": "UncorrelatedSubquery",
+                        "Variant": "PulloutValue",
+                        "PulloutVars": [
+                          "__sq1_0",
+                          "__sq1_1"
+                        ],
+                        "Inputs": [
+                          {
+                            "InputName": "SubQuery",
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select user_id, col from music where 1 != 1",
+                            "Query": "select user_id, col from music where user_id = 5",
+                            "Values": [
+                              "5"
+                            ],
+                            "Vindex": "user_index"
+                          },
+                          {
+                            "InputName": "Outer",
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select col, count(*), count(*), (:__sq1_0, :__sq1_1) from `user` where 1 != 1 group by col",
+                            "OrderBy": "0 ASC",
+                            "Query": "select col, count(*), count(*), (:__sq1_0, :__sq1_1) from `user` group by col order by col asc"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "row comparison with a value subquery in the select list binds each column of the row",
     "query": "select id, (col, name) = (select col, name from user where id = 5) from user where id = 1",
     "plan": {
