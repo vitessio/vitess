@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -78,10 +79,14 @@ type (
 		coll           collations.ID
 		typ            querypb.Type
 		lhsKey, rhsKey int
-		cols           []int
-		hasher         vthash.Hasher
-		sqlmode        evalengine.SQLMode
-		values         *evalengine.EnumSetValues
+		// lhsText and rhsText convert the key of a row of the left and of the
+		// right side before it is hashed, see HashJoin.keyText. They are nil
+		// when the key is hashed as it is.
+		lhsText, rhsText *resultcharset.Conversion
+		cols             []int
+		hasher           vthash.Hasher
+		sqlmode          evalengine.SQLMode
+		values           *evalengine.EnumSetValues
 	}
 
 	probeTableEntry struct {
@@ -91,14 +96,41 @@ type (
 	}
 )
 
+// keyText returns the conversion of the key of the rows of one side of the
+// join, the column key of rows with these fields, to the character set of the
+// collation of the join, and nil when there is nothing to convert.
+//
+// The join has one collation, in which the keys of both sides are hashed. With
+// --convert-result-charset the text of a row is in the character set of the
+// collation in its field, which does not have to be the one of the join: for
+// a latin1 column a.l and a utf8mb4 column d.u, a.l = d.u is compared in
+// utf8mb4_0900_ai_ci, and the 'é' of a.l is the byte E9. Hashed as it is, it
+// does not find the 'é' of d.u, C3 A9, which MySQL 8.0.46 joins it with. The
+// key is converted for the hash only, the rows stay as they are. Without the
+// flag every row is in the connection character set, and is hashed as before.
+func (hj *HashJoin) keyText(vcursor VCursor, fields []*querypb.Field, key int) *resultcharset.Conversion {
+	if !vcursor.ConvertResultCharset() || key >= len(fields) {
+		return nil
+	}
+	conv := resultcharset.ToFields(fields[key:key+1], []*querypb.Field{{Type: fields[key].Type, Charset: uint32(hj.Collation)}})
+	if !conv.ConvertsValues() {
+		return nil
+	}
+	return conv
+}
+
 // TryExecute implements the Primitive interface
 func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// With --convert-result-charset the fields say which character set the
+	// rows are in, see keyText.
+	wantfields = wantfields || vcursor.ConvertResultCharset()
 	lresult, err := vcursor.ExecutePrimitive(ctx, hj.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
 	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
+	pt.lhsText = hj.keyText(vcursor, lresult.Fields, hj.LHSKey)
 	// build the probe table from the LHS result
 	for _, row := range lresult.Rows {
 		err := pt.addLeftRow(row)
@@ -111,6 +143,8 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	if err != nil {
 		return nil, err
 	}
+
+	pt.rhsText = hj.keyText(vcursor, rresult.Fields, hj.RHSKey)
 
 	result := &sqltypes.Result{
 		Fields: joinFields(lresult.Fields, rresult.Fields, hj.Cols),
@@ -137,11 +171,15 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
 	var lfields []*querypb.Field
 	var mu sync.Mutex
-	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
+	// With --convert-result-charset the fields, which come before the rows,
+	// say which character set the rows are in, see keyText.
+	textFields := vcursor.ConvertResultCharset()
+	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields || textFields, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
+			pt.lhsText = hj.keyText(vcursor, lfields, hj.LHSKey)
 		}
 		for _, current := range result.Rows {
 			err := pt.addLeftRow(current)
@@ -158,9 +196,14 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	var sendFields atomic.Bool
 	sendFields.Store(wantfields)
 
-	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load(), func(result *sqltypes.Result) error {
+	var haveRightFields bool
+	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load() || textFields, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		if !haveRightFields && len(result.Fields) != 0 {
+			haveRightFields = true
+			pt.rhsText = hj.keyText(vcursor, result.Fields, hj.RHSKey)
+		}
 		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
 		if len(result.Fields) != 0 && sendFields.CompareAndSwap(true, false) {
@@ -259,7 +302,11 @@ func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey 
 }
 
 func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
-	hash, err := pt.hash(r[pt.lhsKey])
+	key := r[pt.lhsKey]
+	if pt.lhsText != nil {
+		key = pt.lhsText.Value(0, key)
+	}
+	hash, err := pt.hash(key)
 	if err != nil {
 		return err
 	}
@@ -288,6 +335,9 @@ func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err
 		return
 	}
 
+	if pt.rhsText != nil {
+		val = pt.rhsText.Value(0, val)
+	}
 	hash, err := pt.hash(val)
 	if err != nil {
 		return nil, err

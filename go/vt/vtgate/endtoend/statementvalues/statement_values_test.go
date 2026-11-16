@@ -348,6 +348,24 @@ func TestStatementValues(t *testing.T) {
 		}
 	}
 
+	// Both sides have a LIMIT, which vtgate applies, so it joins them itself,
+	// with a hash of the two columns in the collation that MySQL compares
+	// them in, utf8mb4_0900_ai_ci. The rows of a.l are in latin1: the 'é'
+	// of a.l is E9 and the one of d.u is C3 A9.
+	t.Run("hash join of a latin1 and a utf8mb4 column", func(t *testing.T) {
+		const query = "select a.id, d.id from (select id, l from a order by id limit 10) as a join (select id, u from d order by id limit 10) as d on a.l = d.u"
+		plan := rows(t, conn, "vexplain plan "+query)
+		require.Len(t, plan, 1)
+		require.Contains(t, plan[0], `"Variant": "HashJoin"`)
+		for _, workload := range []string{"oltp", "olap"} {
+			exec(t, conn, "set workload = "+workload)
+			got := rows(t, conn, query)
+			slices.Sort(got)
+			assert.Equal(t, []string{"2|1", "5|2"}, got, workload)
+		}
+		exec(t, conn, "set workload = oltp")
+	})
+
 	// A recursion that reads 'ab中cd' from the utf8mb4 column d.u for a CTE
 	// whose column is the latin1 column a.l: MySQL fails with error 1366
 	// with its default sql_mode, which is strict, and returns 'ab?cd' and a

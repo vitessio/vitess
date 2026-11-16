@@ -17,8 +17,10 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -235,4 +237,85 @@ func TestHashJoinJSONKeys(t *testing.T) {
 		require.NoError(t, err)
 		expectResultAnyOrder(t, r, expected)
 	})
+}
+
+// TestHashJoinKeyCharsets joins the rows of
+//
+//	create table sorted (id int primary key, l varchar(10) character set latin1 collate latin1_german2_ci);
+//	insert into sorted values (1, 'é'), (2, 'd'), (3, 'f'), (4, 'Müller'), (5, 'MUELLER'), (6, 'z');
+//
+// with themselves on l, with each side as a tablet with
+// --queryserver-config-raw-result-charset sends it, in latin1 with the
+// collation of the column in the field, or as a tablet without the flag sends
+// it, in utf8mb4. MySQL 8.0.46 joins
+//
+//	on a.l = b.l                         1-1, 2-2, 3-3, 4-4, 4-5, 5-4, 5-5, 6-6
+//	on convert(a.l using utf8mb4) =
+//	   convert(b.l using utf8mb4)        1-1, 2-2, 3-3, 4-4, 5-5, 6-6
+//
+// In latin1_german2_ci 'Müller' equals 'MUELLER', and in utf8mb4_0900_ai_ci
+// it does not. The key of each side is hashed in the collation of the join,
+// whatever character set its rows are in. It asks for no fields: the join has
+// to ask for the ones that it needs itself.
+func TestHashJoinKeyCharsets(t *testing.T) {
+	latin1German2 := collations.MySQL8().LookupByName("latin1_german2_ci")
+	utf8mb4 := collations.MySQL8().DefaultConnectionCharset()
+	rows := func(raw bool) *sqltypes.Result {
+		text, collation := []string{"é", "d", "f", "Müller", "MUELLER", "z"}, utf8mb4
+		if raw {
+			text, collation = []string{"\xe9", "d", "f", "M\xfcller", "MUELLER", "z"}, latin1German2
+		}
+		qr := &sqltypes.Result{Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Charset: uint32(collations.CollationBinaryID)},
+			{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collation), ColumnLength: 10},
+		}}
+		for i, value := range text {
+			qr.Rows = append(qr.Rows, sqltypes.Row{sqltypes.NewInt32(int32(i + 1)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(value))})
+		}
+		return qr
+	}
+
+	tests := []struct {
+		name      string
+		collation collations.ID
+		pairs     []string
+	}{
+		{"latin1_german2_ci", latin1German2, []string{"1-1", "2-2", "3-3", "4-4", "4-5", "5-4", "5-5", "6-6"}},
+		{"utf8mb4_0900_ai_ci", utf8mb4, []string{"1-1", "2-2", "3-3", "4-4", "5-5", "6-6"}},
+	}
+	for _, tc := range tests {
+		for _, rawLeft := range []bool{false, true} {
+			for _, rawRight := range []bool{false, true} {
+				for _, stream := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%s, left raw %v, right raw %v, stream %v", tc.name, rawLeft, rawRight, stream), func(t *testing.T) {
+						hj := &HashJoin{
+							Opcode:         InnerJoin,
+							Left:           &fakePrimitive{results: []*sqltypes.Result{rows(rawLeft)}},
+							Right:          &fakePrimitive{results: []*sqltypes.Result{rows(rawRight)}},
+							Cols:           []int{-1, 1},
+							LHSKey:         1,
+							RHSKey:         1,
+							Collation:      tc.collation,
+							ComparisonType: sqltypes.VarChar,
+							CollationEnv:   collations.MySQL8(),
+						}
+						vcursor := &noopVCursor{convertResultCharset: true}
+						var qr *sqltypes.Result
+						var err error
+						if stream {
+							qr, err = wrapStreamExecute(hj, vcursor, map[string]*querypb.BindVariable{}, false)
+						} else {
+							qr, err = hj.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, false)
+						}
+						require.NoError(t, err)
+						var pairs []string
+						for _, row := range qr.Rows {
+							pairs = append(pairs, row[0].ToString()+"-"+row[1].ToString())
+						}
+						assert.ElementsMatch(t, tc.pairs, pairs)
+					})
+				}
+			}
+		}
+	}
 }
