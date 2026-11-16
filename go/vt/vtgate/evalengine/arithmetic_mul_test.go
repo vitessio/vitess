@@ -19,6 +19,8 @@ package evalengine
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestMathMulOverflow covers the integer multiplication helpers at the edges
@@ -43,13 +45,11 @@ func TestMathMulOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := mathMul_ii0(c.v1, c.v2)
 			if c.wantErr {
-				if err == nil {
-					t.Errorf("%d * %d = %d, want out of range error", c.v1, c.v2, got)
-				}
+				assert.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
 				continue
 			}
-			if err != nil || got != c.want {
-				t.Errorf("%d * %d = %d, %v, want %d", c.v1, c.v2, got, err, c.want)
+			if assert.NoError(t, err, "%d * %d", c.v1, c.v2) {
+				assert.Equal(t, c.want, got, "%d * %d", c.v1, c.v2)
 			}
 		}
 	})
@@ -72,13 +72,11 @@ func TestMathMulOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := mathMul_uu0(c.v1, c.v2)
 			if c.wantErr {
-				if err == nil {
-					t.Errorf("%d * %d = %d, want out of range error", c.v1, c.v2, got)
-				}
+				assert.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
 				continue
 			}
-			if err != nil || got != c.want {
-				t.Errorf("%d * %d = %d, %v, want %d", c.v1, c.v2, got, err, c.want)
+			if assert.NoError(t, err, "%d * %d", c.v1, c.v2) {
+				assert.Equal(t, c.want, got, "%d * %d", c.v1, c.v2)
 			}
 		}
 	})
