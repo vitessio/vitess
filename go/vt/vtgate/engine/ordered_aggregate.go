@@ -93,6 +93,7 @@ func (oa *OrderedAggregate) executeGroupBy(result *sqltypes.Result) (*sqltypes.R
 	if len(result.Rows) < 1 {
 		return result, nil
 	}
+	keys := comparedGroupBy(result.Fields, oa.GroupByKeys)
 
 	out := &sqltypes.Result{
 		Fields: result.Fields,
@@ -105,7 +106,7 @@ func (oa *OrderedAggregate) executeGroupBy(result *sqltypes.Result) (*sqltypes.R
 	for _, row := range result.Rows {
 		var nextGroup bool
 
-		currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+		currentKey, nextGroup, err = oa.nextGroupBy(keys, currentKey, row)
 		if err != nil {
 			return nil, err
 		}
@@ -142,12 +143,13 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		Fields: fields,
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
+	keys := comparedGroupBy(result.Fields, oa.GroupByKeys)
 
 	var currentKey []sqltypes.Value
 	for _, row := range result.Rows {
 		var nextGroup bool
 
-		currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+		currentKey, nextGroup, err = oa.nextGroupBy(keys, currentKey, row)
 		if err != nil {
 			return nil, err
 		}
@@ -185,11 +187,13 @@ func (oa *OrderedAggregate) executeStreamGroupBy(ctx context.Context, vcursor VC
 	var fields []*querypb.Field
 	var currentKey []sqltypes.Value
 	var lastRow sqltypes.Row
+	keys := oa.GroupByKeys
 
 	visitor := func(qr *sqltypes.Result) error {
 		var err error
 		if fields == nil && len(qr.Fields) > 0 {
 			fields = qr.Fields
+			keys = comparedGroupBy(fields, oa.GroupByKeys)
 			if err = cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -197,7 +201,7 @@ func (oa *OrderedAggregate) executeStreamGroupBy(ctx context.Context, vcursor VC
 		for _, row := range qr.Rows {
 			var nextGroup bool
 
-			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			currentKey, nextGroup, err = oa.nextGroupBy(keys, currentKey, row)
 			if err != nil {
 				return err
 			}
@@ -242,11 +246,13 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 	var agg *aggregationState
 	var fields []*querypb.Field
 	var currentKey []sqltypes.Value
+	keys := oa.GroupByKeys
 
 	visitor := func(qr *sqltypes.Result) error {
 		var err error
 
 		if agg == nil && len(qr.Fields) != 0 {
+			keys = comparedGroupBy(qr.Fields, oa.GroupByKeys)
 			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates, env, vcursor.ConnCollation())
 			if err != nil {
 				return err
@@ -260,7 +266,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		for _, row := range qr.Rows {
 			var nextGroup bool
 
-			currentKey, nextGroup, err = oa.nextGroupBy(currentKey, row)
+			currentKey, nextGroup, err = oa.nextGroupBy(keys, currentKey, row)
 			if err != nil {
 				return err
 			}
@@ -329,12 +335,15 @@ func (oa *OrderedAggregate) NeedsTransaction() bool {
 	return oa.Input.NeedsTransaction()
 }
 
-func (oa *OrderedAggregate) nextGroupBy(currentKey, nextRow []sqltypes.Value) (nextKey []sqltypes.Value, nextGroup bool, err error) {
+// nextGroupBy compares the keys of two rows. The keys are the ones of the
+// plan with the collations for the rows of this execution, see
+// comparedGroupBy.
+func (oa *OrderedAggregate) nextGroupBy(keys []*GroupByParams, currentKey, nextRow []sqltypes.Value) (nextKey []sqltypes.Value, nextGroup bool, err error) {
 	if currentKey == nil {
 		return nextRow, false, nil
 	}
 
-	for _, gb := range oa.GroupByKeys {
+	for _, gb := range keys {
 		v1 := currentKey[gb.KeyCol]
 		v2 := nextRow[gb.KeyCol]
 		if v1.TinyWeightCmp(v2) != 0 {

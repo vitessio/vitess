@@ -49,6 +49,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [Columns that are not `utf8mb4` are compared in their collation](#vtgate-column-collation-text)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -610,6 +611,14 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-column-collation-text"/>Columns that are not `utf8mb4` are compared in their collation</a>
+
+MySQL compares a column in the collation of the column. VTGate gets the text of every column in `utf8mb4`, and when it sorted, grouped, de-duplicated, joined or filtered a column of another character set itself, it gave those `utf8mb4` bytes to the collation of the column as they were. For a `latin1` column, `é` sorted before `d` when VTGate merged the rows of several shards, `Müller` and `MUELLER` were two groups in `latin1_german2_ci`, and `HEX(col)` and `UPPER(col)` in an expression that VTGate evaluates worked on the `utf8mb4` bytes.
+
+VTGate now converts the text to the character set of the column for the comparison, and returns what MySQL returns. The rows themselves are returned as before.
+
+**Impact**: the order, the groups and the rows of queries on text columns that are not `utf8mb4`, and that VTGate evaluates itself, can change for text that is not ASCII. Queries on `utf8mb4` and `utf8mb3` columns are not affected, and in most character sets neither is text that is all ASCII. During a rolling upgrade, VTGates of both versions can return such rows in a different order. A session that asks for reduced field metadata through the gRPC API (`included_fields` other than `ALL`) keeps the previous behavior, because the tablet then does not say which character set it sent.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	"vitess.io/vitess/go/mysql"
@@ -41,12 +42,18 @@ type Projection struct {
 
 // TryExecute implements the Primitive interface
 func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields)
+	// An expression of a column of another character set than utf8mb4 needs
+	// the fields of the rows, see rowFields.
+	fieldCharsets := p.needsFieldCharsets()
+	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields || fieldCharsets)
 	if err != nil {
 		return nil, err
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	if fieldCharsets {
+		rowFields(env, result.Fields)
+	}
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
@@ -76,10 +83,21 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var once sync.Once
 	var fields []*querypb.Field
 	var mu sync.Mutex
-	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	// An expression of a column of another character set than utf8mb4 needs
+	// the fields of the rows, which come before them, see rowFields.
+	fieldCharsets := p.needsFieldCharsets()
+	var compared streamComparedFields
+	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields || fieldCharsets, func(qr *sqltypes.Result) error {
 		var err error
 		mu.Lock()
 		defer mu.Unlock()
+		if fieldCharsets && compared.first(qr) {
+			rowFields(env, qr.Fields)
+		}
+		if fieldCharsets && !wantfields {
+			// The fields were asked for here, and are the ones of the input.
+			qr.Fields = nil
+		}
 		if wantfields {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
@@ -112,6 +130,12 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		qr.Rows = resultRows
 		return callback(qr)
 	})
+}
+
+// needsFieldCharsets reports whether one of the expressions needs the fields
+// of the rows, see evalengine.NeedsFieldCharsets.
+func (p *Projection) needsFieldCharsets() bool {
+	return slices.ContainsFunc(p.Exprs, evalengine.NeedsFieldCharsets)
 }
 
 // GetFields implements the Primitive interface

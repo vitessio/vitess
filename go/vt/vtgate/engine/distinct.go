@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -103,7 +104,9 @@ func newProbeTable(checkCols []CheckCol, collationEnv *collations.Environment) *
 
 // TryExecute implements the Primitive interface
 func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	input, err := vcursor.ExecutePrimitive(ctx, d.Source, bindVars, wantfields)
+	// The fields say which character set the rows are in, see
+	// comparedCollation.
+	input, err := vcursor.ExecutePrimitive(ctx, d.Source, bindVars, wantfields || d.convertsText())
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +116,7 @@ func (d *Distinct) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 		InsertID: input.InsertID,
 	}
 
-	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
+	pt := newProbeTable(comparedCheckCols(input.Fields, d.CheckCols), vcursor.Environment().CollationEnv())
 
 	for _, row := range input.Rows {
 		appendRow, err := pt.exists(row)
@@ -135,13 +138,19 @@ func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	var mu sync.Mutex
 
 	pt := newProbeTable(d.CheckCols, vcursor.Environment().CollationEnv())
-	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
+	// The fields, which come before the rows, say which character set the
+	// rows are in, see comparedCollation.
+	var compared streamComparedFields
+	err := vcursor.StreamExecutePrimitive(ctx, d.Source, bindVars, wantfields || d.convertsText(), func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,
 		}
 		mu.Lock()
 		defer mu.Unlock()
+		if compared.first(input) {
+			pt.checkCols = slices.Clone(comparedCheckCols(input.Fields, d.CheckCols))
+		}
 		for _, row := range input.Rows {
 			appendRow, err := pt.exists(row)
 			if err != nil {
@@ -155,6 +164,16 @@ func (d *Distinct) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 	})
 
 	return err
+}
+
+// convertsText is convertsText for the collations of the columns.
+func (d *Distinct) convertsText() bool {
+	for _, col := range d.CheckCols {
+		if convertsText(col.Type.Collation()) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetFields implements the Primitive interface

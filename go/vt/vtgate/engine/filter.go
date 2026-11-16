@@ -41,11 +41,17 @@ type Filter struct {
 
 // TryExecute satisfies the Primitive interface.
 func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields)
+	// A predicate on a column of another character set than utf8mb4 needs
+	// the fields of the rows, see rowFields.
+	fields := evalengine.NeedsFieldCharsets(f.Predicate)
+	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields || fields)
 	if err != nil {
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	if fields {
+		rowFields(env, result.Fields)
+	}
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
 		env.Row = row
@@ -67,11 +73,18 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 	var mu sync.Mutex
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	// A predicate on a column of another character set than utf8mb4 needs
+	// the fields of the rows, which come before them, see rowFields.
+	fields := evalengine.NeedsFieldCharsets(f.Predicate)
+	var compared streamComparedFields
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
 
 		mu.Lock()
 		defer mu.Unlock()
+		if fields && compared.first(results) {
+			rowFields(env, results.Fields)
+		}
 		for _, row := range results.Rows {
 			env.Row = row
 			evalResult, err := env.Evaluate(f.Predicate)
@@ -86,7 +99,7 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 		return callback(results.Truncate(f.Truncate))
 	}
 
-	return vcursor.StreamExecutePrimitive(ctx, f.Input, bindVars, wantfields, filter)
+	return vcursor.StreamExecutePrimitive(ctx, f.Input, bindVars, wantfields || fields, filter)
 }
 
 // GetFields implements the Primitive interface.

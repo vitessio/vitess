@@ -377,7 +377,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	err := route.OrderBy.SortResult(out)
+	err := comparedOrder(out.Fields, route.OrderBy).SortResult(out)
 	return out, err
 }
 

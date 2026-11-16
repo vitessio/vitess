@@ -72,7 +72,10 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
-	gotFields := wantfields
+	// The fields say which character set the rows are in, see
+	// comparedCollation.
+	compareFields := orderConvertsText(ms.OrderBy)
+	gotFields := wantfields || compareFields
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
 		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
@@ -87,13 +90,16 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		Compare: ms.OrderBy,
 	}
 
-	if wantfields {
+	if wantfields || compareFields {
 		fields, err := ms.getStreamingFields(handles)
 		if err != nil {
 			return err
 		}
-		if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-			return err
+		merge.Compare = comparedOrder(fields, ms.OrderBy)
+		if wantfields {
+			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
 		}
 	}
 

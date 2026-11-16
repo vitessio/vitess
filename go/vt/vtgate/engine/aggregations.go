@@ -411,7 +411,13 @@ func isComparable(typ sqltypes.Type) bool {
 	return false
 }
 
+// newAggregation returns the state of the aggregations of one execution over
+// rows with these fields. A DISTINCT, a MIN and a MAX compare their column in
+// the collation of comparedCollation.
 func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env *evalengine.ExpressionEnv, collation collations.ID) (*aggregationState, []*querypb.Field, error) {
+	// The fields that are returned are changed below, the ones of the rows
+	// say which character set the rows are in.
+	rowFields := fields
 	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field { return from.CloneVT() })
 
 	aggregators := make([]aggregator, len(fields))
@@ -447,7 +453,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 				from: aggr.Col,
 				distinct: aggregatorDistinct{
 					column:       distinct,
-					coll:         aggr.Type.Collation(),
+					coll:         comparedCollation(rowFields, distinct, aggr.Type.Collation()),
 					collationEnv: aggr.CollationEnv,
 					values:       aggr.Type.Values(),
 				},
@@ -467,7 +473,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 				sum:  sum,
 				distinct: aggregatorDistinct{
 					column:       distinct,
-					coll:         aggr.Type.Collation(),
+					coll:         comparedCollation(rowFields, distinct, aggr.Type.Collation()),
 					collationEnv: aggr.CollationEnv,
 					values:       aggr.Type.Values(),
 				},
@@ -477,7 +483,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 			ag = &aggregatorMin{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation(), aggr.Type.Values()),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, comparedCollation(rowFields, aggr.Col, aggr.Type.Collation()), aggr.Type.Values()),
 				},
 			}
 
@@ -485,7 +491,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 			ag = &aggregatorMax{
 				aggregatorMinMax{
 					from:   aggr.Col,
-					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, aggr.Type.Collation(), aggr.Type.Values()),
+					minmax: evalengine.NewAggregationMinMax(sourceType, aggr.CollationEnv, comparedCollation(rowFields, aggr.Col, aggr.Type.Collation()), aggr.Type.Values()),
 				},
 			}
 
