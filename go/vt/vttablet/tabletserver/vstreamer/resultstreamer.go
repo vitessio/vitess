@@ -51,12 +51,12 @@ type resultStreamer struct {
 func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error, vse *Engine) *resultStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &resultStreamer{
-		ctx:     ctx,
-		cancel:  cancel,
-		cp:      cp,
-		query:   query,
-		send:    send,
-		vse:     vse,
+		ctx:    ctx,
+		cancel: cancel,
+		cp:     cp,
+		query:  query,
+		send:   send,
+		vse:    vse,
 		// VStreamResults reuses no row pool, so the memory bounds (and their
 		// packet-size cap) do not apply to it.
 		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize, false),
