@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -29,13 +30,16 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -541,6 +545,130 @@ func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 	assert.GreaterOrEqual(t, directOpens.Load(), int32(256), "each of the 256 chunks must be written with O_DIRECT")
 	assert.Contains(t, preallocatedSizes, int64(16*1024*1024), "the 16MiB chunked file must be preallocated to its full size")
 	assert.Contains(t, logger.String(), "Restoring 1 of 1 files with O_DIRECT, in 256 chunks", "the restore must log what it writes with O_DIRECT")
+}
+
+// TestBackupRestoreWithBinlogsDirect backs up a source with a binlog large enough to be chunked, and
+// restores it with --builtinbackup-restore-write-mode=direct. In practice, binlogs are the only chunked
+// files whose size isn't a multiple of directIOAlignment, so this covers a chunked file of a full backup
+// that is restored with O_DIRECT, into the binlog directory, and ends with bytes written buffered.
+func TestBackupRestoreWithBinlogsDirect(t *testing.T) {
+	const (
+		chunkSize = 64 * 1024
+		// The last chunk is one aligned block and a partial one.
+		binlogSize = 3*chunkSize + directIOAlignment + 904
+	)
+	backupRoot := t.TempDir()
+	requireDirectIO(t, backupRoot)
+	requireFallocate(t, backupRoot)
+
+	// Override the minimum chunk size and the multiple of chunk sizes so we can use 64KiB chunks.
+	oldThreshold, oldSize, oldMin, oldMultiple := backupFileChunkThreshold, backupFileChunkSize, minBackupFileChunkSize, backupFileChunkSizeMultiple
+	t.Cleanup(func() {
+		backupFileChunkThreshold, backupFileChunkSize, minBackupFileChunkSize, backupFileChunkSizeMultiple = oldThreshold, oldSize, oldMin, oldMultiple
+	})
+	backupFileChunkThreshold, backupFileChunkSize, minBackupFileChunkSize, backupFileChunkSizeMultiple = chunkSize, chunkSize, chunkSize, chunkSize
+
+	filebackupstorage.FileBackupStorageRoot = backupRoot
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+	dataDir := path.Join(backupRoot, "datadir")
+	require.NoError(t, os.MkdirAll(path.Join(dataDir, "test1"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(dataDir, "test1", "0.ibd"), []byte("data"), 0o644))
+
+	srcDir := path.Join(backupRoot, "src")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	srcBase := path.Join(srcDir, "src-bin")
+	binlog := make([]byte, binlogSize)
+	_, err := rand.Read(binlog)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(srcBase+".000001", binlog, 0o644))
+	require.NoError(t, os.WriteFile(srcBase+".index", []byte(srcBase+".000001\n"), 0o644))
+
+	ts, keyspace, shard := newBackupTestTopo(t)
+	mysqld := newBackupTestMysqld(t)
+	mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{
+		binlogBackupVarsQuery: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("Variable_name|Value", "varchar|varchar"),
+			"log_bin|ON", "log_replica_updates|ON"),
+		binlogLocationQuery: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("log_bin_basename|log_bin_index", "varchar|varchar"),
+			srcBase+"|"+srcBase+".index"),
+	}
+	be := &BuiltinBackupEngine{}
+	backupResult, err := be.ExecuteBackup(t.Context(), BackupParams{
+		Logger: logutil.NewMemoryLogger(),
+		Mysqld: mysqld,
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               dataDir,
+			BinLogPath:            srcBase,
+		},
+		Stats:                backupstats.NoStats(),
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		TopoServer:           ts,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		MysqlShutdownTimeout: time.Minute,
+		IncludeBinlogs:       true,
+	}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+	require.NoError(t, err)
+	require.Equal(t, BackupUsable, backupResult)
+
+	// The file handle has no dir or name, so the MANIFEST is directly under the root.
+	manifest, err := os.ReadFile(path.Join(backupRoot, backupManifestFileName))
+	require.NoError(t, err)
+	var bm builtinBackupManifest
+	require.NoError(t, json.Unmarshal(manifest, &bm))
+	require.Len(t, bm.BinlogFileEntries, 1)
+	require.Len(t, bm.BinlogFileEntries[0].Chunks, 4, "the binlog must be chunked")
+
+	setRestoreWriteMode(t, restoreWriteModeDirect)
+	var directOpens, bufferedOpens atomic.Int32
+	oldOpenFile := openFile
+	t.Cleanup(func() { openFile = oldOpenFile })
+	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		if flag&unix.O_DIRECT != 0 {
+			directOpens.Add(1)
+		} else if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+			bufferedOpens.Add(1)
+		}
+		return oldOpenFile(name, flag, perm)
+	}
+
+	// Restore into a target with another binlog basename.
+	dstDir := path.Join(backupRoot, "dst")
+	require.NoError(t, os.MkdirAll(dstDir, 0o755))
+	dstBase := path.Join(dstDir, "dst-bin")
+	_, err = be.ExecuteRestore(t.Context(), RestoreParams{
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+			DataDir:               dataDir,
+			BinLogPath:            dstBase,
+			RelayLogPath:          path.Join(backupRoot, "relaylog"),
+			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
+			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
+		},
+		Logger:               logutil.NewMemoryLogger(),
+		Mysqld:               newBackupTestMysqld(t),
+		Concurrency:          4,
+		HookExtraEnv:         map[string]string{},
+		DbName:               "test",
+		Keyspace:             "test",
+		Shard:                "-",
+		StartTime:            time.Now(),
+		Stats:                backupstats.NoStats(),
+		MysqlShutdownTimeout: time.Minute,
+	}, filebackupstorage.NewBackupHandle(nil, "", "", true))
+	require.NoError(t, err)
+
+	got, err := os.ReadFile(dstBase + ".000001")
+	require.NoError(t, err)
+	assert.True(t, bytes.Equal(binlog, got), "restored binlog does not match")
+	assert.Zero(t, bufferedOpens.Load(), "no chunk of the binlog may be written without O_DIRECT")
+	assert.GreaterOrEqual(t, directOpens.Load(), int32(4), "each of the 4 chunks of the binlog must be written with O_DIRECT")
 }
 
 // TestExecuteRestoreDirectChecksBeforeRemovingData checks that a restore that can't be done in
