@@ -3204,7 +3204,7 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	// waitTimeout*X -- where X is the number of sub-steps where the waitTimeout
 	// value is used: stopping existing streams, waiting for replication to catch
 	// up, initializing the target sequences, and completing the detached
-	// post-journal tail, which runs without checking the locks.
+	// post-journal tail.
 	postJournalTimeout := max(waitTimeout, 30*time.Second)
 	ksLockTTL := waitTimeout*3 + postJournalTimeout
 	startPostJournalCtx := func(ctx context.Context) (context.Context, context.CancelFunc) {
