@@ -294,5 +294,20 @@ func TestVtgateEvaluatesColumnCollations(t *testing.T) {
 
 		assert.Equal(t, []string{"1", "1", "1", "2", "1"}, column("select l, count(*) from sorted group by l order by l", 1), workload)
 		assert.Equal(t, []string{"2", "1", "1", "2"}, column("select g, count(*) from sorted group by g order by g", 1), workload)
+
+		// vtgate puts the separator between the GROUP_CONCAT of each shard,
+		// in the character set of the values: the utf8mb4 bytes of 'ü'
+		// between latin1 values come out as 'Ã¼', and between gbk values
+		// as '眉'. The order of the shards is not checked.
+		for _, query := range []string{
+			"select group_concat(l separator 'ü') from sorted where id in (4, 5)",
+			"select group_concat(g separator 'ü') from sorted where id in (1, 4)",
+		} {
+			values := column(query, 0)
+			if assert.Len(t, values, 1, workload) {
+				assert.Contains(t, values[0], "ü", "%s: %s", workload, query)
+				assert.NotContains(t, values[0], "Ã", "%s: %s", workload, query)
+			}
+		}
 	}
 }

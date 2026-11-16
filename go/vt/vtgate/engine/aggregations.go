@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -312,6 +313,29 @@ type aggregatorGroupConcat struct {
 	n      int
 }
 
+// groupConcatSeparator returns the separator of a GROUP_CONCAT in the
+// character set of the values that vtgate puts it between, which are the
+// column col of rows with these fields.
+//
+// The separator is text of the statement, in the connection character set,
+// utf8mb4. With --convert-result-charset the values are in the character set
+// of the collation in their field: a tablet with
+// --queryserver-config-raw-result-charset sends the GROUP_CONCAT of a
+// latin1_german2_ci column in latin1. MySQL converts the separator to the
+// character set of the column: GROUP_CONCAT(l SEPARATOR 'ü') of 'Müller' and
+// 'MUELLER' is 4D FC 6C 6C 65 72 FC 4D 55 45 4C 4C 45 52, and with the
+// separator '中', which latin1 does not have, the separator is "?". Without
+// the flag, and for values that are in the connection character set or have
+// the binary collation, the separator stays as it is.
+func groupConcatSeparator(vcursor VCursor, fields []*querypb.Field, col int, separator string) []byte {
+	if !vcursor.ConvertResultCharset() || col >= len(fields) {
+		return []byte(separator)
+	}
+	statement := []*querypb.Field{{Type: sqltypes.VarChar, Charset: uint32(vcursor.ConnCollation())}}
+	conv := resultcharset.ToFields(statement, fields[col:col+1])
+	return conv.Value(0, sqltypes.NewVarChar(separator)).Raw()
+}
+
 func (a *aggregatorGroupConcat) add(row []sqltypes.Value) error {
 	if row[a.from].IsNull() {
 		return nil
@@ -411,7 +435,13 @@ func isComparable(typ sqltypes.Type) bool {
 	return false
 }
 
-func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env *evalengine.ExpressionEnv, collation collations.ID) (*aggregationState, []*querypb.Field, error) {
+// newAggregation returns the state of the aggregations of one execution over
+// rows with these fields.
+func newAggregation(vcursor VCursor, fields []*querypb.Field, aggregates []*AggregateParams, env *evalengine.ExpressionEnv) (*aggregationState, []*querypb.Field, error) {
+	collation := vcursor.ConnCollation()
+	// The fields that are returned are changed below, the ones of the rows
+	// say which character set the rows are in.
+	rowFields := fields
 	fields = slice.Map(fields, func(from *querypb.Field) *querypb.Field { return from.CloneVT() })
 
 	aggregators := make([]aggregator, len(fields))
@@ -497,7 +527,7 @@ func newAggregation(fields []*querypb.Field, aggregates []*AggregateParams, env 
 
 		case opcode.AggregateGroupConcat:
 			gcFunc := aggr.Func.(*sqlparser.GroupConcatExpr)
-			separator := []byte(gcFunc.Separator)
+			separator := groupConcatSeparator(vcursor, rowFields, aggr.Col, gcFunc.Separator)
 			ag = &aggregatorGroupConcat{
 				from:      aggr.Col,
 				type_:     targetType,

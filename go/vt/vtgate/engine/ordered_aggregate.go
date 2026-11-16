@@ -133,7 +133,7 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 		return oa.executeGroupBy(result)
 	}
 
-	agg, fields, err := newAggregation(result.Fields, oa.Aggregates, env, vcursor.ConnCollation())
+	agg, fields, err := newAggregation(vcursor, result.Fields, oa.Aggregates, env)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (oa *OrderedAggregate) TryStreamExecute(ctx context.Context, vcursor VCurso
 		var err error
 
 		if agg == nil && len(qr.Fields) != 0 {
-			agg, fields, err = newAggregation(qr.Fields, oa.Aggregates, env, vcursor.ConnCollation())
+			agg, fields, err = newAggregation(vcursor, qr.Fields, oa.Aggregates, env)
 			if err != nil {
 				return err
 			}
@@ -310,7 +310,7 @@ func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bind
 		return nil, err
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-	_, fields, err := newAggregation(qr.Fields, oa.Aggregates, env, vcursor.ConnCollation())
+	_, fields, err := newAggregation(vcursor, qr.Fields, oa.Aggregates, env)
 	if err != nil {
 		return nil, err
 	}

@@ -24,9 +24,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
@@ -177,5 +181,62 @@ func BenchmarkScalarAggregate(b *testing.B) {
 				}
 			})
 		})
+	}
+}
+
+// TestGroupConcatSeparatorCharset concatenates the GROUP_CONCAT of two
+// shards. The separator is in the character set of the values: for a
+// latin1_german2_ci column l with 'Müller' and 'MUELLER', MySQL 8.0.46 gives,
+// read with character_set_results = NULL,
+//
+//	HEX(GROUP_CONCAT(l ORDER BY id SEPARATOR 'ü'))   4DFC6C6C6572FC4D55454C4C4552
+//	HEX(GROUP_CONCAT(l ORDER BY id SEPARATOR '中'))  4DFC6C6C65723F4D55454C4C4552
+func TestGroupConcatSeparatorCharset(t *testing.T) {
+	latin1German2 := collations.MySQL8().LookupByName("latin1_german2_ci")
+	utf8mb4 := collations.MySQL8().DefaultConnectionCharset()
+	rows := func(collation collations.ID, values ...string) *sqltypes.Result {
+		qr := &sqltypes.Result{Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32, Charset: uint32(collations.CollationBinaryID)},
+			{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collation), ColumnLength: 10},
+		}}
+		for i, value := range values {
+			qr.Rows = append(qr.Rows, sqltypes.Row{sqltypes.NewInt32(int32(i)), sqltypes.MakeTrusted(sqltypes.VarChar, []byte(value))})
+		}
+		return qr
+	}
+	tests := []struct {
+		name      string
+		rows      *sqltypes.Result
+		convert   bool
+		separator string
+		value     string
+	}{
+		{"latin1 values", rows(latin1German2, "M\xfcller", "MUELLER"), true, "ü", "M\xfcller\xfcMUELLER"},
+		{"latin1 values, a separator that latin1 does not have", rows(latin1German2, "M\xfcller", "MUELLER"), true, "中", "M\xfcller?MUELLER"},
+		{"utf8mb4 values", rows(utf8mb4, "Müller", "MUELLER"), true, "ü", "MüllerüMUELLER"},
+		{"utf8mb4 values, without the flag", rows(utf8mb4, "Müller", "MUELLER"), false, "ü", "MüllerüMUELLER"},
+	}
+	for _, tc := range tests {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, stream %v", tc.name, stream), func(t *testing.T) {
+				param := NewAggregateParam(AggregateGroupConcat, 1, nil, "", collations.MySQL8())
+				param.Func = &sqlparser.GroupConcatExpr{Separator: tc.separator}
+				aggregate := &ScalarAggregate{
+					Aggregates: []*AggregateParams{param},
+					Input:      &fakePrimitive{results: []*sqltypes.Result{tc.rows}},
+				}
+				vcursor := &noopVCursor{convertResultCharset: tc.convert}
+				var qr *sqltypes.Result
+				var err error
+				if stream {
+					qr, err = wrapStreamExecute(aggregate, vcursor, map[string]*querypb.BindVariable{}, true)
+				} else {
+					qr, err = aggregate.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true)
+				}
+				require.NoError(t, err)
+				require.Len(t, qr.Rows, 1)
+				assert.Equal(t, tc.value, qr.Rows[0][1].ToString())
+			})
+		}
 	}
 }
