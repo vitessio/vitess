@@ -301,11 +301,8 @@ func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID cl
 				log.Warn("lease of the lock expired before the lock was released", slog.Int64("lease_id", int64(leaseID)), slog.String("path", nodePath))
 				return
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(keepAliveRetryDelay):
-			}
+			// If ctx ends meanwhile, the next attempt fails before reaching etcd.
+			time.Sleep(keepAliveRetryDelay)
 		}
 		var err error
 		if leaseKA, err = cli.KeepAlive(ctx, leaseID); err != nil {
