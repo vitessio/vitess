@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -140,6 +141,59 @@ func TestForTextOtherCharsets(t *testing.T) {
 	require.NotNil(t, swe7)
 	assert.Zero(t, swe7.Collate([]byte("Ä"), []byte("ä"), false))
 	assert.NotZero(t, swe7.Collate([]byte("Ä"), []byte("["), false))
+}
+
+// TestForTextASCII checks ASCII text in a character set where it does not have
+// the bytes of ASCII. In sjis MySQL 8.0.46 writes 'a\b' as 61 81 5F 62, the
+// weight string of the backslash in sjis_japanese_ci is 81 5F, and 'a\b' does
+// not sort before 'a]b', where the byte 5C does.
+func TestForTextASCII(t *testing.T) {
+	const sjisJapaneseCI collations.ID = 13
+	plain := Lookup(sjisJapaneseCI)
+	require.NotNil(t, plain)
+	sjis := Lookup(ForText(sjisJapaneseCI, utf8mb40900AICI))
+	require.NotNil(t, sjis)
+
+	assert.Equal(t, "815F", strings.ToUpper(hex.EncodeToString(sjis.WeightString(nil, []byte(`\`), 0))))
+	assert.Positive(t, sjis.Collate([]byte(`a\b`), []byte("a]b"), false))
+	assert.Zero(t, sjis.Collate([]byte(`a\b`), []byte(`a\b`), false))
+	// The bytes of the utf8mb4 text, given to sjis_japanese_ci as they are.
+	assert.Negative(t, plain.Collate([]byte(`a\b`), []byte("a]b"), false))
+
+	hash := func(c Collation, text string) vthash.Hash {
+		h := vthash.New()
+		c.Hash(&h, []byte(text), 0)
+		return h.Sum128()
+	}
+	// A row that is in sjis and one that is in utf8mb4 are the same value.
+	assert.Equal(t, hash(plain, "a\x81\x5fb"), hash(sjis, `a\b`))
+
+	// Text without a backslash is not converted, and is compared the same.
+	assert.Zero(t, sjis.Collate([]byte("abc"), []byte("ABC"), false))
+}
+
+// TestIsASCIIIdentical checks which character sets have ASCII text as the
+// bytes of ASCII. MySQL 8.0.46 writes '\\' as 81 5F in sjis and as 5C in
+// cp932, and 'Ä' as 5B in swe7.
+func TestIsASCIIIdentical(t *testing.T) {
+	tests := map[string]bool{
+		"utf8mb4_0900_ai_ci": true,
+		"utf8mb3_general_ci": true,
+		"latin1_swedish_ci":  true,
+		"gbk_chinese_ci":     true,
+		"cp932_japanese_ci":  true,
+		"sjis_japanese_ci":   false,
+		"swe7_swedish_ci":    false,
+		"ucs2_general_ci":    false,
+		"utf16_general_ci":   false,
+		"utf16le_general_ci": false,
+		"utf32_general_ci":   false,
+	}
+	for name, want := range tests {
+		coll := Lookup(collations.MySQL8().LookupByName(name))
+		require.NotNil(t, coll, name)
+		assert.Equal(t, want, charset.IsASCIIIdentical(coll.Charset()), name)
+	}
 }
 
 // TestForTextKeepsTheCollation checks when ForText returns the collation that

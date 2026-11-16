@@ -121,7 +121,7 @@ func (r *textCollationRegistry) id(coll Collation, to, src Charset) collations.I
 		Collation: coll,
 		id:        id,
 		from:      src,
-		ascii:     asciiIdentical(src) && asciiIdentical(to),
+		ascii:     charset.IsASCIIIdentical(src) && charset.IsASCIIIdentical(to),
 	}
 	var wrapped Collation = text
 	if tiny, ok := coll.(TinyWeightCollation); ok {
@@ -148,17 +148,6 @@ func (r *textCollationRegistry) lookup(id collations.ID) Collation {
 		return nil
 	}
 	return (*p)[i]
-}
-
-// asciiIdentical reports whether ASCII text has the bytes of ASCII in cs. It
-// does not in ucs2, utf16, utf16le and utf32, and in swe7, which has Ä at the
-// byte of "[" and eight more letters in place of ASCII punctuation.
-func asciiIdentical(cs Charset) bool {
-	switch cs.(type) {
-	case charset.Charset_ucs2, charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_utf32:
-		return false
-	}
-	return cs.Name() != "swe7"
 }
 
 // textCollation is a collation of ForText: the embedded collation for text
