@@ -148,7 +148,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 ) (*vstreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid VStream options: %v", err)
+		return nil, vterrors.Wrapf(err, "invalid VStream options")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{

@@ -864,7 +864,7 @@ func TestStreamRowsReusesRowPool(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			execStatements(t, []string{tc.create})
-			defer execStatements(t, []string{"drop table t1"})
+			t.Cleanup(func() { execStatements(t, []string{"drop table t1"}) })
 
 			// Six-digit ids keep every row the same length, so every full packet holds the same number of rows.
 			const batch, firstID = 5000, 100000
@@ -936,7 +936,7 @@ func TestStreamRowsDropsDensePoolForLargeRows(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, " + smallColumns("varbinary(1)") + ", val longblob, primary key(id))",
 	})
-	defer execStatements(t, []string{"drop table t1"})
+	t.Cleanup(func() { execStatements(t, []string{"drop table t1"}) })
 
 	var stmts []string
 	for first := firstID; first < firstID+denseRows; first += 5000 {
@@ -1016,9 +1016,7 @@ func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
 	execStatements(t, []string{
 		"create table t1(id int, val longblob, primary key(id))",
 	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
+	t.Cleanup(func() { execStatements(t, []string{"drop table t1"}) })
 
 	// Packet k holds k small rows followed by the large one, so the large value sits in slot k of that
 	// packet; with a fixed packet size of bigBytes the packet closes right after it.
@@ -1114,7 +1112,7 @@ func TestRowStreamerMemoryBoundsFlag(t *testing.T) {
 // resumed from a position, which goes through the uvstreamer's catchup streamer.
 func TestStreamsRejectUnknownOverride(t *testing.T) {
 	execStatements(t, []string{"create table t1(id int, val varbinary(128), primary key(id))"})
-	defer execStatements(t, []string{"drop table t1"})
+	t.Cleanup(func() { execStatements(t, []string{"drop table t1"}) })
 	require.NoError(t, engine.se.Reload(t.Context()))
 
 	options := &binlogdatapb.VStreamOptions{ConfigOverrides: map[string]string{"no-such-override": "1"}}

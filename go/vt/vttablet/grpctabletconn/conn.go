@@ -818,6 +818,9 @@ func (t *rowPoolTracker) trim(rows []*querypb.Row) []*querypb.Row {
 		return rows
 	}
 
+	// One pass measures the slots the packet wrote and the packet's own
+	// footprint, which sets the budget.
+	valueBytes, fieldCount := 0, 0
 	for i, r := range rows {
 		if i >= len(t.caps) {
 			t.caps = append(t.caps, 0)
@@ -825,9 +828,11 @@ func (t *rowPoolTracker) trim(rows []*querypb.Row) []*querypb.Row {
 		c := cap(r.Values) + cap(r.Lengths)*8
 		t.total += c - t.caps[i]
 		t.caps[i] = c
+		valueBytes += len(r.Values)
+		fieldCount = max(fieldCount, len(r.Lengths))
 	}
 
-	if t.total <= sqltypes.RowPoolPacketBudget(rows) {
+	if t.total <= sqltypes.RowPoolBudget(valueBytes, len(rows), fieldCount) {
 		return rows
 	}
 

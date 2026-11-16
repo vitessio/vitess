@@ -57,7 +57,9 @@ func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string
 		query:   query,
 		send:    send,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize, vttablet.VStreamerMemoryBounds),
+		// VStreamResults reuses no row pool, so the memory bounds (and their
+		// packet-size cap) do not apply to it.
+		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize, false),
 	}
 }
 

@@ -91,7 +91,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 ) (*rowStreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid VStream options: %v", err)
+		return nil, vterrors.Wrapf(err, "invalid VStream options")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
@@ -411,10 +411,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	// Each sent row carries one length per selected column; the row pool's
 	// retention budget is derived from every packet's own footprint, see
 	// sqltypes.RowPoolBudget.
-	fieldCount := len(rs.plan.fields())
+	fields := rs.plan.fields()
+	fieldCount := len(fields)
 
 	err = safeSend(rs.ctx, &binlogdatapb.VStreamRowsResponse{
-		Fields:   rs.plan.fields(),
+		Fields:   fields,
 		Pkfields: pkfields,
 		Gtid:     gtid,
 	})

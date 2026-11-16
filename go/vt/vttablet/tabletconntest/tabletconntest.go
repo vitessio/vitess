@@ -1233,12 +1233,12 @@ func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 		}
 	}
 	f.VStreamRowsResponses = packets
-	defer func() { f.VStreamRowsResponses = nil }()
+	t.Cleanup(func() { f.VStreamRowsResponses = nil })
 
 	for _, memoryBounds := range []bool{true, false} {
 		var got []rowPoolSeen
 		withMemoryBounds(memoryBounds, func() {
-			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+			ctx := callerid.NewContext(t.Context(), TestCallerID, TestVTGateCallerID)
 			err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamRowsResponse) error {
 				if recordRowPool(&got, resp.Rows) {
 					resp.Rows = nil
@@ -1276,12 +1276,12 @@ func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 		packets = append(packets, &binlogdatapb.VStreamTablesResponse{TableName: "t1", Rows: rows})
 	}
 	f.VStreamTablesResponses = packets
-	defer func() { f.VStreamTablesResponses = nil }()
+	t.Cleanup(func() { f.VStreamTablesResponses = nil })
 
 	for _, memoryBounds := range []bool{true, false} {
 		var got []rowPoolSeen
 		withMemoryBounds(memoryBounds, func() {
-			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+			ctx := callerid.NewContext(t.Context(), TestCallerID, TestVTGateCallerID)
 			err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamTablesResponse) error {
 				if recordRowPool(&got, resp.Rows) {
 					resp.Rows = nil
