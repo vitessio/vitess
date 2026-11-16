@@ -48,14 +48,17 @@ var _ Primitive = (*RecurseCTE)(nil)
 // TODO: This should be controlled with the cte_max_recursion_depth system variable.
 const maxRecurseDepth = 1000
 
-// recursionText returns the conversion of the rows of a recursion, which have
-// the fields from, to the character sets of the fields of the seed, and nil
-// when there is nothing to convert.
+// maxRecursionWarnings is the number of warnings that one execution records
+// for the values of its recursions, which is the max_error_count of MySQL.
+const maxRecursionWarnings = 1024
+
+// recursionRows returns the rows of a recursion in the character sets of the
+// fields of the seed, converted by text, the rowsInFields of the two, which
+// is nil when there is nothing to convert.
 //
 // The columns of a recursive CTE are the ones of its seed, and the result has
-// the fields of the seed. With --convert-result-charset the text of a row is
-// in the character set of the collation in the field of its own result, and
-// the recursion can read another column than the seed. For
+// the fields of the seed. The recursion can read another column than the
+// seed. For
 //
 //	with recursive r (id, l) as (
 //	  select id, l from a where id = 2
@@ -63,30 +66,7 @@ const maxRecurseDepth = 1000
 //	select id, l from r
 //
 // with a latin1 column a.l and a utf8mb4 column d.u, MySQL 8.0.46 returns
-// the 'ß' of d.u as DF, in latin1. vtgate returned its utf8mb4 bytes, C3 9F,
-// with the field of a.l, and a utf8mb4 client got 'ÃŸ'.
-//
-// What becomes of a character that the character set of the seed does not
-// have is in recursionRows. Without the flag every result is in the
-// connection character set.
-func (r *RecurseCTE) recursionText(vcursor VCursor, from, seed []*querypb.Field) *resultcharset.Conversion {
-	if !vcursor.ConvertResultCharset() || len(from) == 0 || len(seed) == 0 {
-		return nil
-	}
-	conv := resultcharset.ToFields(from, seed)
-	if !conv.ConvertsValues() {
-		return nil
-	}
-	return conv
-}
-
-// maxRecursionWarnings is the number of warnings that one execution records
-// for the values of its recursions, which is the max_error_count of MySQL.
-const maxRecursionWarnings = 1024
-
-// recursionRows returns the rows of a recursion in the character sets of the
-// fields of the seed, converted by text, which is nil when there is nothing
-// to convert.
+// the 'ß' of d.u as DF, in latin1.
 //
 // A value can have a character that the character set of the column of the
 // seed does not have. For a latin1 column of the seed and 'ab中cd' in the
@@ -173,7 +153,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	// The values of the rows of the seed and of each recursion become bind
 	// variables of the next recursion. The rows of a recursion are converted
 	// to the character sets of the fields of the seed first, see
-	// recursionText, so the fields of the seed convert the values of both.
+	// recursionRows, so the fields of the seed convert the values of both.
 	convert := vcursor.ConvertResultCharset()
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields || convert)
 	if err != nil {
@@ -207,7 +187,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err != nil {
 				return nil, err
 			}
-			rows, err := r.recursionRows(vcursor, r.recursionText(vcursor, rresult.Fields, res.Fields), rresult.Rows, res.Fields, &warned)
+			rows, err := r.recursionRows(vcursor, rowsInFields(vcursor, rresult.Fields, res.Fields), rresult.Rows, res.Fields, &warned)
 			if err != nil {
 				return nil, err
 			}
@@ -237,7 +217,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	//
 	// The values of the rows become bind variables of the next recursion.
 	// The rows of a recursion are converted to the character sets of the
-	// fields of the seed first, see recursionText, so the fields of the seed,
+	// fields of the seed first, see recursionRows, so the fields of the seed,
 	// which come with its first chunk, convert the values of both.
 	convert := vcursor.ConvertResultCharset()
 	var recurseRows []sqltypes.Row
@@ -297,7 +277,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				}
 				if !haveFields && len(result.Fields) != 0 {
 					haveFields = true
-					text = r.recursionText(vcursor, result.Fields, seedFields)
+					text = rowsInFields(vcursor, result.Fields, seedFields)
 				}
 				rows, err := r.recursionRows(vcursor, text, result.Rows, seedFields, &warned)
 				if err != nil {

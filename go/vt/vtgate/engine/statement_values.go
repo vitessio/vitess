@@ -101,3 +101,25 @@ func (s *streamStatementValues) of(vcursor VCursor, chunk *sqltypes.Result) stat
 	}
 	return s.values
 }
+
+// rowsInFields returns the conversion of rows that have the fields from to
+// the character sets of the fields to, for the rows of two results that vtgate
+// returns as one with the fields to: the sources of a UNION, and the seed and
+// the recursions of a recursive CTE. It is nil when there is nothing to
+// convert.
+//
+// With --convert-result-charset the text of a row is in the character set of
+// the collation in the field of its own result: a latin1_swedish_ci column
+// with 'Müller' is 4D FC 6C 6C 65 72, and has to be 4D C3 BC 6C 6C 65 72 in a
+// result whose field says utf8mb4. Without the flag every result is in the
+// connection character set.
+func rowsInFields(vcursor VCursor, from, to []*querypb.Field) *resultcharset.Conversion {
+	if !vcursor.ConvertResultCharset() || len(from) == 0 || len(to) == 0 {
+		return nil
+	}
+	conv := resultcharset.ToFields(from, to)
+	if !conv.ConvertsValues() {
+		return nil
+	}
+	return conv
+}

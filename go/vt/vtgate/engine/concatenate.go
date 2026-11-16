@@ -89,26 +89,6 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	}, nil
 }
 
-// sourceText returns the conversion of the rows of a source of the UNION,
-// which have the fields from, to the character sets of the fields of the
-// UNION, and nil when there is nothing to convert.
-//
-// With --convert-result-charset the text of each source is in the character
-// set of its column, and the UNION has one collation for each of its columns:
-// a latin1_swedish_ci column with 'Müller' in a UNION with a utf8mb4 column is
-// 4D FC 6C 6C 65 72 in its source and 4D C3 BC 6C 6C 65 72 in the UNION.
-// Without the flag every source is in the connection character set.
-func (c *Concatenate) sourceText(vcursor VCursor, from, to []*querypb.Field) *resultcharset.Conversion {
-	if !vcursor.ConvertResultCharset() || len(from) == 0 {
-		return nil
-	}
-	conv := resultcharset.ToFields(from, to)
-	if !conv.ConvertsValues() {
-		return nil
-	}
-	return conv
-}
-
 func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fieldTypes []evalengine.Type, sqlmode evalengine.SQLMode) error {
 	if len(row) != len(fieldTypes) {
 		return errWrongNumberOfColumnsInSelect
@@ -244,7 +224,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		fieldTypes    []evalengine.Type                                   // Cached final field types
 		resultFields  []*querypb.Field                                    // Final fields that need to be set for the first result.
 		needsCoercion = make([]bool, len(c.Sources))                      // Tracks if coercion is needed for each individual source
-		sourceText    = make([]*resultcharset.Conversion, len(c.Sources)) // The conversion of the text of each source, see Concatenate.sourceText
+		sourceText    = make([]*resultcharset.Conversion, len(c.Sources)) // The conversion of the text of each source to the collations of the UNION, see rowsInFields
 	)
 
 	// Process each result chunk, considering type coercion.
@@ -301,7 +281,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 								}
 							}
 							needsCoercion[srcIdx] = srcNeedsCoercion
-							sourceText[srcIdx] = c.sourceText(vcursor, result.Fields, resultFields)
+							sourceText[srcIdx] = rowsInFields(vcursor, result.Fields, resultFields)
 						}
 
 						// We only need to send the fields in the first result.
@@ -407,7 +387,7 @@ func (c *Concatenate) coerceAndVisitResultsForOneSource(
 			break
 		}
 	}
-	text := c.sourceText(vcursor, res[0].Fields, fields)
+	text := rowsInFields(vcursor, res[0].Fields, fields)
 	if res[0].Fields != nil {
 		res[0].Fields = fields
 	}
