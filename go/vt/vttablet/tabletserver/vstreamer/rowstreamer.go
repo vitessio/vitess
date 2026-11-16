@@ -83,6 +83,9 @@ type rowStreamer struct {
 	conn    *snapshotConn
 	options *binlogdatapb.VStreamOptions
 	config  *vttablet.VReplicationConfig
+	// throttlerApp is the app name this streamer checks the throttler with: rowstreamer, or
+	// rowstreamer:vtgate-vstream for the copy phase of a VTGate VStream.
+	throttlerApp throttlerapp.Name
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
@@ -109,6 +112,8 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		conn:    conn,
 		options: options,
 		config:  config,
+
+		throttlerApp: throttlerAppName(throttlerapp.RowStreamerName, options),
 	}
 }
 
@@ -453,7 +458,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		}
 
 		// check throttler.
-		if checkResult, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, throttlerapp.RowStreamerName); !ok {
+		if checkResult, ok := rs.vse.throttlerClient.ThrottleCheckOKOrWaitAppName(rs.ctx, rs.throttlerApp); !ok {
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(rs.ctx, &binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})

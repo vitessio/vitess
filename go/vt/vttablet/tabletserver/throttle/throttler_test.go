@@ -1282,6 +1282,71 @@ func TestIsAppExempted(t *testing.T) {
 // the throttler will use to check metrics.
 // On a replica tablet, that list is expect to probe the tablet itself.
 // On the PRIMARY, the list includes all shard tablets, including the PRIMARY itself.
+// TestVTGateVStreamAppRules checks how throttler rules apply to the app names that a source tablet checks
+// its throttler with: vstreamer and rowstreamer for VReplication workflows, vstreamer:vtgate-vstream and
+// rowstreamer:vtgate-vstream for VTGate VStreams. A rule for vtgate-vstream applies to VTGate VStreams only,
+// and a rule for vstreamer or rowstreamer applies to both kinds of stream, so existing rules keep working.
+func TestVTGateVStreamAppRules(t *testing.T) {
+	vtgateBinlog := throttlerapp.VStreamerName.Concatenate(throttlerapp.VTGateVStreamName)
+	vtgateCopy := throttlerapp.RowStreamerName.Concatenate(throttlerapp.VTGateVStreamName)
+	require.Equal(t, "vstreamer:vtgate-vstream", vtgateBinlog.String())
+	require.Equal(t, "rowstreamer:vtgate-vstream", vtgateCopy.String())
+	// The target side of an Online DDL migration, which also streams from the source tablet as vstreamer.
+	onlineDDLApplier := throttlerapp.VPlayerName.ConcatenateString(
+		throttlerapp.Concatenate("wf", throttlerapp.VReplicationName.String(), throttlerapp.OnlineDDLName.String()))
+
+	newThrottler := func() *Throttler {
+		return &Throttler{
+			throttledApps:   cache.New(cache.NoExpiration, 0),
+			heartbeatWriter: &FakeHeartbeatWriter{},
+		}
+	}
+	plusOneHour := time.Now().Add(time.Hour)
+
+	t.Run("exempting vtgate-vstream exempts only VTGate VStreams", func(t *testing.T) {
+		throttler := newThrottler()
+		throttler.ThrottleApp(throttlerapp.VTGateVStreamName.String(), plusOneHour, DefaultThrottleRatio, true)
+		for _, app := range []throttlerapp.Name{vtgateBinlog, vtgateCopy} {
+			exempted, matched := throttler.IsAppExempted(app.String())
+			assert.True(t, exempted, app)
+			assert.Equal(t, throttlerapp.VTGateVStreamName.String(), matched, app)
+		}
+		for _, app := range []string{throttlerapp.VStreamerName.String(), throttlerapp.RowStreamerName.String(), onlineDDLApplier} {
+			exempted, _ := throttler.IsAppExempted(app)
+			assert.False(t, exempted, app)
+		}
+	})
+	t.Run("throttling vtgate-vstream throttles only VTGate VStreams", func(t *testing.T) {
+		throttler := newThrottler()
+		throttler.ThrottleApp(throttlerapp.VTGateVStreamName.String(), plusOneHour, DefaultThrottleRatio, false)
+		for _, app := range []throttlerapp.Name{vtgateBinlog, vtgateCopy} {
+			throttled, matched := throttler.IsAppThrottled(app.String())
+			assert.True(t, throttled, app)
+			assert.Equal(t, throttlerapp.VTGateVStreamName.String(), matched, app)
+		}
+		for _, app := range []string{throttlerapp.VStreamerName.String(), throttlerapp.RowStreamerName.String(), onlineDDLApplier} {
+			throttled, _ := throttler.IsAppThrottled(app)
+			assert.False(t, throttled, app)
+		}
+	})
+	t.Run("a vstreamer rule still applies to VTGate VStreams", func(t *testing.T) {
+		throttler := newThrottler()
+		throttler.ThrottleApp(throttlerapp.VStreamerName.String(), plusOneHour, DefaultThrottleRatio, true)
+		for _, app := range []throttlerapp.Name{throttlerapp.VStreamerName, vtgateBinlog} {
+			exempted, _ := throttler.IsAppExempted(app.String())
+			assert.True(t, exempted, app)
+		}
+		exempted, _ := throttler.IsAppExempted(vtgateCopy.String())
+		assert.False(t, exempted, "a vstreamer rule does not apply to the copy phase")
+
+		throttler.ThrottleApp(throttlerapp.VStreamerName.String(), plusOneHour, DefaultThrottleRatio, false)
+		for _, app := range []throttlerapp.Name{throttlerapp.VStreamerName, vtgateBinlog} {
+			throttled, _ := throttler.IsAppThrottled(app.String())
+			assert.True(t, throttled, app)
+		}
+	})
+}
+
 func TestRefreshInventory(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)

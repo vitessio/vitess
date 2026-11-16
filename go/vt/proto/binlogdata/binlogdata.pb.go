@@ -2230,7 +2230,12 @@ type VStreamOptions struct {
 	// row streamer should not add a MAX_EXECUTION_TIME query hint.
 	NoTimeouts bool `protobuf:"varint,4,opt,name=no_timeouts,json=noTimeouts,proto3" json:"no_timeouts,omitempty"`
 	// Only stream events for these types. If not provided, the default behavior is to send all event types.
-	EventTypes    []VEventType `protobuf:"varint,5,rep,packed,name=event_types,json=eventTypes,proto3,enum=binlogdata.VEventType" json:"event_types,omitempty"`
+	EventTypes []VEventType `protobuf:"varint,5,rep,packed,name=event_types,json=eventTypes,proto3,enum=binlogdata.VEventType" json:"event_types,omitempty"`
+	// Set by VTGate on the streams of its VStream API. The source tablet's vstreamer and rowstreamer then
+	// check the tablet throttler as vstreamer:vtgate-vstream and rowstreamer:vtgate-vstream rather than as
+	// vstreamer and rowstreamer, so that a throttler rule for vtgate-vstream applies to VTGate VStreams but
+	// not to VReplication workflows. Rules for vstreamer and rowstreamer still apply to both.
+	FromVtgate    bool `protobuf:"varint,6,opt,name=from_vtgate,json=fromVtgate,proto3" json:"from_vtgate,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2298,6 +2303,13 @@ func (x *VStreamOptions) GetEventTypes() []VEventType {
 		return x.EventTypes
 	}
 	return nil
+}
+
+func (x *VStreamOptions) GetFromVtgate() bool {
+	if x != nil {
+		return x.FromVtgate
+	}
+	return false
 }
 
 // VStreamRequest is the payload for VStreamer
@@ -3454,7 +3466,7 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\vp_k_columns\x18\x03 \x03(\x03R\tpKColumns\x12#\n" +
 	"\x0ep_k_index_name\x18\x04 \x01(\tR\vpKIndexName\"A\n" +
 	"\rMinimalSchema\x120\n" +
-	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xd9\x02\n" +
+	"\x06tables\x18\x01 \x03(\v2\x18.binlogdata.MinimalTableR\x06tables\"\xfa\x02\n" +
 	"\x0eVStreamOptions\x12'\n" +
 	"\x0finternal_tables\x18\x01 \x03(\tR\x0einternalTables\x12Z\n" +
 	"\x10config_overrides\x18\x02 \x03(\v2/.binlogdata.VStreamOptions.ConfigOverridesEntryR\x0fconfigOverrides\x12$\n" +
@@ -3462,7 +3474,9 @@ const file_binlogdata_proto_rawDesc = "" +
 	"\vno_timeouts\x18\x04 \x01(\bR\n" +
 	"noTimeouts\x127\n" +
 	"\vevent_types\x18\x05 \x03(\x0e2\x16.binlogdata.VEventTypeR\n" +
-	"eventTypes\x1aB\n" +
+	"eventTypes\x12\x1f\n" +
+	"\vfrom_vtgate\x18\x06 \x01(\bR\n" +
+	"fromVtgate\x1aB\n" +
 	"\x14ConfigOverridesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfd\x02\n" +

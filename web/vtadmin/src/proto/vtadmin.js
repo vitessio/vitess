@@ -126528,6 +126528,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {Array.<string>|null} [tables_to_copy] VStreamOptions tables_to_copy
          * @property {boolean|null} [no_timeouts] VStreamOptions no_timeouts
          * @property {Array.<binlogdata.VEventType>|null} [event_types] VStreamOptions event_types
+         * @property {boolean|null} [from_vtgate] VStreamOptions from_vtgate
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -126604,6 +126605,14 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamOptions.prototype.event_types = $util.emptyArray;
 
         /**
+         * VStreamOptions from_vtgate.
+         * @member {boolean} from_vtgate
+         * @memberof binlogdata.VStreamOptions
+         * @instance
+         */
+        VStreamOptions.prototype.from_vtgate = false;
+
+        /**
          * Creates a new VStreamOptions instance using the specified properties.
          * @function create
          * @memberof binlogdata.VStreamOptions
@@ -126648,6 +126657,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.no_timeouts);
             if (message.event_types != null && message.event_types.length)
                 writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.event_types);
+            if (message.from_vtgate != null && $Object.hasOwnProperty.call(message, "from_vtgate") && message.from_vtgate !== false)
+                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.from_vtgate);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -126780,6 +126791,15 @@ export const binlogdata = $root.binlogdata = (() => {
                         message.event_types.push(reader.int32());
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.from_vtgate = value;
+                        else
+                            delete message.from_vtgate;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -126860,6 +126880,9 @@ export const binlogdata = $root.binlogdata = (() => {
                     if (typeof message.event_types[i] !== "number" || (message.event_types[i] | 0) !== message.event_types[i])
                         return "event_types: enum value[] expected";
             }
+            if (message.from_vtgate != null && $Object.hasOwnProperty.call(message, "from_vtgate"))
+                if (typeof message.from_vtgate !== "boolean")
+                    return "from_vtgate: boolean expected";
             return null;
         };
 
@@ -127011,6 +127034,9 @@ export const binlogdata = $root.binlogdata = (() => {
                             message.event_types[message.event_types.length] = object.event_types[i];
                     }
             }
+            if (object.from_vtgate != null)
+                if (object.from_vtgate)
+                    message.from_vtgate = $Boolean(object.from_vtgate);
             return message;
         };
 
@@ -127038,8 +127064,10 @@ export const binlogdata = $root.binlogdata = (() => {
             }
             if (options.objects || options.defaults)
                 object.config_overrides = {};
-            if (options.defaults)
+            if (options.defaults) {
                 object.no_timeouts = false;
+                object.from_vtgate = false;
+            }
             if (message.internal_tables && message.internal_tables.length) {
                 object.internal_tables = $Array(message.internal_tables.length);
                 for (let j = 0; j < message.internal_tables.length; ++j)
@@ -127066,6 +127094,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 for (let j = 0; j < message.event_types.length; ++j)
                     object.event_types[j] = options.enums === $String ? $root.binlogdata.VEventType[message.event_types[j]] === $undefined ? message.event_types[j] : $root.binlogdata.VEventType[message.event_types[j]] : message.event_types[j];
             }
+            if (message.from_vtgate != null && $Object.hasOwnProperty.call(message, "from_vtgate"))
+                object.from_vtgate = message.from_vtgate;
             return object;
         };
 
