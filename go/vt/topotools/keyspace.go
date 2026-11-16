@@ -104,8 +104,7 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 }
 
 // lockCheckInterval is how often UpdateShardRecords checks the keyspace lock
-// while it waits for the tablet refresh. With the etcd topo, checking the lock
-// renews its lease, so the lease does not expire during a long refresh.
+// while it waits for the tablet refresh.
 const lockCheckInterval = time.Second
 
 // UpdateShardRecords updates QueryServiceDisabled for servedType on the shards
