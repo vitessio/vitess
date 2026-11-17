@@ -70,9 +70,9 @@ func requiredPosition(t *testing.T, encoded string) replication.Position {
 // TestCheckRequiredPosition checks that a candidate that received the
 // required position satisfies it, even when it has not applied it.
 func TestCheckRequiredPosition(t *testing.T) {
-	candidates := map[string]*RelayLogPositions{"a": {
+	candidates := ersCandidatesFromPositions(t, map[string]*RelayLogPositions{requiredAdvancedAlias: {
 		Executed: requiredPosition(t, requiredLow), Combined: requiredPosition(t, requiredHigh),
-	}}
+	}})
 	require.NoError(t, checkRequiredPosition(requiredPosition(t, requiredHigh), candidates, "candidate"))
 }
 
