@@ -209,10 +209,12 @@ type shardState struct {
 	// that this shard should be marked serving only after a reparent
 	// operation has succeeded.
 	waitForReparent bool
-	// primaryNotServing is true when the latest healthcheck from a PRIMARY
-	// tablet of this shard reported not serving. MarkShardNotServing reads it
+
+	// primaryNotServing is true when the latest healthcheck from the current
+	// primary of this shard reported not serving. MarkShardNotServing reads it
 	// to skip waiting for a reparent.
-	primaryNotServing    bool
+	primaryNotServing bool
+
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
 }
@@ -434,7 +436,6 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		// buffering for that case.
 		sstate.waitForReparent = false
 	}
-	sstate.primaryNotServing = !th.Serving
 
 	// if the primary for this shard has been externally reparented, we're undergoing a failover,
 	// which is considered an availability event. update this shard to point it to the new tablet
@@ -443,6 +444,13 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		sstate.externallyReparented = th.PrimaryTermStartTime
 		sstate.currentPrimary = th.Tablet.Alias
 		kss.consistent = false
+	}
+
+	// Ignore a former primary that still reports PRIMARY. A dead one reports
+	// not serving on every healthcheck retry, which must not let the next
+	// reparent skip waitForReparent.
+	if topoproto.TabletAliasEqual(th.Tablet.GetAlias(), sstate.currentPrimary) {
+		sstate.primaryNotServing = !th.Serving
 	}
 
 	kss.ensureConsistentLocked()

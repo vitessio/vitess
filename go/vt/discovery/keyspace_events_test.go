@@ -646,7 +646,8 @@ func TestOnHealthCheck(t *testing.T) {
 
 // TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
 // primary recovering without a reparent ends buffering, and that a reparent
-// still waits for a primary with a newer term.
+// still waits for a primary with a newer term, even after a former primary
+// reports not serving.
 func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	ctx := t.Context()
 
@@ -715,6 +716,16 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 
 	kss.onHealthCheck(primaryHealth(101, true, 20))
 	requireResolved(true, "new primary with a newer term")
+
+	// Fail a healthcheck retry to the dead former primary, then start another
+	// reparent while the current primary still reports serving.
+	kss.onHealthCheck(primaryHealth(100, false, 10))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	requireResolved(false, "stale serving healthcheck from the demoted primary after a former primary failed")
+
+	kss.onHealthCheck(primaryHealth(102, true, 30))
+	requireResolved(true, "new primary with a newer term after a former primary failed")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
