@@ -209,9 +209,9 @@ type shardState struct {
 	// that this shard should be marked serving only after a reparent
 	// operation has succeeded.
 	waitForReparent bool
-	// primaryNotServing is true when the latest primary healthcheck for this
-	// shard reported the primary not serving. MarkShardNotServing reads it to
-	// skip waiting for a reparent. A demoted primary never reports serving again.
+	// primaryNotServing is true when the latest healthcheck from a PRIMARY
+	// tablet of this shard reported not serving. MarkShardNotServing reads it
+	// to skip waiting for a reparent.
 	primaryNotServing    bool
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
