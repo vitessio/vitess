@@ -208,7 +208,11 @@ type shardState struct {
 	// waitForReparent is used to tell the keyspace event watcher
 	// that this shard should be marked serving only after a reparent
 	// operation has succeeded.
-	waitForReparent      bool
+	waitForReparent bool
+	// primaryNotServing is true when the latest primary healthcheck for this
+	// shard reported the primary not serving. MarkShardNotServing reads it to
+	// skip waiting for a reparent. A demoted primary never reports serving again.
+	primaryNotServing    bool
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
 }
@@ -430,6 +434,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		// buffering for that case.
 		sstate.waitForReparent = false
 	}
+	sstate.primaryNotServing = !th.Serving
 
 	// if the primary for this shard has been externally reparented, we're undergoing a failover,
 	// which is considered an availability event. update this shard to point it to the new tablet
@@ -1079,11 +1084,15 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 	// Mark the keyspace inconsistent and the shard not serving.
 	kss.consistent = false
 	sstate.serving = false
-	if isReparentErr {
+	if isReparentErr && !sstate.primaryNotServing {
 		// If the error was triggered because a reparent operation has started.
 		// We mark the shard to wait for a reparent to finish before marking it serving.
 		// This is required to prevent premature stopping of buffering if we receive
 		// a serving healthcheck from a primary that is being demoted.
+		//
+		// Skip this once the healthcheck has already reported the primary not serving,
+		// as onHealthCheck does. Otherwise a primary that recovers from a transient
+		// healthcheck failure without a reparent never marks the shard serving again.
 		sstate.waitForReparent = true
 	}
 	return true
