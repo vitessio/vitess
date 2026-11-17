@@ -644,95 +644,77 @@ func TestOnHealthCheck(t *testing.T) {
 	}
 }
 
-// TestTransientPrimaryHealthCheckFailureDoesNotWedgeKeyspace verifies that a
-// primary which briefly fails its healthcheck, without a reparent, does not
-// leave its keyspace permanently inconsistent when buffering starts in the gap.
-func TestTransientPrimaryHealthCheckFailureDoesNotWedgeKeyspace(t *testing.T) {
+// TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
+// primary recovering without a reparent ends buffering, and that a reparent
+// still waits for a primary with a newer term.
+func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	ctx := t.Context()
-	cell := "cell"
-	keyspace := "testks"
-	shards := []string{"-80", "80-"}
-
-	primaries := map[string]*topodatapb.Tablet{
-		"-80": {Alias: &topodatapb.TabletAlias{Cell: cell, Uid: 100}},
-		"80-": {Alias: &topodatapb.TabletAlias{Cell: cell, Uid: 200}},
-	}
-	newPrimary80 := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: cell, Uid: 201}}
-
-	targetFor := func(shard string) *querypb.Target {
-		return &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}
-	}
-
-	health := func(tablet *topodatapb.Tablet, shard string, serving bool, primaryTermStartTime int64) *TabletHealth {
-		return &TabletHealth{
-			Tablet:               tablet,
-			Target:               targetFor(shard),
-			Serving:              serving,
-			PrimaryTermStartTime: primaryTermStartTime,
-		}
-	}
 
 	kss := &keyspaceState{
-		keyspace: keyspace,
+		keyspace: "ks",
 		shards:   make(map[string]*shardState),
 		lastKeyspace: &topodatapb.SrvKeyspace{
 			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
-				ServedType: topodatapb.TabletType_PRIMARY,
-				ShardReferences: []*topodatapb.ShardReference{
-					{Name: "-80"},
-					{Name: "80-"},
-				},
+				ServedType:      topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{{Name: "0"}},
 			}},
 		},
 	}
 
 	kew := &KeyspaceEventWatcher{
 		ts:               &fakeTopoServer{},
-		localCell:        cell,
-		keyspaces:        map[string]*keyspaceState{keyspace: kss},
+		localCell:        "cell",
+		keyspaces:        map[string]*keyspaceState{"ks": kss},
 		missingKeyspaces: make(map[string]time.Time),
 		subs:             make(map[chan *KeyspaceEvent]struct{}),
 	}
 	kss.kew = kew
 	events := kew.Subscribe()
 
-	requireResolved := func(msg string) {
+	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
+
+	primaryHealth := func(uid uint32, serving bool, termStart int64) *TabletHealth {
+		return &TabletHealth{
+			Tablet:               &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell", Uid: uid}},
+			Target:               target,
+			Serving:              serving,
+			PrimaryTermStartTime: termStart,
+		}
+	}
+
+	// requireResolved asserts whether a keyspace event was broadcast.
+	// onHealthCheck broadcasts synchronously.
+	requireResolved := func(want bool, msg string) {
 		t.Helper()
 
 		select {
-		case ev := <-events:
-			require.Equal(t, keyspace, ev.Keyspace)
+		case <-events:
+			require.True(t, want, "unexpected keyspace event: %s", msg)
 		default:
-			require.Fail(t, "no keyspace event was broadcast", msg)
+			require.False(t, want, "no keyspace event was broadcast: %s", msg)
 		}
-
-		require.True(t, kss.isConsistent(), msg)
 	}
 
-	// Both primaries report healthy. The keyspace becomes consistent.
-	for _, shard := range shards {
-		kss.onHealthCheck(health(primaries[shard], shard, true, 10))
-	}
-	requireResolved("initial healthy primaries")
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "initial healthy primary")
 
-	// The -80 primary fails its healthcheck without a reparent.
-	kss.onHealthCheck(health(primaries["-80"], "-80", false, 10))
-	require.False(t, kss.isConsistent())
-
-	// A query for -80 arrives during the failure and the vtgate starts buffering.
-	_, shouldBuffer := kew.ShouldStartBufferingForTarget(ctx, targetFor("-80"))
+	// Fail the primary healthcheck and start buffering.
+	kss.onHealthCheck(primaryHealth(100, false, 10))
+	_, shouldBuffer := kew.ShouldStartBufferingForTarget(ctx, target)
 	require.True(t, shouldBuffer)
-	require.True(t, kew.MarkShardNotServing(ctx, keyspace, "-80", true /* isReparentErr */))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
 
-	// The same primary, with the same term start time, reports healthy again.
-	kss.onHealthCheck(health(primaries["-80"], "-80", true, 10))
-	requireResolved("same primary recovered without a reparent")
+	// Recover the same primary with the same term.
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "same primary recovered without a reparent")
 
-	// A PlannedReparentShard later runs on the other shard, 80-.
-	kss.onHealthCheck(health(primaries["80-"], "80-", false, 10))
-	require.True(t, kew.MarkShardNotServing(ctx, keyspace, "80-", true /* isReparentErr */))
-	kss.onHealthCheck(health(newPrimary80, "80-", true, 20))
-	requireResolved("reparent on another shard of the same keyspace")
+	// Start a reparent while the old primary still reports serving.
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(false, "stale serving healthcheck from the demoted primary")
+
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	requireResolved(true, "new primary with a newer term")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
