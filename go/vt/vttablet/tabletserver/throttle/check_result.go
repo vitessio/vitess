@@ -43,8 +43,10 @@ package throttle
 
 import (
 	"fmt"
+	"log/slog"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 )
 
@@ -113,6 +115,31 @@ func (c *CheckResult) Summary() string {
 	default:
 		return fmt.Sprintf("unknown response code: %v", c.ResponseCode)
 	}
+}
+
+// LogAttrs returns the slog attributes of a check result. reason is the
+// response code name, so that it is one of a fixed set; the values that
+// Summary formats into its text are in their own attributes.
+func (c *CheckResult) LogAttrs() []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("reason", c.ResponseCode.String()),
+		slog.String("app", c.AppName),
+	}
+	switch c.ResponseCode {
+	case tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED:
+		attrs = append(attrs,
+			slog.String("scope", c.Scope),
+			slog.String("metric_name", c.MetricName),
+			slog.Float64("metric_value", c.Value),
+			slog.Float64("threshold", c.Threshold),
+		)
+	case tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR:
+		attrs = append(attrs,
+			slog.Any("error", c.Error),
+			slog.String("error_code", vterrors.Code(c.Error).String()),
+		)
+	}
+	return attrs
 }
 
 // NewErrorCheckResult returns a check result that indicates an error
