@@ -174,12 +174,13 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		return
 	}
 
-	orc.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), orc.proc
+	orc.exit = exit
 	go func() {
-		if orc.proc != nil {
-			orc.exit <- orc.proc.Wait()
-			close(orc.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	return nil

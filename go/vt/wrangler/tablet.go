@@ -138,7 +138,7 @@ func (wr *Wrangler) shouldSendSemiSyncAck(ctx context.Context, tablet *topodatap
 		return false, err
 	}
 
-	durabilityName, err := wr.ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := wr.ts.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return false, err
 	}

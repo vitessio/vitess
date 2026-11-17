@@ -84,7 +84,7 @@ func TestPromote(t *testing.T) {
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
-	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", &sqltypes.Result{})
 	db.AddQuery("STOP REPLICA", &sqltypes.Result{})
 	db.AddQuery("RESET REPLICA ALL", &sqltypes.Result{})
 	db.AddQuery("FLUSH BINARY LOGS", &sqltypes.Result{})
@@ -118,13 +118,13 @@ func TestPromoteAppliesReceivedTransactions(t *testing.T) {
 	t.Cleanup(db.VerifyAllExecutedOrFail)
 	db.AddExpectedQuery("SELECT 1", nil)
 	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-		Query:       "SHOW REPLICA STATUS",
+		Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 		QueryResult: replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"),
 	})
 	db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
 	// More transactions arrived between the initial status read and the receiver stop.
 	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-		Query:       "SHOW REPLICA STATUS",
+		Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 		QueryResult: replicaStatusResult("No", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10"),
 	})
 	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
@@ -167,7 +167,7 @@ func TestPromotePreservesRelayLogWhenApplierWaitFails(t *testing.T) {
 			t.Cleanup(db.VerifyAllExecutedOrFail)
 			db.AddExpectedQuery("SELECT 1", nil)
 			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-				Query:       "SHOW REPLICA STATUS",
+				Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 				QueryResult: replicaStatusResult("No", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"),
 			})
 			// Any STOP, RESET or FLUSH after the failed wait is unexpected.
@@ -200,13 +200,13 @@ func TestPromoteRefusesUnappliedTransactionsWithStoppedApplier(t *testing.T) {
 			t.Cleanup(db.VerifyAllExecutedOrFail)
 			db.AddExpectedQuery("SELECT 1", nil)
 			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-				Query:       "SHOW REPLICA STATUS",
+				Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 				QueryResult: replicaStatusResult(receiverRunning, "No", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"),
 			})
 			if receiverRunning == "Yes" {
 				db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
 				db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-					Query:       "SHOW REPLICA STATUS",
+					Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 					QueryResult: replicaStatusResult("No", "No", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-10"),
 				})
 			}
@@ -233,12 +233,12 @@ func TestPromoteSkipsWaitForEmptyReceivedPosition(t *testing.T) {
 	t.Cleanup(db.VerifyAllExecutedOrFail)
 	db.AddExpectedQuery("SELECT 1", nil)
 	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-		Query:       "SHOW REPLICA STATUS",
+		Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 		QueryResult: replicaStatusResult("Yes", "No", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", ""),
 	})
 	db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
 	db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
-		Query:       "SHOW REPLICA STATUS",
+		Query:       "SHOW REPLICA STATUS FOR CHANNEL ''",
 		QueryResult: replicaStatusResult("No", "No", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", ""),
 	})
 	// A GTID wait is unexpected; promotion can proceed with the applier stopped.
@@ -269,17 +269,17 @@ func TestPromoteFailsBeforeResetWhenReceiverStateUnknown(t *testing.T) {
 		queries []fakesqldb.ExpectedExecuteFetch
 	}{
 		{name: "status read", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", Error: injectedErr},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", Error: injectedErr},
 		}},
 		// A connecting receiver must be stopped too.
 		{name: "receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", QueryResult: replicaStatusResult("Connecting", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: replicaStatusResult("Connecting", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
 			{Query: "STOP REPLICA IO_THREAD", Error: injectedErr},
 		}},
 		{name: "status read after the receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", QueryResult: replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: replicaStatusResult("Yes", "Yes", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8")},
 			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
-			{Query: "SHOW REPLICA STATUS", Error: injectedErr},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", Error: injectedErr},
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -317,18 +317,18 @@ func TestPromoteReturnsWhenCanceled(t *testing.T) {
 		queries []fakesqldb.ExpectedExecuteFetch
 		blocked string
 	}{
-		{name: "status read", blocked: "SHOW REPLICA STATUS"},
+		{name: "status read", blocked: "SHOW REPLICA STATUS FOR CHANNEL ''"},
 		{name: "receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: running},
 		}, blocked: "STOP REPLICA IO_THREAD"},
 		{name: "status read after the receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: running},
 			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
-		}, blocked: "SHOW REPLICA STATUS"},
+		}, blocked: "SHOW REPLICA STATUS FOR CHANNEL ''"},
 		{name: "applier wait", queries: []fakesqldb.ExpectedExecuteFetch{
-			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: running},
 			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
-			{Query: "SHOW REPLICA STATUS", QueryResult: stopped},
+			{Query: "SHOW REPLICA STATUS FOR CHANNEL ''", QueryResult: stopped},
 		}, blocked: "SELECT WAIT_FOR_EXECUTED_GTID_SET('" + received + "', 0)"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

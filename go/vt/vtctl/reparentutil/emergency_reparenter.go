@@ -78,6 +78,12 @@ type EmergencyReparentOptions struct {
 	// checked after replication is stopped and a reachable primary is demoted.
 	RequiredPosition replication.Position
 
+	// GroupReplicationForceNewGroup applies to a shard whose durability policy uses MySQL Group
+	// Replication, once its group lost its majority: the voters that do not answer are dropped, and
+	// a new group is bootstrapped from the others (see forceNewGroupReplicationGroup). It is refused
+	// on any other shard.
+	GroupReplicationForceNewGroup bool
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -266,15 +272,30 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		)
 	}
 
-	keyspaceDurability, err := erp.ts.GetKeyspaceDurability(ctx, keyspace)
+	// The shard's own policy, from the record read under the shard lock, applies over the
+	// keyspace's: a shard converted to Group Replication while its keyspace is still being
+	// migrated takes the Group Replication path.
+	shardDurability, err := erp.ts.GetShardInfoDurability(ctx, shardInfo)
 	if err != nil {
 		return err
 	}
 
-	erp.logger.Info("Getting a new durability policy", slog.String("durability_policy", keyspaceDurability))
-	opts.durability, err = policy.GetDurabilityPolicy(keyspaceDurability)
+	erp.logger.Info("Getting a new durability policy", slog.String("durability_policy", shardDurability))
+	opts.durability, err = policy.GetDurabilityPolicy(shardDurability)
 	if err != nil {
 		return err
+	}
+
+	// A group replication shard elects its primary through the group, not through
+	// replication positions. It has its own path; see reparentShardLockedGroupReplication.
+	// That path only needs the previous primary's alias, for its cell, and does not read its
+	// tablet record: the record lives in the topology server of that cell, which may be the
+	// cell that was lost.
+	if policy.IsGroupReplication(opts.durability) {
+		if shardInfo.PrimaryAlias != nil {
+			prevPrimary = &topodatapb.Tablet{Alias: shardInfo.PrimaryAlias.CloneVT()}
+		}
+		return erp.reparentShardLockedGroupReplication(ctx, ev, keyspace, shard, prevPrimary, opts)
 	}
 
 	// get the previous primary according to the topology server,
@@ -286,6 +307,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return err
 		}
 		prevPrimary = prevPrimaryInfo.Tablet
+	}
+	if opts.GroupReplicationForceNewGroup {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,
+			"--group-replication-force-new-group applies only to a shard whose durability policy uses group replication, not %s", shardDurability)
 	}
 
 	// read all the tablets and their information

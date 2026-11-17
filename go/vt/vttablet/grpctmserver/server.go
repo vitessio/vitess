@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -639,6 +640,29 @@ func (s *server) ResetReplicationParameters(ctx context.Context, request *tablet
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ResetReplicationParametersResponse{}
 	return response, s.tm.ResetReplicationParameters(ctx)
+}
+
+func (s *server) StartGroupReplication(ctx context.Context, request *tabletmanagerdatapb.StartGroupReplicationRequest) (response *tabletmanagerdatapb.StartGroupReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StartGroupReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StartGroupReplicationResponse{}
+	response.Status, err = s.tm.StartGroupReplication(ctx, request)
+	if request.GetReportDefinitiveRefusal() && tmclient.IsGroupBootstrapRefused(err) {
+		// gRPC returns an error or a response, not both: the definitive refusal travels in the
+		// response, which only a caller that asked for it reads (see tmclient.GroupBootstrapRefusedError).
+		response.Status = nil
+		response.DefinitiveRefusal = err.Error()
+		return response, nil
+	}
+	return response, err
+}
+
+func (s *server) StopGroupReplication(ctx context.Context, request *tabletmanagerdatapb.StopGroupReplicationRequest) (response *tabletmanagerdatapb.StopGroupReplicationResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "StopGroupReplication", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.StopGroupReplicationResponse{}
+	response.Status, err = s.tm.StopGroupReplication(ctx)
+	return response, err
 }
 
 func (s *server) SetReplicationSource(ctx context.Context, request *tabletmanagerdatapb.SetReplicationSourceRequest) (response *tabletmanagerdatapb.SetReplicationSourceResponse, err error) {

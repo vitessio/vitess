@@ -52,7 +52,7 @@ func TestCollectFullStatusData(t *testing.T) {
 			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5|9",
 		),
 	)
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "|"))
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"), "|"))
 	db.AddQuery("SHOW BINARY LOG STATUS", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("File|Position|Binlog_Do_DB|Binlog_Ignore_DB|Executed_Gtid_Set", "varchar|int64|varchar|varchar|varchar"),
 		"binlog.000001|154|||8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
@@ -77,7 +77,8 @@ func TestCollectFullStatusData(t *testing.T) {
 			"Rpl_semi_sync_source_clients|3",
 		),
 	)
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
 		"4.5",
 	))
@@ -122,11 +123,13 @@ func TestCollectFullStatusData(t *testing.T) {
 	// costing their own queries.
 	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
 	assert.Zero(t, db.GetQueryCalledNum("select @@global.replica_net_timeout"))
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
+	// Without the group replication plugin, the group replication status costs one query.
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
 	assert.Equal(t, selectOneCalls+1, db.GetQueryCalledNum("SELECT 1"))
 
-	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", &sqltypes.Result{})
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
 	))
 	db.ResetQueryLog()
@@ -137,7 +140,7 @@ func TestCollectFullStatusData(t *testing.T) {
 	assert.Nil(t, status.ReplicationStatus)
 	assert.Nil(t, status.ReplicationConfiguration)
 	// A primary reads the same batch, so the query count does not move.
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 8)
 }
 
 func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
@@ -158,10 +161,11 @@ func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
 			"42|test-uuid|8.0.35|MySQL Community Server - GPL|1|1|ON|ROW|1|1|FULL|8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5|9",
 		),
 	)
-	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", &sqltypes.Result{})
 	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
 	db.AddQuery("SELECT @@global.gtid_purged", sqltypes.MakeTestResult(sqltypes.MakeTestFields("gtid_purged", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5"))
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", &sqltypes.Result{})
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", &sqltypes.Result{})
 
@@ -173,21 +177,21 @@ func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
 func TestCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
 	db, mysqld := newCollectFullStatusDataTestMysqld(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	db.SetBeforeFunc("SHOW REPLICA STATUS", cancel)
+	db.SetBeforeFunc("SHOW REPLICA STATUS FOR CHANNEL ''", cancel)
 
 	result, err := mysqld.CollectFullStatusData(ctx)
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, result)
 	assert.Zero(t, db.GetQueryCalledNum("SHOW BINARY LOG STATUS"))
-	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
+	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''"))
 }
 
 func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 	t.Run("successful retry", func(t *testing.T) {
 		db, mysqld := newCollectFullStatusDataTestMysqld(t)
 		var connectionClosed atomic.Bool
-		db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
+		db.SetBeforeFunc("SHOW REPLICA STATUS FOR CHANNEL ''", func() {
 			if connectionClosed.CompareAndSwap(false, true) {
 				db.CloseAllConnections()
 			}
@@ -197,18 +201,18 @@ func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"))
 	})
 
 	t.Run("retry failure", func(t *testing.T) {
 		db, mysqld := newCollectFullStatusDataTestMysqld(t)
-		db.SetBeforeFunc("SHOW REPLICA STATUS", db.CloseAllConnections)
+		db.SetBeforeFunc("SHOW REPLICA STATUS FOR CHANNEL ''", db.CloseAllConnections)
 
 		result, err := mysqld.CollectFullStatusData(t.Context())
 
 		require.Error(t, err)
 		assert.Nil(t, result)
-		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+		assert.Equal(t, 2, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"))
 	})
 }
 
@@ -355,7 +359,7 @@ func TestCollectFullStatusDataFailsWhenCoreBatchFails(t *testing.T) {
 	status, err := testMysqld.CollectFullStatusData(t.Context())
 	require.ErrorContains(t, err, "failed to read server_uuid")
 	assert.Nil(t, status)
-	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS"))
+	assert.Zero(t, db.GetQueryCalledNum("SHOW REPLICA STATUS FOR CHANNEL ''"))
 }
 
 func TestFakeMysqlDaemonCollectFullStatusData(t *testing.T) {
@@ -411,7 +415,8 @@ func TestCollectFullStatusDataOmitsGTIDPurgedForFilePos(t *testing.T) {
 	db.AddQuery("SHOW SLAVE STATUS", &sqltypes.Result{})
 	db.AddQuery("SHOW BINARY LOG STATUS", &sqltypes.Result{})
 	db.AddQuery("SHOW MASTER STATUS", &sqltypes.Result{})
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", &sqltypes.Result{})
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", &sqltypes.Result{})
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", &sqltypes.Result{})
 	db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", &sqltypes.Result{})
 

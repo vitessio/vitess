@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -186,44 +187,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			// Find the correct primary tablet and set the replication source,
-			// since the primary could have changed while we executed the backup which can
-			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
-			if err != nil {
-				l.Error("Failed to fetch updated tablet info", slog.Any("error", err))
-				return
-			}
-
-			// Do not do anything for primary tablets or when active reparenting is disabled
-			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
-				return
-			}
-
-			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
-			if err != nil {
-				return
-			}
-
-			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
-			if err != nil {
-				l.Error("Failed to get durability policy", slog.String("keyspace", tablet.Keyspace), slog.Any("error", err))
-				return
-			}
-			durability, err := policy.GetDurabilityPolicy(durabilityName)
-			if err != nil {
-				l.Error("Failed to get durability with name", slog.String("durability_policy", durabilityName), slog.Any("error", err))
-			}
-
-			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
-			if err != nil {
-				l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
-				return
-			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
-				l.Error("Failed to set replication source", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
-			}
+			tm.restoreReplicationAfterBackupLocked(bgCtx, tablet.Tablet, l)
 		}()
 
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
@@ -238,12 +202,67 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	return returnErr
 }
 
-// primarySemiSyncAction returns the semi-sync action that the keyspace's
+// restoreReplicationAfterBackupLocked points the tablet at the shard's primary again after an
+// offline backup, under the action lock: the primary could have changed while the backup ran, which
+// can also change whether the tablet sends semi-sync acks. It does nothing on a primary tablet, when
+// active reparents are disabled, or when the shard's durability policy cannot be resolved. Nor does
+// it on a member of the shard's replication group (groupMemberOfShard): its MySQL replicates through
+// the group, which it rejoins through the sync loop or VTOrc, and must not replicate on the default
+// channel next to it.
+func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context, tablet *topodatapb.Tablet, l logutil.Logger) {
+	tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
+	if err != nil {
+		l.Error("Failed to fetch updated tablet info", slog.Any("error", err))
+		return
+	}
+
+	// Do not do anything for primary tablets or when active reparenting is disabled
+	if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+		return
+	}
+
+	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tablet)
+	if err != nil {
+		return
+	}
+
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		l.Error("Failed to get the shard record", slog.String("keyspace", tablet.Keyspace), slog.String("shard", tablet.Shard), slog.Any("error", err))
+		return
+	}
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
+	if err != nil {
+		l.Error("Failed to get durability policy", slog.String("keyspace", tablet.Keyspace), slog.String("shard", tablet.Shard), slog.Any("error", err))
+		return
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		l.Error("Failed to get durability with name", slog.String("durability_policy", durabilityName), slog.Any("error", err))
+		return
+	}
+	if groupMemberOfShard(durability, si.GroupReplicationVoters, tabletInfo.Tablet) {
+		l.Info("Not configuring replication after the backup: the tablet is a member of the shard's replication group, which it rejoins on its own")
+		return
+	}
+
+	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
+	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, isSemiSync)
+	if err != nil {
+		l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		return
+	}
+	if err := tm.setReplicationSourceLocked(ctx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+		l.Error("Failed to set replication source", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	}
+}
+
+// primarySemiSyncAction returns the semi-sync action that the shard's
 // durability policy requires for the primary.
 func (tm *TabletManager) primarySemiSyncAction(ctx context.Context, tablet *topodatapb.Tablet) (SemiSyncAction, error) {
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := tm.TopoServer.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
@@ -335,4 +354,47 @@ func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 		return mysqlShutdownTimeout
 	}
 	return timeout
+}
+
+// leavesReplicationToGroup returns whether the tablet, which stops being the shard's primary, must
+// not be made to replicate from the new primary on the default channel: a member of the shard's
+// replication group (groupMemberOfShard), or, on a vttablet that runs Group Replication, a tablet
+// whose shard record or policy cannot be read. A tablet that is not a voter of a group's shard
+// replicates from the group's primary, as such tablets do. The read does not inherit the caller's
+// cancellation, only a short bound of its own.
+func (tm *TabletManager) leavesReplicationToGroup(ctx context.Context) bool {
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), groupReplicationTopoReadTimeout)
+	defer cancel()
+	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(readCtx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warn("Cannot read the shard record, so cannot tell whether the tablet is a member of the shard's replication group", slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	durabilityName, err := tm.TopoServer.GetShardInfoDurability(readCtx, si)
+	if err != nil {
+		log.Warn("Cannot read the durability policy, so cannot tell whether the tablet is a member of the shard's replication group", slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		log.Warn("Cannot resolve the durability policy, so cannot tell whether the tablet is a member of the shard's replication group", slog.String("policy", durabilityName), slog.Any("error", err))
+		return groupReplicationEnabled()
+	}
+	return groupMemberOfShard(durability, si.GroupReplicationVoters, tablet)
+}
+
+// groupMemberOfShard returns whether the tablet is a member of its shard's replication group, which
+// replicates through the group and never on the default channel: under a group replication policy, a
+// listed voter, or, while the shard record lists no voter, a tablet that the policy allows in the
+// group (as VTOrc's replicatesThroughGroup). Other tablets of the shard replicate asynchronously from
+// the group's primary.
+func groupMemberOfShard(durability policy.Durabler, voters []*topodatapb.TabletAlias, tablet *topodatapb.Tablet) bool {
+	if !policy.IsGroupReplication(durability) {
+		return false
+	}
+	if len(voters) > 0 {
+		return policy.IsVoter(voters, tablet.Alias)
+	}
+	return policy.IsGroupMember(durability, tablet)
 }

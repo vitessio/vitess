@@ -21,11 +21,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestGetTabletsAndMapByShardCell tests GetTabletMapForShardByCell and GetTabletsByShardCell calls.
@@ -94,4 +97,67 @@ func TestGetTabletsAndMapByShardCell(t *testing.T) {
 			checkTabletListEqual(t, maps.Values(tt.want), tabletList)
 		})
 	}
+}
+
+// TestGetTabletMapForShardWithCellTimeout checks that a cell whose topology server does not
+// answer costs at most the cell timeout, and that the tablets of the other cells are returned.
+func TestGetTabletMapForShardWithCellTimeout(t *testing.T) {
+	ctx := t.Context()
+	seeded, factory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
+	t.Cleanup(seeded.Close)
+	require.NoError(t, seeded.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, seeded.CreateShard(ctx, "ks", "0"))
+	for _, alias := range []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 1}, {Cell: "zone2", Uid: 2}} {
+		require.NoError(t, seeded.CreateTablet(ctx, &topodatapb.Tablet{Alias: alias, Keyspace: "ks", Shard: "0", Hostname: "host"}))
+	}
+	// zone2's topology server is cut off.
+	require.NoError(t, seeded.UpdateCellInfoFields(ctx, "zone2", func(ci *topodatapb.CellInfo) error {
+		ci.ServerAddress = memorytopo.UnreachableServerAddr
+		return nil
+	}))
+	ts, err := topo.NewWithFactory(factory, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+
+	readCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	start := time.Now()
+	tablets, err := ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "0", 100*time.Millisecond)
+	assert.Less(t, time.Since(start), 10*time.Second, "the unreachable cell must cost at most the cell timeout")
+	require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+	assert.Equal(t, []string{"zone1-0000000001"}, maps.Keys(tablets))
+
+	// The cells that did not answer are named, so that a tablet of a cut-off cell can be told
+	// from a tablet that does not exist.
+	tablets, failed, err := ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "0", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+	assert.Equal(t, []string{"zone1-0000000001"}, maps.Keys(tablets))
+	assert.Equal(t, []string{"zone2"}, failed)
+
+	// A shard that does not exist is an error, not a partial result.
+	_, err = ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "-80", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
+}
+
+// TestGetTabletMapForShardWithCellTimeoutWithoutCells checks that a shard that does not exist is an
+// error also when no cell is registered, so that no cell's read checks the shard record.
+func TestGetTabletMapForShardWithCellTimeoutWithoutCells(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx)
+	t.Cleanup(ts.Close)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+
+	readCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "-80", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
+	_, _, err = ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "-80", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
+
+	// A shard that exists has no tablets without cells.
+	tablets, failed, err := ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "0", 100*time.Millisecond)
+	require.NoError(t, err)
+	assert.Empty(t, tablets)
+	assert.Empty(t, failed)
 }
