@@ -19,14 +19,43 @@ package evalengine
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// TestMathIntDivSignedUnsignedBoundary covers the signed/unsigned DIV helpers
-// at the extremes of the int64/uint64 ranges. A BIGINT UNSIGNED result is only
-// valid when the quotient truncates to 0; any negative quotient is out of range.
-func TestMathIntDivSignedUnsignedBoundary(t *testing.T) {
+// TestMathIntDivBoundary covers the integer DIV helpers at the extremes of the
+// int64/uint64 ranges. A BIGINT UNSIGNED result is only valid when the quotient
+// truncates to 0; any negative quotient is out of range. For BIGINT, -2^63 DIV
+// -1 is the one quotient that does not fit.
+func TestMathIntDivBoundary(t *testing.T) {
 	const maxUint = uint64(math.MaxUint64)
 	const absMinInt64 = uint64(1) << 63 // |math.MinInt64| == 2^63
+
+	t.Run("ii", func(t *testing.T) {
+		cases := []struct {
+			v1, v2  int64
+			want    int64
+			wantErr bool
+		}{
+			{math.MinInt64, -1, 0, true}, // 2^63 does not fit
+			{math.MinInt64, 1, math.MinInt64, false},
+			{math.MinInt64, math.MinInt64, 1, false},
+			{math.MaxInt64, -1, -math.MaxInt64, false},
+			{-math.MaxInt64, -1, math.MaxInt64, false},
+			{-10, 3, -3, false},
+			{10, 3, 3, false},
+		}
+		for _, c := range cases {
+			got, err := mathIntDiv_ii0(c.v1, c.v2)
+			if c.wantErr {
+				require.Error(t, err, "mathIntDiv_ii0(%d, %d)", c.v1, c.v2)
+				continue
+			}
+			require.NoError(t, err, "mathIntDiv_ii0(%d, %d)", c.v1, c.v2)
+			assert.Equal(t, c.want, got, "mathIntDiv_ii0(%d, %d)", c.v1, c.v2)
+		}
+	})
 
 	t.Run("iu", func(t *testing.T) {
 		cases := []struct {
@@ -40,9 +69,9 @@ func TestMathIntDivSignedUnsignedBoundary(t *testing.T) {
 			{-5, 10, 0, false},
 			{-10, maxUint, 0, false},
 			// |v1| >= v2 -> out of range (quotient is negative)
-			{math.MinInt64, absMinInt64 - 1, 0, true},   // |v1|=2^63 > 2^63-1
-			{math.MinInt64, absMinInt64, 0, true},       // |v1|=2^63 == v2
-			{-(math.MaxInt64), math.MaxInt64, 0, true},  // equal magnitudes
+			{math.MinInt64, absMinInt64 - 1, 0, true}, // |v1|=2^63 > 2^63-1
+			{math.MinInt64, absMinInt64, 0, true},     // |v1|=2^63 == v2
+			{-math.MaxInt64, math.MaxInt64, 0, true},  // equal magnitudes
 			{-10, 3, 0, true},
 			// v1 >= 0 path unchanged
 			{10, 3, 3, false},
@@ -50,13 +79,12 @@ func TestMathIntDivSignedUnsignedBoundary(t *testing.T) {
 		}
 		for _, c := range cases {
 			got, err := mathIntDiv_iu0(c.v1, c.v2)
-			if (err != nil) != c.wantErr {
-				t.Errorf("mathIntDiv_iu0(%d, %d) err=%v, wantErr=%v", c.v1, c.v2, err, c.wantErr)
+			if c.wantErr {
+				require.Error(t, err, "mathIntDiv_iu0(%d, %d)", c.v1, c.v2)
 				continue
 			}
-			if err == nil && got != c.want {
-				t.Errorf("mathIntDiv_iu0(%d, %d) = %d, want %d", c.v1, c.v2, got, c.want)
-			}
+			require.NoError(t, err, "mathIntDiv_iu0(%d, %d)", c.v1, c.v2)
+			assert.Equal(t, c.want, got, "mathIntDiv_iu0(%d, %d)", c.v1, c.v2)
 		}
 	})
 
@@ -79,13 +107,12 @@ func TestMathIntDivSignedUnsignedBoundary(t *testing.T) {
 		}
 		for _, c := range cases {
 			got, err := mathIntDiv_ui0(c.v1, c.v2)
-			if (err != nil) != c.wantErr {
-				t.Errorf("mathIntDiv_ui0(%d, %d) err=%v, wantErr=%v", c.v1, c.v2, err, c.wantErr)
+			if c.wantErr {
+				require.Error(t, err, "mathIntDiv_ui0(%d, %d)", c.v1, c.v2)
 				continue
 			}
-			if err == nil && got != c.want {
-				t.Errorf("mathIntDiv_ui0(%d, %d) = %d, want %d", c.v1, c.v2, got, c.want)
-			}
+			require.NoError(t, err, "mathIntDiv_ui0(%d, %d)", c.v1, c.v2)
+			assert.Equal(t, c.want, got, "mathIntDiv_ui0(%d, %d)", c.v1, c.v2)
 		}
 	})
 }
