@@ -384,7 +384,10 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 			return wrapError(err, curPos, uvs.vse)
 		}
 		uvs.pos = curPos
-		vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(curPos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
+		vs, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(curPos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
+		if err != nil {
+			return wrapError(err, curPos, uvs.vse)
+		}
 		if err := vs.refreshHistorianForStartup(uvs.ctx); err != nil {
 			return wrapError(err, curPos, uvs.vse)
 		}
@@ -462,24 +465,29 @@ func (uvs *uvstreamer) Stream() error {
 	}
 	vs := uvs.vs
 	if vs == nil {
-		vs = uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
+		var err error
+		vs, err = uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), replication.EncodePosition(uvs.stopPos), uvs.send, "replicate", uvs.options)
+		if err != nil {
+			return err
+		}
 		uvs.setVs(vs)
 	}
 	return vs.Stream()
 }
 
-func (uvs *uvstreamer) newStartupVStreamer(ctx context.Context, startPos, stopPos string, send func([]*binlogdatapb.VEvent) error, phase string, options *binlogdatapb.VStreamOptions) *vstreamer {
-	vs := newVStreamer(ctx, uvs.cp, uvs.se, startPos, stopPos, uvs.filter, uvs.getVSchema(), uvs.throttlerApp, send, phase, uvs.vse, options)
-	if vs != nil {
-		vs.historianRefreshedForStartup = uvs.historianRefreshedForStartup
-		vs.isHistorianRefreshedForStartup = func() bool {
-			return uvs.historianRefreshedForStartup
-		}
-		vs.markHistorianRefreshedForStartup = func() {
-			uvs.historianRefreshedForStartup = true
-		}
+func (uvs *uvstreamer) newStartupVStreamer(ctx context.Context, startPos, stopPos string, send func([]*binlogdatapb.VEvent) error, phase string, options *binlogdatapb.VStreamOptions) (*vstreamer, error) {
+	vs, err := newVStreamer(ctx, uvs.cp, uvs.se, startPos, stopPos, uvs.filter, uvs.getVSchema(), uvs.throttlerApp, send, phase, uvs.vse, options)
+	if err != nil {
+		return nil, err
 	}
-	return vs
+	vs.historianRefreshedForStartup = uvs.historianRefreshedForStartup
+	vs.isHistorianRefreshedForStartup = func() bool {
+		return uvs.historianRefreshedForStartup
+	}
+	vs.markHistorianRefreshedForStartup = func() {
+		uvs.historianRefreshedForStartup = true
+	}
+	return vs, nil
 }
 
 func (uvs *uvstreamer) lock(msg string) {

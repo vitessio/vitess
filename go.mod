@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.27.3
+go 1.27.4
 
 tool (
 	github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
@@ -21,7 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
 	github.com/aws/smithy-go v1.28.7
 	github.com/bndr/gotabulate v1.1.2
-	github.com/brianvoe/gofakeit/v7 v7.18.1
+	github.com/brianvoe/gofakeit/v7 v7.18.2
 	github.com/buger/jsonparser v1.6.1
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
@@ -62,7 +62,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/common v0.73.1
-	github.com/shirou/gopsutil/v4 v4.26.9
+	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/sjmudd/stopwatch v0.1.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/afero v1.15.0
@@ -90,7 +90,7 @@ require (
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sync v0.24.0
+	golang.org/x/sync v0.25.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	golang.org/x/time v0.16.0

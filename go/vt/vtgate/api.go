@@ -19,6 +19,7 @@ package vtgate
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -37,7 +38,7 @@ const (
 
 func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...any) {
 	errMsg := fmt.Sprintf(format, args...)
-	log.Error(fmt.Sprintf("HTTP error on %v: %v, request: %#v", r.URL.Path, errMsg, r))
+	log.Error("HTTP error", slog.String("url", r.URL.Path), slog.String("error", errMsg))
 	http.Error(w, errMsg, http.StatusInternalServerError)
 }
 

@@ -511,28 +511,23 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	})
 }
 
-// TestMySQLShellLogsMaskPasswords checks that the mysqlsh command line that a
-// backup and a restore log has each password from --mysql-shell-flags masked,
-// in every form mysqlsh takes one, and the other arguments as given, and that
-// mysqlsh still gets the passwords.
-func TestMySQLShellLogsMaskPasswords(t *testing.T) {
+// TestMySQLShellLogOmitsFlags checks that the mysqlsh command line that a
+// backup and a restore log leaves out the operator's --mysql-shell-flags and
+// the dump or load flags, which can hold passwords and tokens in forms that are
+// hard to parse, keeps the rest of the "-e" call that Vitess adds, and that
+// mysqlsh still gets everything as given.
+func TestMySQLShellLogOmitsFlags(t *testing.T) {
 	const secret = "mysqlsh_secret_5d2b"
-	originalFlags, originalLocation, originalLoadFlags := mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags
+	originalFlags, originalLocation, originalDumpFlags, originalLoadFlags := mysqlShellFlags, mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags
 	t.Cleanup(func() {
-		mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags = originalFlags, originalLocation, originalLoadFlags
+		mysqlShellFlags, mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags = originalFlags, originalLocation, originalDumpFlags, originalLoadFlags
 	})
-	mysqlShellFlags = strings.ReplaceAll("--defaults-file=/dev/null --js -h localhost -uroot --user root "+
-		"--password={pw} --password {pw} -p{pw} -p {pw} -Ep{pw} --password1={pw} --password2 {pw} --password3={pw} "+
-		"--dbpassword={pw} --dbPassword={pw} --db-password={pw} --loose-password={pw} "+
-		"--uri=root:{pw}@localhost --uri root:{pw}@localhost mysql://root:{pw}@localhost:3306 --ssh=me:{pw}@bastion "+
-		"--uri=root:{pw}@host/db?ssl-ca=file:/x "+
-		"-C root:{pw}@localhost -S root:{pw}@localhost -i root:{pw}@localhost -mc root:{pw}@host:3306", "{pw}", secret)
-	wantArgs := "--defaults-file=/dev/null --js -h localhost -uroot --user root " +
-		"--password=**** --password **** -p**** -p **** -Ep**** --password1=**** --password2 **** --password3=**** " +
-		"--dbpassword=**** --dbPassword=**** --db-password=**** --loose-password=**** " +
-		"--uri=root:****@localhost --uri root:****@localhost mysql://root:****@localhost:3306 --ssh=me:****@bastion " +
-		"--uri=root:****@host/db?ssl-ca=file:/x " +
-		"-C root:****@localhost -S root:****@localhost -i root:****@localhost -mc root:****@host:3306 -e util."
+	withSecret := func(s string) string { return strings.ReplaceAll(s, "{pw}", secret) }
+	mysqlShellFlags = withSecret("--defaults-file=/dev/null --js -h localhost -uroot --password={pw} " +
+		"--password2 -{pw} -mc root:p@{pw}@host:3306 mysql://root:pa/{pw}@host:3306")
+	// Compact JSON, as mysqlsh gets it.
+	const credentials = `"s3EndpointOverride":"https://user:{pw}@minio:9000","azureStorageSasToken":"{pw}"`
+	mysqlShellDumpFlags = withSecret(`{"threads":4,` + credentials + `}`)
 
 	newMysqld := func(t *testing.T) *FakeMysqlDaemon {
 		fakedb := fakesqldb.New(t)
@@ -541,29 +536,37 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 		t.Cleanup(mysqld.Close)
 		return mysqld
 	}
-	assertMasked := func(t *testing.T, logs *logtest.Logs, stream *logutil.MemoryLogger, binary string) {
-		record := logs.Record(t, "running mysql shell")
-		assert.Equal(t, "INFO", record["level"])
-		assert.Contains(t, record["exec_cmd"], binary+" "+wantArgs)
-		assert.NotContains(t, logs.String(), secret)
-		assert.NotContains(t, stream.String(), secret)
-	}
 
 	// fakeMySQLShell writes a mysqlsh that records its arguments, one per line,
-	// and fails. assertRanUnmasked checks that it got the flags as given.
+	// and fails.
 	fakeMySQLShell := func(t *testing.T, binary string) (argsFile string) {
 		argsFile = path.Join(t.TempDir(), "args")
 		generateTestFile(t, binary, "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
 		return argsFile
 	}
-	assertRanUnmasked := func(t *testing.T, argsFile string) {
-		args, err := os.ReadFile(argsFile)
+	// assertRanAndLogged checks that mysqlsh got the flags and the "-e" call
+	// with the JSON flags as given, and that the logged command line is that
+	// call with placeholders for the flags and the JSON.
+	assertRanAndLogged := func(t *testing.T, logs *logtest.Logs, stream *logutil.MemoryLogger, binary, argsFile, function, jsonFlags, placeholder string) {
+		recorded, err := os.ReadFile(argsFile)
 		require.NoError(t, err)
-		assert.Contains(t, strings.ReplaceAll(string(args), "\n", " "), mysqlShellFlags+" -e util.")
+		args := strings.Split(strings.TrimSuffix(string(recorded), "\n"), "\n")
+		require.GreaterOrEqual(t, len(args), 2)
+		call := args[len(args)-1]
+		assert.Equal(t, mysqlShellFlags+" -e", strings.Join(args[:len(args)-1], " "))
+		require.True(t, strings.HasPrefix(call, "util."+function+"(\""), call)
+		require.True(t, strings.HasSuffix(call, "\", "+jsonFlags+")"), call)
+
+		record := logs.Record(t, "running mysql shell")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, binary+" <--mysql-shell-flags> -e "+strings.TrimSuffix(call, jsonFlags+")")+placeholder+")", record["exec_cmd"])
+		assert.NotContains(t, logs.String(), secret)
+		assert.Contains(t, stream.String(), placeholder)
+		assert.NotContains(t, stream.String(), secret)
 	}
 
 	t.Run("backup", func(t *testing.T) {
-		mysqlShellBackupLocation = "logical"
+		mysqlShellBackupLocation = t.TempDir()
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		argsFile := fakeMySQLShell(t, be.binaryName)
 		logs := logtest.Capture(t, slog.LevelInfo)
@@ -575,13 +578,12 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 			Mysqld:      newMysqld(t),
 		}, &FakeBackupHandle{Dir: t.TempDir(), NameV: t.Name()})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertMasked(t, logs, stream, be.binaryName)
-		assertRanUnmasked(t, argsFile)
+		assertRanAndLogged(t, logs, stream, be.binaryName, argsFile, "dumpInstance", mysqlShellDumpFlags, "<--mysql-shell-dump-flags>")
 	})
 
 	t.Run("restore", func(t *testing.T) {
 		mysqlShellBackupLocation = t.TempDir()
-		mysqlShellLoadFlags = `{"updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
+		mysqlShellLoadFlags = withSecret(`{"updateGtidSet":"replace","skipBinlog":true,"progressFile":"",` + credentials + `}`)
 		bin := t.TempDir()
 		argsFile := fakeMySQLShell(t, path.Join(bin, "mysqlsh"))
 		t.Setenv("PATH", bin)
@@ -601,42 +603,6 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 			return io.NopCloser(bytes.NewReader(manifest)), nil
 		}})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertMasked(t, logs, stream, path.Join(bin, "mysqlsh"))
-		assertRanUnmasked(t, argsFile)
+		assertRanAndLogged(t, logs, stream, path.Join(bin, "mysqlsh"), argsFile, "loadDump", mysqlShellLoadFlags, "<--mysql-shell-load-flags>")
 	})
-}
-
-// TestMaskURIPassword probes maskURIPassword across the connection-string
-// shapes mysqlsh accepts, since a wrong parse logs a password in clear.
-func TestMaskURIPassword(t *testing.T) {
-	cases := []struct {
-		name string
-		uri  string
-		want string
-	}{
-		{"no scheme", "root:secret@localhost", "root:****@localhost"},
-		{"with scheme", "mysql://root:secret@localhost:3306", "mysql://root:****@localhost:3306"},
-		{"ssh user info", "me:secret@bastion", "me:****@bastion"},
-		// mysqlsh's parser takes the first ":/" anywhere as the end of the
-		// scheme, so it rejects a schemeless string with a ":/" after the "@"
-		// (it reads everything up to that ":/" as the scheme). The password is
-		// real, so mask it.
-		{"colon-slash after host", "root:secret@host/db?ssl-ca=file:/x", "root:****@host/db?ssl-ca=file:/x"},
-		{"colon-slash after host with scheme", "mysql://root:secret@host/db?ssl-ca=file:/x", "mysql://root:****@host/db?ssl-ca=file:/x"},
-		{"percent-encoded at in password", "root:p%40ss@host", "root:****@host"},
-		{"colon in password", "user:pa:ss@host", "user:****@host"},
-		{"colon-run password", "user:::@host", "user:****@host"},
-		{"IPv6 host", "root:secret@[::1]:3306", "root:****@[::1]:3306"},
-		{"IPv6 host with scheme", "mysql://root:secret@[fe80::1]:3306", "mysql://root:****@[fe80::1]:3306"},
-		{"no password", "root@localhost", "root@localhost"},
-		{"no at sign", "localhost:3306", "localhost:3306"},
-		{"empty", "", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := maskURIPassword(tc.uri)
-			assert.Equal(t, tc.want, got)
-			assert.NotContains(t, got, "secret")
-		})
-	}
 }
