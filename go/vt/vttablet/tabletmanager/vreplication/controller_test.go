@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -911,12 +912,232 @@ func TestTerminalVReplicationError(t *testing.T) {
 	require.False(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator))
 }
 
-func TestControllerSetMessageDoesNotOverwriteParkedState(t *testing.T) {
-	dbClient := binlogplayer.NewMockDBClient(t)
-	blpStats := binlogplayer.NewStats()
-	defer blpStats.Stop()
-	ct := &controller{id: 1, blpStats: blpStats}
-	dbClient.ExpectRequest("update _vt.vreplication set message='Picked source tablet: zone1-0000000100' where id=1 and state not in ('Stopped', 'Error') and (message = '' or message like 'Picked source tablet%' or message like 'Error picking tablet%' or message like 'Error creating tablet picker%')", testDMLResponse, nil)
-	require.NoError(t, ct.setMessage(dbClient, "Picked source tablet: zone1-0000000100"))
-	dbClient.Wait()
+// TestControllerRetryKeepsPickedNoticeFromHidingError checks the query text of
+// the "Picked source tablet" notice: unconditional on a controller's first
+// run, as before, and guarded on a retry, with a NULL message treated as
+// empty.
+func TestControllerRetryKeepsPickedNoticeFromHidingError(t *testing.T) {
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+	for _, retrying := range []bool{false, true} {
+		t.Run(fmt.Sprintf("retrying=%t", retrying), func(t *testing.T) {
+			dbClient := binlogplayer.NewMockDBClient(t)
+			blpStats := binlogplayer.NewStats()
+			defer blpStats.Stop()
+			ct := &controller{id: 1, blpStats: blpStats, retrying: retrying}
+			want := fmt.Sprintf("update _vt.vreplication set message=%s where id=1", encodeString("Picked source tablet: "+alias.String()))
+			if retrying {
+				want += " and (ifnull(message, '') = '' or message like 'Picked source tablet: %' or message like 'Error picking tablet%' or message like 'Error creating tablet picker%')"
+			}
+			dbClient.ExpectRequest(want, testDMLResponse, nil)
+			require.NoError(t, ct.setPickedTabletMessage(dbClient, alias))
+			dbClient.Wait()
+		})
+	}
+}
+
+// vreplicationRow reads a stream's state and message, with a NULL message
+// returned as "NULL".
+func vreplicationRow(t *testing.T, id int) (string, string) {
+	t.Helper()
+	qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("select state, ifnull(message, 'NULL') from _vt.vreplication where id=%d", id))
+	require.NoError(t, err)
+	require.Len(t, qr.Rows, 1)
+	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString()
+}
+
+// TestRetryMessageHandling runs the message writes of a stream's run against
+// MySQL, on a _vt.vreplication row that no controller is running, so that the
+// predicates are checked against real rows, including NULL messages.
+func TestRetryMessageHandling(t *testing.T) {
+	ctx := t.Context()
+	tablet := addTablet(100)
+	defer deleteTablet(tablet)
+
+	savedPickerDelay := discovery.GetTabletPickerRetryDelay()
+	defer discovery.SetTabletPickerRetryDelay(savedPickerDelay)
+	discovery.SetTabletPickerRetryDelay(10 * time.Millisecond)
+
+	// Inserted directly, so the engine does not start a controller for it.
+	bls := &binlogdatapb.BinlogSource{Keyspace: env.KeyspaceName, Shard: env.ShardName, Filter: &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{Match: "t1"}},
+	}}
+	insert := binlogplayer.CreateVReplicationState("retry_messages", bls, "", binlogdatapb.VReplicationWorkflowState_Stopped, vrepldb, 0, 0)
+	qr, err := env.Mysqld.FetchSuperQuery(ctx, insert)
+	require.NoError(t, err)
+	id := int(qr.InsertID)
+	defer func() {
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("delete from _vt.vreplication where id=%d", id)))
+	}()
+
+	const (
+		applyErr    = "error applying event: retryable failure"
+		pickerErr   = "Error picking tablet: no healthy tablet"
+		pickedOther = "Picked source tablet: zone1-0000000200"
+		null        = "NULL"
+	)
+	running := binlogdatapb.VReplicationWorkflowState_Running.String()
+	copying := binlogdatapb.VReplicationWorkflowState_Copying.String()
+
+	dbClient := &realDBClient{nolog: true}
+	require.NoError(t, dbClient.Connect())
+	defer dbClient.Close()
+
+	newCt := func(retrying bool, keyspace string) *controller {
+		blpStats := binlogplayer.NewStats()
+		t.Cleanup(blpStats.Stop)
+		return &controller{
+			vre:              playerEngine,
+			id:               int32(id),
+			blpStats:         blpStats,
+			source:           &binlogdatapb.BinlogSource{Keyspace: keyspace, Shard: env.ShardName},
+			retrying:         retrying,
+			tpTs:             env.TopoServ,
+			tpCells:          []string{env.Cells[0]},
+			tpTabletTypesStr: "replica",
+		}
+	}
+	pickTablet := func(retrying bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			_, err := newCt(retrying, env.KeyspaceName).pickSourceTablet(ctx, dbClient)
+			require.NoError(t, err)
+		}
+	}
+	// No tablet serves this keyspace, so the picker fails and writes
+	// "Error picking tablet: ...".
+	pickNoTablet := func(retrying bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			_, err := newCt(retrying, "no_tablets_ks").pickSourceTablet(ctx, dbClient)
+			require.Error(t, err)
+		}
+	}
+	setStateRunning := func(retrying bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			stats := binlogplayer.NewStats()
+			defer stats.Stop()
+			vr := &vreplicator{id: int32(id), stats: stats, dbClient: newVDBClient(dbClient, stats, 0)}
+			vr.preserveMessage.Store(retrying)
+			require.NoError(t, vr.setState(binlogdatapb.VReplicationWorkflowState_Running, ""))
+		}
+	}
+	copyProgress := func(rowsCopied int64) func(t *testing.T) {
+		return func(t *testing.T) {
+			stats := binlogplayer.NewStats()
+			defer stats.Stop()
+			vr := &vreplicator{id: int32(id), stats: stats, dbClient: newVDBClient(dbClient, stats, 0)}
+			vr.preserveMessage.Store(true)
+			stats.CopyRowCount.Set(rowsCopied)
+			vr.clearPreservedMessageOnCopyProgress()
+			require.Equal(t, rowsCopied == 0, vr.preserveMessage.Load())
+		}
+	}
+
+	type testCase struct {
+		name        string
+		state       string
+		message     string // null for a NULL message
+		run         func(t *testing.T)
+		wantState   string
+		wantMessage string // "Picked" is the notice for the tablet picked here
+	}
+	tcases := []testCase{
+		// A first run behaves as before: every write goes through.
+		{"first run: picked notice replaces an old error", running, applyErr, pickTablet(false), running, "Picked"},
+		{"first run: picked notice on a NULL message", running, null, pickTablet(false), running, "Picked"},
+		{"first run: setState clears an old error", running, applyErr, setStateRunning(false), running, ""},
+		// A retry keeps the error that made the previous run fail.
+		{"retry: picked notice keeps an apply error", running, applyErr, pickTablet(true), running, applyErr},
+		{"retry: picked notice on a NULL message", running, null, pickTablet(true), running, "Picked"},
+		{"retry: picked notice on an empty message", running, "", pickTablet(true), running, "Picked"},
+		{"retry: picked notice replaces a picker error", running, pickerErr, pickTablet(true), running, "Picked"},
+		{"retry: picked notice replaces an older notice", running, pickedOther, pickTablet(true), running, "Picked"},
+		{"retry: picker error replaces an apply error", running, applyErr, pickNoTablet(true), running, "Error picking tablet: "},
+		{"retry: picker error on a NULL message", running, null, pickNoTablet(true), running, "Error picking tablet: "},
+		{"first run: picker error on a NULL message", running, null, pickNoTablet(false), running, "Error picking tablet: "},
+		{"retry: setState keeps an apply error", running, applyErr, setStateRunning(true), running, applyErr},
+		{"retry: setState on a NULL message", running, null, setStateRunning(true), running, ""},
+		{"retry: setState to a new state clears the message", copying, applyErr, setStateRunning(true), running, ""},
+		{"retry: copy progress clears a kept error", copying, applyErr, copyProgress(10), copying, ""},
+		{"retry: no copy progress keeps the error", copying, applyErr, copyProgress(0), copying, applyErr},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			message := encodeString(tc.message)
+			if tc.message == null {
+				message = "NULL"
+			}
+			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("update _vt.vreplication set state=%s, message=%s where id=%d",
+				encodeString(tc.state), message, id)))
+			tc.run(t)
+			gotState, gotMessage := vreplicationRow(t, id)
+			assert.Equal(t, tc.wantState, gotState)
+			switch tc.wantMessage {
+			case "Picked":
+				assert.Equal(t, pickedTabletMessagePrefix+tablet.Alias.String(), gotMessage)
+			case "Error picking tablet: ":
+				assert.True(t, strings.HasPrefix(gotMessage, tc.wantMessage), "message: %q", gotMessage)
+			default:
+				assert.Equal(t, tc.wantMessage, gotMessage)
+			}
+		})
+	}
+}
+
+// TestEngineExecRestartClearsOldError restarts a Running stream that still
+// shows an old apply error through Engine.Exec, as Workflow start and update
+// do, with no writes on the source. The new controller's first run must clear
+// the message right away, without waiting for a position save.
+func TestEngineExecRestartClearsOldError(t *testing.T) {
+	ctx := t.Context()
+	defer deleteTablet(addTablet(100))
+
+	// Source and target are the same MySQL server here, so the test's own
+	// writes reach the vplayer as empty transactions, and it saves their
+	// position (clearing the message) after idleTimeout. Raise it so that
+	// only the restart itself can clear the message within the deadline.
+	savedIdleTimeout := idleTimeout
+	defer func() { idleTimeout = savedIdleTimeout }()
+	idleTimeout = 30 * time.Second
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{Match: "t1"}},
+		},
+	}
+	cancel, id := startVReplication(t, bls, "")
+	defer cancel()
+
+	const oldErr = "error applying event: old failure"
+	require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("update _vt.vreplication set message=%s where id=%d", encodeString(oldErr), id)))
+	_, message := vreplicationRow(t, id)
+	require.Equal(t, oldErr, message)
+
+	_, err := playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Running' where id=%d", id))
+	require.NoError(t, err)
+	expectDBClientQueries(t, qh.Expect(
+		"/update _vt.vreplication set state = 'Running' where id in",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		"/update _vt.vreplication set state='Running', message=left\\('', 1000\\) where id=",
+	))
+
+	// Nothing but the restart can clear the message within this deadline.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		state, message := vreplicationRow(t, id)
+		if state == binlogdatapb.VReplicationWorkflowState_Running.String() && message == "" {
+			break
+		}
+		require.True(t, time.Now().Before(deadline), "old error not cleared by a fresh start: state=%q message=%q", state, message)
+		time.Sleep(10 * time.Millisecond)
+	}
 }

@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -129,6 +130,18 @@ type vreplicator struct {
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
 	workflowConfig             *vttablet.VReplicationConfig
+
+	// preserveMessage is set by the controller when this vreplicator runs
+	// for a retry. The stream's message then holds the error that made the
+	// previous run fail, so setState with an empty message does not clear it
+	// while the state stays the same. The kept error is cleared once the
+	// stream makes progress: by the first position save (GenerateUpdatePos
+	// writes message='') or, in the copy phase, by
+	// clearPreservedMessageOnCopyProgress after the first copied rows.
+	preserveMessage atomic.Bool
+	// rowsCopiedAtStart is the copy row count when this vreplicator was
+	// created, so the copy phase can tell when this run has copied rows.
+	rowsCopiedAtStart int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -178,6 +191,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		workflowConfig:  workflowConfig,
 	}
 	vr.setExistingRowsCopied()
+	vr.rowsCopiedAtStart = vr.stats.CopyRowCount.Get()
 	return vr
 }
 
@@ -578,10 +592,7 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 		Message: message,
 	})
 	buf := sqlparser.NewTrackedBuffer(nil)
-	// Lower-tier write: never overwrite the stop/error reason of a parked
-	// stream. History and vreplication_log below still record it.
-	buf.Myprintf("update _vt.vreplication set message=%s where id=%s and %s",
-		encodeString(message), strconv.Itoa(int(vr.id)), notParkedPredicate)
+	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
 	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
@@ -629,12 +640,12 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
-	// setState(Running, "") is called on every retry with a brand-new
-	// vreplicator (vr.state is still the zero value). Without this, the
-	// empty message clears a retryable apply error even though the row
-	// is already Running. A real transition into this state still clears.
-	if message == "" {
-		query += fmt.Sprintf(" and (state != %v or message = '')", encodeString(state.String()))
+	// On a retry, the row is usually already in this state and its message
+	// is the error that made the previous run fail. Keep that error instead
+	// of clearing it before the retry has made any progress. A change to
+	// another state still clears the message.
+	if message == "" && vr.preserveMessage.Load() {
+		query += fmt.Sprintf(" and (state != %v or ifnull(message, '') = '')", encodeString(state.String()))
 	}
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
@@ -652,6 +663,22 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	vr.state = state
 
 	return nil
+}
+
+// clearPreservedMessageOnCopyProgress clears the message kept from a failed
+// run once this run has copied rows, as GenerateUpdatePos does when it saves
+// a position. Without it, a retry that recovers in the copy phase keeps
+// showing the old error until the next position save.
+func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
+	if !vr.preserveMessage.Load() || vr.stats.CopyRowCount.Get() <= vr.rowsCopiedAtStart {
+		return
+	}
+	query := fmt.Sprintf("update _vt.vreplication set message='' where id=%v", vr.id)
+	if _, err := vr.dbClient.Execute(query); err != nil {
+		log.Warn("Unable to clear the message after copy progress", vr.logAttrs(slog.Any("error", err))...)
+		return
+	}
+	vr.preserveMessage.Store(false)
 }
 
 func encodeString(in string) string {

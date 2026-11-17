@@ -69,24 +69,17 @@ const (
 	RetriesExhaustedIndicator = "retries exhausted"
 )
 
-// notParkedPredicate restricts lower-tier (informational / retryable error)
-// message writes to streams that are not Stopped or Error. For a parked
-// stream, the message is the reason it stopped (fatal tier, written together
-// with the state by vreplicator.setState or by an operator) and must remain
-// the last visible message. Legitimate clearing happens when the stream is
-// moved back to Running/Copying via setState(..., "") or an explicit update.
-var notParkedPredicate = "state not in (" +
-	encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String()) + ", " +
-	encodeString(binlogdatapb.VReplicationWorkflowState_Error.String()) + ")"
+// pickedTabletMessagePrefix starts the notice written after the tablet picker
+// selected a source tablet.
+const pickedTabletMessagePrefix = "Picked source tablet: "
 
-// informationalMessagePredicate restricts controller.setMessage (tablet-picker
-// notices) to rows whose current message is empty or is itself a picker
-// notice. A retryable apply error leaves state=Running, so notParkedPredicate
-// alone does not protect it; this keeps "Picked source tablet" from replacing
-// that error. Do not add this predicate to vreplicator.setMessage: apply
-// errors must still be able to replace a picker notice.
-var informationalMessagePredicate = "(message = '' or message like " +
-	encodeString("Picked source tablet%") + " or message like " +
+// retryKeepsMessagePredicate limits the "Picked source tablet" notice on a
+// retry to rows whose message is empty (or NULL) or is itself a tablet picker
+// message. On a retry, the message holds the error that made the previous
+// run fail, and the notice must not hide it. A NULL message counts as empty:
+// a new row's message is NULL until something writes it.
+var retryKeepsMessagePredicate = "(ifnull(message, '') = '' or message like " +
+	encodeString(pickedTabletMessagePrefix+"%") + " or message like " +
 	encodeString("Error picking tablet%") + " or message like " +
 	encodeString("Error creating tablet picker%") + ")"
 
@@ -119,6 +112,13 @@ type controller struct {
 
 	// Stores the last picked tablet so that it can be ignored if a non-transient error occurs.
 	lastPickedTablet *topodatapb.TabletAlias
+
+	// retrying is true when runBlp runs again after a failed run, so the
+	// stream's message holds the error that made the previous run fail.
+	// It is false for the first run of a controller, which the engine
+	// creates on open, on Exec (for example Workflow start or update), and
+	// on tablet restart. Only the run goroutine reads or writes it.
+	retrying bool
 
 	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
 	tpTs             *topo.Server
@@ -294,6 +294,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
+		ct.retrying = true
 	}
 }
 
@@ -392,6 +393,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
+		// On a retry, keep the previous run's error visible until this run
+		// makes progress. A first run clears the message as before.
+		vr.preserveMessage.Store(ct.retrying)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 
@@ -431,14 +435,28 @@ func terminalVReplicationError(err error, unrecoverable bool, maxTimeToRetry tim
 }
 
 func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
+	return ct.setMessageWhere(dbClient, message, "")
+}
+
+// setPickedTabletMessage writes the "Picked source tablet" notice. On a
+// retry, it does not replace the error that made the previous run fail.
+func (ct *controller) setPickedTabletMessage(dbClient binlogplayer.DBClient, alias *topodatapb.TabletAlias) error {
+	predicate := ""
+	if ct.retrying {
+		predicate = retryKeepsMessagePredicate
+	}
+	return ct.setMessageWhere(dbClient, pickedTabletMessagePrefix+alias.String(), predicate)
+}
+
+func (ct *controller) setMessageWhere(dbClient binlogplayer.DBClient, message, predicate string) error {
 	ct.blpStats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,
 	})
-	// Never overwrite the stop/error reason of a parked stream, or a
-	// retryable apply error still sitting on a Running row.
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v and %s and %s",
-		encodeString(binlogplayer.MessageTruncate(message)), ct.id, notParkedPredicate, informationalMessagePredicate)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	if predicate != "" {
+		query += " and " + predicate
+	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
@@ -471,7 +489,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if err != nil {
 		return tablet, err
 	}
-	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
+	ct.setPickedTabletMessage(dbClient, tablet.Alias)
 	log.Info("found eligible source tablet", ct.logAttrs(slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))...)
 	ct.sourceTablet.Store(tablet.Alias)
 	ct.lastPickedTablet = tablet.Alias

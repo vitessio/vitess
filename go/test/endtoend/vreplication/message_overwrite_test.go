@@ -66,9 +66,9 @@ FOR EACH ROW
 // Subtest retryable_error_then_tablet_pick covers the retry path: a
 // retryable apply error leaves state=Running, the controller waits
 // RetryDelay, then runBlp picks a tablet and writes "Picked source tablet"
-// and replicate() calls setState(Running, ""). Without the guards on those
-// writes, the apply error is replaced and is no longer visible in
-// _vt.vreplication.message.
+// and replicate() calls setState(Running, ""). On a retry, neither write may
+// replace the apply error in _vt.vreplication.message. Once the trigger is
+// dropped, the stream must recover and show Running with an empty message.
 //
 // Subtest on_ddl_stop parks the stream via on_ddl=STOP. The controller
 // exits after setState(Stopped, "Stopped at DDL ...") and is not restarted
@@ -146,9 +146,17 @@ func TestVReplicationMessageOverwrite(t *testing.T) {
 			"after the retryable apply error was written, later _vt.vreplication.message values lost it (tablet pick / Running-clear). later samples:\n%s\nfull samples:\n%s\nlogs:\n%s",
 			formatStreamSamples(overwrites), formatStreamSamples(samples), formatVReplicationLog(logs))
 
-		moveTablesAction(t, "Cancel", cell, workflow, defaultSourceKs, defaultTargetKs, "t1")
-		_, err = targetTab.QueryTablet("drop trigger if exists t1_fail_insert", defaultTargetKs, true)
+		// Once the cause is gone, the next retry applies the event and its
+		// position save clears the kept error, so Workflow show reports a
+		// healthy stream again.
+		_, err = targetTab.QueryTablet("drop trigger t1_fail_insert", defaultTargetKs, true)
 		require.NoError(t, err)
+		require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String(), "message=="))
+		recovered := readStreamRow(t, targetTab, workflow)
+		assert.Equal(t, binlogdatapb.VReplicationWorkflowState_Running.String(), recovered.state)
+		assert.Empty(t, recovered.message, "the kept error was not cleared after the stream recovered")
+
+		moveTablesAction(t, "Cancel", cell, workflow, defaultSourceKs, defaultTargetKs, "t1")
 	})
 
 	t.Run("on_ddl_stop", func(t *testing.T) {

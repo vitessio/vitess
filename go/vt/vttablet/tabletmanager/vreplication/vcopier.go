@@ -454,6 +454,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				return io.EOF
 			default:
 			}
+			vc.vr.clearPreservedMessageOnCopyProgress()
 			select {
 			case <-copyStateGCTicker.C:
 				// Garbage collect older copy_state rows:
