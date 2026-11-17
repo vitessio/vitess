@@ -140,6 +140,7 @@ vitess.io/vitess/go/vt/vttablet/tabletserver/gc
 vitess.io/vitess/go/vt/vttablet/tabletserver/messager
 vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler
 vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry
+vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/strategy/tablethrottler
 vitess.io/vitess/go/vt/vttablet/tabletserver/repltracker
 vitess.io/vitess/go/vt/vttablet/tabletserver/rules
 vitess.io/vitess/go/vt/vttablet/tabletserver/schema
