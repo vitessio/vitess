@@ -1278,6 +1278,18 @@ func TestValidIntroducedLiteral(t *testing.T) {
 			result:     `VARCHAR("8540")`,
 		},
 		{
+			// MySQL checks only the byte ranges in ujis, so an unmapped
+			// double-byte character is accepted.
+			expression: `HEX(_ujis X'A9A1')`,
+			result:     `VARCHAR("A9A1")`,
+		},
+		{
+			// MySQL checks only the byte ranges in gb2312, so an unmapped
+			// double-byte character is accepted.
+			expression: `HEX(_gb2312 X'AAA1')`,
+			result:     `VARCHAR("AAA1")`,
+		},
+		{
 			// MySQL accepts a string that ends in the middle of a character in
 			// eucjpms.
 			expression: `HEX(_eucjpms X'8E')`,

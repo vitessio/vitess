@@ -320,6 +320,11 @@ func IntroducerLiterals(yield Query) {
 	contents := []string{
 		`X'4D7953514C'`, `X'C2'`, `X'41C2'`, `X'C2414243'`, `X'D800'`, `X'00D8'`, `X'00110000'`,
 		`X'F09F9880'`, `X'8540'`, `X'8E'`, `X'8FA1'`, `0xC2`, `b'11000010'`,
+		// These bytes sit on the edges of the byte ranges that introducer.go
+		// ports from MySQL for the multi-byte East Asian character sets, so
+		// widening or narrowing a range by one byte changes a result.
+		`X'80'`, `X'E0'`, `X'A040'`, `X'FD40'`, `X'817F'`, `X'81FD'`, `X'8041'`, `X'815B'`,
+		`X'817B'`, `X'F8A1'`, `X'8EE0'`, `X'A1FF'`, `X'8FA1A0'`, `X'A9A1'`, `X'AAA1'`,
 	}
 
 	for _, pfx := range introducers {
