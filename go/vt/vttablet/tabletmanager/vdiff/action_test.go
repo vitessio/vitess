@@ -407,16 +407,18 @@ func TestPerformVDiffAction(t *testing.T) {
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(UpdateAction),
 				VdiffUuid: uuid,
+				Keyspace:  keyspace,
+				Workflow:  workflow,
 				Options: &tabletmanagerdatapb.VDiffOptions{
 					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
 				},
 			},
 			expectQueries: []queryAndResult{
 				{
-					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
+					query: vdiffByUUIDQuery,
 				},
 			},
-			wantErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID "+uuid+" on tablet cell1-0000000100"),
+			wantErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID "+uuid+" keyspace "+keyspace+" and workflow "+workflow+" on tablet cell1-0000000100"),
 		},
 	}
 
@@ -513,6 +515,7 @@ func TestHandleUpdateAction(t *testing.T) {
 		state           string
 		liveController  bool
 		leftoverDone    bool
+		otherWorkflow   bool
 		wantErr         string
 		wantState       string
 		wantControllers int
@@ -550,6 +553,12 @@ func TestHandleUpdateAction(t *testing.T) {
 			liveController:  true,
 			wantErr:         "run VDiff stop first",
 			wantControllers: 1,
+		},
+		{
+			name:          "rejects vdiff of another workflow",
+			state:         "stopped",
+			otherWorkflow: true,
+			wantErr:       "no vdiff found for UUID",
 		},
 	}
 
@@ -598,14 +607,23 @@ func TestHandleUpdateAction(t *testing.T) {
 				})
 			}
 
-			if tt.wantErr == "" {
+			workflow := "wf"
+			switch {
+			case tt.otherWorkflow:
+				// The vdiff belongs to wf, so a lookup for another
+				// workflow on the same keyspace finds nothing.
+				workflow = "other_wf"
+				vdiffenv.dbClient.ExpectRequest(updateLookupQuery(vduuid, workflow), noResults, nil)
+			case tt.wantErr == "":
 				expectUpdateOptionsQueries(t, vdiffenv, vduuid, existingJSON, tt.state, string(wantJSON), "in_order:primary", "zone1", "zone1")
-			} else {
+			default:
 				expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, tt.state)
 			}
 
 			got, err := vdiffenv.vde.PerformVDiffAction(ctx, &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(UpdateAction),
+				Keyspace:  "ks",
+				Workflow:  workflow,
 				VdiffUuid: vduuid,
 				Options: &tabletmanagerdatapb.VDiffOptions{
 					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
@@ -615,7 +633,9 @@ func TestHandleUpdateAction(t *testing.T) {
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantErr)
-				require.Contains(t, err.Error(), "VDiff stop")
+				if !tt.otherWorkflow {
+					require.Contains(t, err.Error(), "VDiff stop")
+				}
 				require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 			} else {
 				require.NoError(t, err)
@@ -634,15 +654,15 @@ func TestHandleUpdateAction(t *testing.T) {
 	}
 }
 
+func updateLookupQuery(vduuid, workflow string) string {
+	return fmt.Sprintf("select * from _vt.vdiff where keyspace = 'ks' and workflow = %s and vdiff_uuid = %s and db_name = %s",
+		encodeString(workflow), encodeString(vduuid), encodeString(vdiffDBName))
+}
+
 func expectUpdateLookupQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, existingJSON, state string) {
 	t.Helper()
 	vdiffenv.dbClient.ExpectRequest(
-		"select id as id from _vt.vdiff where vdiff_uuid = "+encodeString(vduuid)+" and db_name = "+encodeString(vdiffDBName),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
-		nil,
-	)
-	vdiffenv.dbClient.ExpectRequest(
-		"select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName),
+		updateLookupQuery(vduuid, "wf"),
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
 			fmt.Sprintf("1|%s|wf|ks|0|%s|%s|%s|", vduuid, vdiffDBName, state, existingJSON),
@@ -707,6 +727,8 @@ func TestHandleUpdateActionSerializesWithControllerStartup(t *testing.T) {
 	go func() {
 		errCh <- vdiffenv.vde.handleUpdateAction(ctx, dbClient, &tabletmanagerdatapb.VDiffRequest{
 			Action:    string(UpdateAction),
+			Keyspace:  "ks",
+			Workflow:  "wf",
 			VdiffUuid: vduuid,
 			Options: &tabletmanagerdatapb.VDiffOptions{
 				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},

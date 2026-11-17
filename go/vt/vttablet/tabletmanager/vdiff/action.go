@@ -519,35 +519,31 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	vde.mu.Lock()
 	defer vde.mu.Unlock()
 
-	idQuery, err := sqlparser.ParseAndBind(sqlGetVDiffID,
+	// Match the keyspace and workflow as well as the UUID: vtctld checks
+	// the new cells against the workflow in the request, so they must not
+	// be stored on a vdiff that belongs to another workflow.
+	lookupQuery, err := sqlparser.ParseAndBind(sqlGetVDiffByKeyspaceWorkflowUUID,
+		sqltypes.StringBindVariable(req.Keyspace),
+		sqltypes.StringBindVariable(req.Workflow),
 		sqltypes.StringBindVariable(req.VdiffUuid),
 		sqltypes.StringBindVariable(vde.dbName),
 	)
 	if err != nil {
 		return err
 	}
-	qr, err := dbClient.ExecuteFetch(idQuery, 1)
-	if err != nil {
-		return err
-	}
-	if len(qr.Rows) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %s",
-			req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
-	}
-	id, err := qr.Named().Row().ToInt64("id")
-	if err != nil {
-		return fmt.Errorf("vdiff found with invalid id on tablet %s: %w",
-			topoproto.TabletAliasString(vde.thisTablet.Alias), err)
-	}
-
-	qr, err = vde.getVDiffByID(ctx, dbClient, id)
+	qr, err := dbClient.ExecuteFetch(lookupQuery, 1)
 	if err != nil {
 		return err
 	}
 	row := qr.Named().Row()
 	if row == nil {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %s",
-			req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s keyspace %s and workflow %s on tablet %s",
+			req.VdiffUuid, req.Keyspace, req.Workflow, topoproto.TabletAliasString(vde.thisTablet.Alias))
+	}
+	id, err := row.ToInt64("id")
+	if err != nil {
+		return fmt.Errorf("vdiff found with invalid id on tablet %s: %w",
+			topoproto.TabletAliasString(vde.thisTablet.Alias), err)
 	}
 
 	state := strings.ToLower(row.AsString("state", ""))
