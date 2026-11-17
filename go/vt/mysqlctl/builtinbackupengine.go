@@ -290,7 +290,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore. Must be a multiple of 1MiB (1048576), so that every chunk can be restored with --builtinbackup-restore-write-mode=direct.")
-	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before the existing data is removed. Incremental backups are always restored buffered.")
+	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 1MiB (1048576); otherwise the restore fails before the existing data is removed. Incremental backups are always restored buffered.")
 }
 
 // errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
@@ -1658,12 +1658,14 @@ func directModeErrorf(format string, args ...any) error {
 	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "can't restore with --builtinbackup-restore-write-mode=direct, use --builtinbackup-restore-write-mode=buffered instead: %s", fmt.Sprintf(format, args...))
 }
 
-// checkChunksAligned checks that every chunk of fe starts at an offset that O_DIRECT can write at,
-// which is the case for backups taken with a chunk size that is a multiple of directIOAlignment.
+// checkChunksAligned checks that every chunk of fe starts at a multiple of backupFileChunkSizeMultiple,
+// as in backups taken with a chunk size that is a multiple of it, so that the chunks can be restored
+// with O_DIRECT whatever the page size is.
 func checkChunksAligned(fe *FileEntry) error {
+	multiple := int64(backupFileChunkSizeMultiple)
 	for _, c := range fe.Chunks {
-		if c.Offset%directIOAlignment != 0 {
-			return directModeErrorf("chunk %v of %v starts at offset %d, which is not a multiple of %d", c.StorageName, fe.Name, c.Offset, directIOAlignment)
+		if c.Offset%multiple != 0 {
+			return directModeErrorf("chunk %v of %v starts at offset %d, which is not a multiple of %d", c.StorageName, fe.Name, c.Offset, multiple)
 		}
 	}
 	return nil

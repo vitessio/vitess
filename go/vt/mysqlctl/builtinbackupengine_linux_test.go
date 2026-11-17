@@ -416,7 +416,14 @@ func TestCheckDirectRestore(t *testing.T) {
 		{
 			name:      "unaligned chunk offsets",
 			chunkSize: 6000,
-			expectErr: "starts at offset 6000, which is not a multiple of 4096",
+			expectErr: "starts at offset 6000, which is not a multiple of 1048576",
+		},
+		{
+			// As in a backup taken before chunk sizes had to be a multiple of 1MiB. On a kernel with
+			// 64KiB pages, the last bytes of a file could share a page with the previous chunk.
+			name:      "chunk offsets aligned for O_DIRECT but not to 1MiB",
+			chunkSize: 64 * 1024,
+			expectErr: "starts at offset 65536, which is not a multiple of 1048576",
 		},
 		{
 			name:          "O_DIRECT is rejected",
