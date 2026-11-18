@@ -476,6 +476,34 @@ func TestOnHealthCheck(t *testing.T) {
 			wantExternallyReparented: 20,
 			wantUID:                  2,
 		}, {
+			name: "Serving former primary with an older term seen in non-serving shard",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 20,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  2,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
 			name: "New serving primary seen while waiting for reparent",
 			ss: &shardState{
 				serving:              false,
@@ -559,6 +587,34 @@ func TestOnHealthCheck(t *testing.T) {
 			wantWaitForReparent:      false,
 			wantExternallyReparented: 10,
 			wantUID:                  1,
+		}, {
+			name: "Non-serving former primary with an older term seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 20,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  2,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      true,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
 		}, {
 			name: "New serving primary while already serving",
 			ss: &shardState{
@@ -646,9 +702,8 @@ func TestOnHealthCheck(t *testing.T) {
 
 // TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
 // primary recovering without a reparent or after a graceful restart resolves
-// the keyspace event, and that a reparent still waits for a primary with a newer term, even after a former
-// primary reports not serving. It also verifies that a former primary with an
-// older term cannot resolve the keyspace event.
+// the keyspace event, and that a reparent still waits for a primary with a
+// newer term, even after a former primary reports not serving.
 func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	ctx := t.Context()
 
@@ -738,16 +793,6 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 
 	kss.onHealthCheck(primaryHealth(102, true, 30))
 	requireResolved(true, "new primary with a newer term after a former primary failed")
-
-	// Fail the current primary and start buffering, then send a serving
-	// healthcheck from a former primary with an older term.
-	kss.onHealthCheck(primaryHealth(102, false, 30))
-	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
-	kss.onHealthCheck(primaryHealth(101, true, 20))
-	requireResolved(false, "serving healthcheck from a former primary with an older term")
-
-	kss.onHealthCheck(primaryHealth(102, true, 30))
-	requireResolved(true, "current primary recovered after a former primary reported serving")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
