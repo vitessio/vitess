@@ -645,9 +645,9 @@ func TestOnHealthCheck(t *testing.T) {
 }
 
 // TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
-// primary recovering without a reparent ends buffering, and that a reparent
-// still waits for a primary with a newer term, even after a former primary
-// reports not serving.
+// primary recovering without a reparent resolves the keyspace event, and that
+// a reparent still waits for a primary with a newer term, even after a former
+// primary reports not serving.
 func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	ctx := t.Context()
 
@@ -683,17 +683,19 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 		}
 	}
 
-	// requireResolved asserts whether a keyspace event was broadcast.
-	// onHealthCheck broadcasts synchronously.
+	// requireResolved checks without blocking whether a keyspace event was
+	// broadcast. It relies on onHealthCheck broadcasting before it returns.
 	requireResolved := func(want bool, msg string) {
 		t.Helper()
 
+		got := false
 		select {
 		case <-events:
-			require.True(t, want, "unexpected keyspace event: %s", msg)
+			got = true
 		default:
-			require.False(t, want, "no keyspace event was broadcast: %s", msg)
 		}
+
+		require.Equal(t, want, got, "keyspace event broadcast: %s", msg)
 	}
 
 	kss.onHealthCheck(primaryHealth(100, true, 10))
