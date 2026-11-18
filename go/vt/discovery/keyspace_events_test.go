@@ -647,7 +647,8 @@ func TestOnHealthCheck(t *testing.T) {
 // TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
 // primary recovering without a reparent resolves the keyspace event, and that
 // a reparent still waits for a primary with a newer term, even after a former
-// primary reports not serving.
+// primary reports not serving. It also verifies that a former primary with an
+// older term cannot resolve the keyspace event.
 func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	ctx := t.Context()
 
@@ -720,14 +721,25 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	requireResolved(true, "new primary with a newer term")
 
 	// Fail a healthcheck retry to the dead former primary, then start another
-	// reparent while the current primary still reports serving.
-	kss.onHealthCheck(primaryHealth(100, false, 10))
+	// reparent while the current primary still reports serving. A vtgate that
+	// never reached the former primary reports it with no term.
+	kss.onHealthCheck(primaryHealth(100, false, 0))
 	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
 	kss.onHealthCheck(primaryHealth(101, true, 20))
 	requireResolved(false, "stale serving healthcheck from the demoted primary after a former primary failed")
 
 	kss.onHealthCheck(primaryHealth(102, true, 30))
 	requireResolved(true, "new primary with a newer term after a former primary failed")
+
+	// Fail the current primary and start buffering, then send a serving
+	// healthcheck from a former primary with an older term.
+	kss.onHealthCheck(primaryHealth(102, false, 30))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	requireResolved(false, "serving healthcheck from a former primary with an older term")
+
+	kss.onHealthCheck(primaryHealth(102, true, 30))
+	requireResolved(true, "current primary recovered after a former primary reported serving")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real

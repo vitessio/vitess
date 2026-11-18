@@ -404,6 +404,12 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		kss.shards[th.Target.Shard] = sstate
 	}
 
+	// Ignore a primary whose term is older than the latest one seen. The
+	// healthcheck keeps reporting a former primary until its tablet record changes.
+	if th.PrimaryTermStartTime != 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
+		return
+	}
+
 	// if the shard went from serving to not serving, or the other way around, the keyspace
 	// is undergoing an availability event
 	if sstate.serving != th.Serving {
