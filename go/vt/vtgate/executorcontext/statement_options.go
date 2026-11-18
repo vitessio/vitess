@@ -69,11 +69,8 @@ func StatementOptionsFromContext(ctx context.Context) (*StatementOptions, bool) 
 // applied. It returns nil when there are no options to send.
 func ExecuteOptions(ctx context.Context, session *SafeSession) *querypb.ExecuteOptions {
 	var options *querypb.ExecuteOptions
-	// The explicit session.Session selector spells out why the nil check
-	// on the embedded session is needed.
-	//nolint:staticcheck // QF1008
-	if session != nil && session.Session != nil && session.Session.Options != nil {
-		options = session.Session.Options.CloneVT()
+	if session != nil && session.GetOptions() != nil {
+		options = session.GetOptions().CloneVT()
 		// A gRPC client sets its session's options, so VTGate validates
 		// their priority as it does a PRIORITY directive's.
 		options.Priority = normalizePriority(options.Priority)
