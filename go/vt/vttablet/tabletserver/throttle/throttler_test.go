@@ -934,7 +934,7 @@ func TestProbeWithUnavailableHost(t *testing.T) {
 		},
 	}
 
-	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0)
+	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0, base.WorstValuePercentile)
 	require.Equal(t, base.NoHostsMetricResult, worstMetric)
 }
 
@@ -980,7 +980,7 @@ func TestProbeWithEmptyHostAndPort(t *testing.T) {
 		},
 	}
 
-	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0)
+	worstMetric := base.AggregateTabletMetricResults("custom", tabletResultsMap, 0, true, 0.0, base.WorstValuePercentile)
 	require.Equal(t, base.NoHostsMetricResult, worstMetric)
 }
 

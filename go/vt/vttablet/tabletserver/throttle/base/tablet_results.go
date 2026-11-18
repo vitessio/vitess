@@ -16,7 +16,13 @@ limitations under the License.
 
 package base
 
-import "sort"
+import (
+	"math"
+	"sort"
+)
+
+// WorstValuePercentile makes AggregateTabletMetricResults return the worst (largest) value.
+const WorstValuePercentile = 100.0
 
 // TabletResultMap maps a tablet to a result
 type TabletResultMap map[string]MetricResultMap
@@ -29,13 +35,27 @@ func (m TabletResultMap) Split(alias string) (withAlias TabletResultMap, all Tab
 	return withAlias, m
 }
 
+// Without returns a copy of the map without the given alias.
+func (m TabletResultMap) Without(alias string) TabletResultMap {
+	result := make(TabletResultMap, len(m))
+	for k, v := range m {
+		if k != alias {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+// AggregateTabletMetricResults returns the nearest-rank percentile of the tablets' values.
+// A percentile outside (0, 100), including NaN, selects the worst (largest) value.
 func AggregateTabletMetricResults(
 	metricName MetricName,
 	tabletResultsMap TabletResultMap,
 	ignoreHostsCount int,
 	ignoreTabletRPCErrors bool,
 	ignoreHostsThreshold float64,
-) (worstMetric MetricResult) {
+	percentile float64,
+) (aggregatedMetric MetricResult) {
 	// probes is known not to change. It can be *replaced*, but not changed.
 	// so it's safe to iterate it
 	probeValues := []float64{}
@@ -93,7 +113,41 @@ func AggregateTabletMetricResults(
 		// And, whether ignored or not, we are reducing our tokens
 		ignoreHostsCount = ignoreHostsCount - 1
 	}
-	worstValue := probeValues[len(probeValues)-1]
-	worstMetric = NewSimpleMetricResult(worstValue)
-	return worstMetric
+	return NewSimpleMetricResult(probeValues[percentileIndex(len(probeValues), percentile)])
+}
+
+// percentileIndex returns the nearest-rank index of the percentile within n ascending values.
+func percentileIndex(n int, percentile float64) int {
+	if !IsPercentileBelowWorst(percentile) {
+		return n - 1
+	}
+	return max(0, int(math.Ceil(percentile*float64(n)/100))-1)
+}
+
+// FloorMetricResult returns the result with the larger value. An error result takes precedence,
+// and a result without hosts yields the other result.
+func FloorMetricResult(floor MetricResult, result MetricResult) MetricResult {
+	if floor == NoHostsMetricResult {
+		return result
+	}
+	if result == NoHostsMetricResult {
+		return floor
+	}
+	floorValue, err := floor.Get()
+	if err != nil {
+		return floor
+	}
+	value, err := result.Get()
+	if err != nil {
+		return result
+	}
+	if floorValue > value {
+		return floor
+	}
+	return result
+}
+
+// IsPercentileBelowWorst reports whether the percentile selects a value other than the worst one.
+func IsPercentileBelowWorst(percentile float64) bool {
+	return percentile > 0 && percentile < WorstValuePercentile
 }
