@@ -645,8 +645,8 @@ func TestOnHealthCheck(t *testing.T) {
 }
 
 // TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
-// primary recovering without a reparent resolves the keyspace event, and that
-// a reparent still waits for a primary with a newer term, even after a former
+// primary recovering without a reparent or after a graceful restart resolves
+// the keyspace event, and that a reparent still waits for a primary with a newer term, even after a former
 // primary reports not serving. It also verifies that a former primary with an
 // older term cannot resolve the keyspace event.
 func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
@@ -711,6 +711,14 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	// Recover the same primary with the same term.
 	kss.onHealthCheck(primaryHealth(100, true, 10))
 	requireResolved(true, "same primary recovered without a reparent")
+
+	// Stop the primary gracefully and start buffering. A stopping tablet
+	// reports the term of a zero time.
+	kss.onHealthCheck(primaryHealth(100, false, time.Time{}.Unix()))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "same primary restarted gracefully")
 
 	// Start a reparent while the old primary still reports serving.
 	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))

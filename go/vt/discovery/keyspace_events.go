@@ -406,7 +406,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 
 	// Ignore a primary whose term is older than the latest one seen. The
 	// healthcheck keeps reporting a former primary until its tablet record changes.
-	if th.PrimaryTermStartTime != 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
+	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
 		return
 	}
 
