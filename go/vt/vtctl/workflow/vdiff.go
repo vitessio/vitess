@@ -667,6 +667,9 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	span.Annotate("uuid", req.Uuid)
 	span.Annotate("target_shards", targetShards)
 	span.Annotate("tablet_types", req.TabletTypes)
+	if req.TabletSelectionPreference != nil {
+		span.Annotate("tablet_selection_preference", req.GetTabletSelectionPreference())
+	}
 	span.Annotate("source_cells", req.SourceCells)
 	span.Annotate("target_cells", req.TargetCells)
 	span.Annotate("clear_source_cells", req.ClearSourceCells)
@@ -680,6 +683,9 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	}
 	if req.ClearTargetCells && len(req.TargetCells) > 0 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both target_cells and clear_target_cells")
+	}
+	if req.TabletSelectionPreference != nil && len(req.TabletTypes) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_selection_preference requires tablet_types")
 	}
 
 	if err := validateVDiffUpdateTabletTypes(req.TabletTypes); err != nil {
@@ -712,7 +718,7 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 
 	tabletPicker := &tabletmanagerdatapb.VDiffPickerOptions{}
 	if len(req.TabletTypes) > 0 {
-		tabletPicker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
+		tabletPicker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.GetTabletSelectionPreference())
 	}
 	if req.ClearSourceCells {
 		cells, err := allTopoCells(ctx, sourceTopo)

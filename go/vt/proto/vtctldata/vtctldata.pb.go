@@ -15655,8 +15655,9 @@ type VDiffUpdateRequest struct {
 	// picker_options.tablet_types value is left unchanged.
 	TabletTypes []topodata.TabletType `protobuf:"varint,5,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
 	// Used with tablet_types to produce the stored tablet_types string
-	// (optionally prefixed with "in_order:"). Ignored when tablet_types is empty.
-	TabletSelectionPreference tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,6,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
+	// (prefixed with "in_order:" for INORDER). Can only be set together with
+	// tablet_types. When unset, ANY is used.
+	TabletSelectionPreference *tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,6,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference,oneof" json:"tablet_selection_preference,omitempty"`
 	// Source cells to search for tablets. Each cell must exist in the
 	// topology. When empty, the existing picker_options.source_cell value
 	// is left unchanged unless clear_source_cells is true.
@@ -15743,8 +15744,8 @@ func (x *VDiffUpdateRequest) GetTabletTypes() []topodata.TabletType {
 }
 
 func (x *VDiffUpdateRequest) GetTabletSelectionPreference() tabletmanagerdata.TabletSelectionPreference {
-	if x != nil {
-		return x.TabletSelectionPreference
+	if x != nil && x.TabletSelectionPreference != nil {
+		return *x.TabletSelectionPreference
 	}
 	return tabletmanagerdata.TabletSelectionPreference(0)
 }
@@ -19025,19 +19026,20 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x12\n" +
 	"\x04uuid\x18\x03 \x01(\tR\x04uuid\x12#\n" +
 	"\rtarget_shards\x18\x04 \x03(\tR\ftargetShards\"\x13\n" +
-	"\x11VDiffStopResponse\"\xdb\x03\n" +
+	"\x11VDiffStopResponse\"\x80\x04\n" +
 	"\x12VDiffUpdateRequest\x12\x1a\n" +
 	"\bworkflow\x18\x01 \x01(\tR\bworkflow\x12'\n" +
 	"\x0ftarget_keyspace\x18\x02 \x01(\tR\x0etargetKeyspace\x12\x12\n" +
 	"\x04uuid\x18\x03 \x01(\tR\x04uuid\x12#\n" +
 	"\rtarget_shards\x18\x04 \x03(\tR\ftargetShards\x127\n" +
-	"\ftablet_types\x18\x05 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12l\n" +
-	"\x1btablet_selection_preference\x18\x06 \x01(\x0e2,.tabletmanagerdata.TabletSelectionPreferenceR\x19tabletSelectionPreference\x12!\n" +
+	"\ftablet_types\x18\x05 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12q\n" +
+	"\x1btablet_selection_preference\x18\x06 \x01(\x0e2,.tabletmanagerdata.TabletSelectionPreferenceH\x00R\x19tabletSelectionPreference\x88\x01\x01\x12!\n" +
 	"\fsource_cells\x18\a \x03(\tR\vsourceCells\x12!\n" +
 	"\ftarget_cells\x18\b \x03(\tR\vtargetCells\x12,\n" +
 	"\x12clear_source_cells\x18\t \x01(\bR\x10clearSourceCells\x12,\n" +
 	"\x12clear_target_cells\x18\n" +
-	" \x01(\bR\x10clearTargetCells\"\x96\x01\n" +
+	" \x01(\bR\x10clearTargetCellsB\x1e\n" +
+	"\x1c_tablet_selection_preference\"\x96\x01\n" +
 	"\x13VDiffUpdateResponse\x12D\n" +
 	"\aresults\x18\x01 \x03(\v2*.vtctldata.VDiffUpdateResponse.ShardResultR\aresults\x1a9\n" +
 	"\vShardResult\x12\x14\n" +
@@ -19832,6 +19834,7 @@ func file_vtctldata_proto_init() {
 	file_vtctldata_proto_msgTypes[23].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[161].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[246].OneofWrappers = []any{}
+	file_vtctldata_proto_msgTypes[256].OneofWrappers = []any{}
 	file_vtctldata_proto_msgTypes[258].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

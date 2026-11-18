@@ -787,9 +787,15 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 	}
 	cli.FinishedParsing(cmd)
 
-	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
-	if updateOptions.TabletTypesInPreferenceOrder {
-		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	// Only send a tablet selection preference along with tablet types, as
+	// vtctld rejects one without the other.
+	var tsp *tabletmanagerdatapb.TabletSelectionPreference
+	if len(updateOptions.TabletTypes) > 0 {
+		pref := tabletmanagerdatapb.TabletSelectionPreference_ANY
+		if updateOptions.TabletTypesInPreferenceOrder {
+			pref = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+		}
+		tsp = &pref
 	}
 
 	resp, err := common.GetClient().VDiffUpdate(common.GetCommandCtx(), &vtctldatapb.VDiffUpdateRequest{

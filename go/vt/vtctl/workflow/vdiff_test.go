@@ -722,7 +722,7 @@ func TestVDiffUpdate(t *testing.T) {
 				Workflow:                  workflow,
 				Uuid:                      vduuid,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
 			},
 			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
 				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
@@ -747,7 +747,7 @@ func TestVDiffUpdate(t *testing.T) {
 				Workflow:                  workflow,
 				Uuid:                      vduuid,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
 			},
 			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
 				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
@@ -767,7 +767,7 @@ func TestVDiffUpdate(t *testing.T) {
 				Workflow:                  workflow,
 				Uuid:                      vduuid,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
 			},
 			wantErr: "specified target shard 0 not a valid target for workflow " + workflow,
 		},
@@ -781,7 +781,7 @@ func TestVDiffUpdate(t *testing.T) {
 				Workflow:                  workflow,
 				Uuid:                      vduuid,
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
 			},
 			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
 				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
@@ -800,6 +800,18 @@ func TestVDiffUpdate(t *testing.T) {
 				Uuid:           vduuid,
 			},
 			wantErr: "no tablet picker options specified to update",
+		},
+		{
+			name: "tablet selection preference without tablet types",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:            targetKeyspace.KeyspaceName,
+				Workflow:                  workflow,
+				Uuid:                      vduuid,
+				SourceCells:               []string{"zone1"},
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
+			},
+			wantErr:  "tablet_selection_preference requires tablet_types",
+			wantCode: vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 		{
 			name: "clear source cells and source cells together",

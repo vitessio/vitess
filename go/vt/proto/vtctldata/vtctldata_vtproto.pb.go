@@ -5650,7 +5650,6 @@ func (m *VDiffUpdateRequest) CloneVT() *VDiffUpdateRequest {
 	r.Workflow = m.Workflow
 	r.TargetKeyspace = m.TargetKeyspace
 	r.Uuid = m.Uuid
-	r.TabletSelectionPreference = m.TabletSelectionPreference
 	r.ClearSourceCells = m.ClearSourceCells
 	r.ClearTargetCells = m.ClearTargetCells
 	if rhs := m.TargetShards; rhs != nil {
@@ -5662,6 +5661,10 @@ func (m *VDiffUpdateRequest) CloneVT() *VDiffUpdateRequest {
 		tmpContainer := make([]topodata.TabletType, len(rhs))
 		copy(tmpContainer, rhs)
 		r.TabletTypes = tmpContainer
+	}
+	if rhs := m.TabletSelectionPreference; rhs != nil {
+		tmpVal := *rhs
+		r.TabletSelectionPreference = &tmpVal
 	}
 	if rhs := m.SourceCells; rhs != nil {
 		tmpContainer := make([]string, len(rhs))
@@ -21688,8 +21691,8 @@ func (m *VDiffUpdateRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 			dAtA[i] = 0x3a
 		}
 	}
-	if m.TabletSelectionPreference != 0 {
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.TabletSelectionPreference))
+	if m.TabletSelectionPreference != nil {
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(*m.TabletSelectionPreference))
 		i--
 		dAtA[i] = 0x30
 	}
@@ -28946,8 +28949,8 @@ func (m *VDiffUpdateRequest) SizeVT() (n int) {
 		}
 		n += 1 + protohelpers.SizeOfVarint(uint64(l)) + l
 	}
-	if m.TabletSelectionPreference != 0 {
-		n += 1 + protohelpers.SizeOfVarint(uint64(m.TabletSelectionPreference))
+	if m.TabletSelectionPreference != nil {
+		n += 1 + protohelpers.SizeOfVarint(uint64(*m.TabletSelectionPreference))
 	}
 	if len(m.SourceCells) > 0 {
 		for _, s := range m.SourceCells {
@@ -67725,7 +67728,7 @@ func (m *VDiffUpdateRequest) UnmarshalVT(dAtA []byte) error {
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field TabletSelectionPreference", wireType)
 			}
-			m.TabletSelectionPreference = 0
+			var v tabletmanagerdata.TabletSelectionPreference
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return protohelpers.ErrIntOverflow
@@ -67735,11 +67738,12 @@ func (m *VDiffUpdateRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.TabletSelectionPreference |= tabletmanagerdata.TabletSelectionPreference(b&0x7F) << shift
+				v |= tabletmanagerdata.TabletSelectionPreference(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
+			m.TabletSelectionPreference = &v
 		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field SourceCells", wireType)

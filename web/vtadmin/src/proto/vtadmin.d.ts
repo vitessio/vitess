@@ -97427,7 +97427,7 @@ export namespace vtctldata {
         tablet_types: topodata.TabletType[];
 
         /** VDiffUpdateRequest tablet_selection_preference. */
-        tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+        tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
 
         /** VDiffUpdateRequest source_cells. */
         source_cells: string[];

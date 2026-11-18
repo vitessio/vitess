@@ -2196,8 +2196,9 @@ message VDiffUpdateRequest {
   // picker_options.tablet_types value is left unchanged.
   repeated topodata.TabletType tablet_types = 5;
   // Used with tablet_types to produce the stored tablet_types string
-  // (optionally prefixed with "in_order:"). Ignored when tablet_types is empty.
-  tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
+  // (prefixed with "in_order:" for INORDER). Can only be set together with
+  // tablet_types. When unset, ANY is used.
+  optional tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
   // Source cells to search for tablets. Each cell must exist in the
   // topology. When empty, the existing picker_options.source_cell value
   // is left unchanged unless clear_source_cells is true.

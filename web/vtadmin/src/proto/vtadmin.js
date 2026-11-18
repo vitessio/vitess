@@ -259003,11 +259003,11 @@ export const vtctldata = $root.vtctldata = (() => {
 
         /**
          * VDiffUpdateRequest tablet_selection_preference.
-         * @member {tabletmanagerdata.TabletSelectionPreference} tablet_selection_preference
+         * @member {tabletmanagerdata.TabletSelectionPreference|null|undefined} tablet_selection_preference
          * @memberof vtctldata.VDiffUpdateRequest
          * @instance
          */
-        VDiffUpdateRequest.prototype.tablet_selection_preference = 0;
+        VDiffUpdateRequest.prototype.tablet_selection_preference = null;
 
         /**
          * VDiffUpdateRequest source_cells.
@@ -259040,6 +259040,15 @@ export const vtctldata = $root.vtctldata = (() => {
          * @instance
          */
         VDiffUpdateRequest.prototype.clear_target_cells = false;
+
+        // OneOf field names bound to virtual getters and setters
+        let $oneOfFields;
+
+        // Virtual OneOf for proto3 optional field
+        $Object.defineProperty(VDiffUpdateRequest.prototype, "_tablet_selection_preference", {
+            get: $util.oneOfGetter($oneOfFields = ["tablet_selection_preference"]),
+            set: $util.oneOfSetter($oneOfFields)
+        });
 
         /**
          * Creates a new VDiffUpdateRequest instance using the specified properties.
@@ -259084,7 +259093,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     writer.uint32(/* id 4, wireType 2 =*/34).string(message.target_shards[i]);
             if (message.tablet_types != null && message.tablet_types.length)
                 writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.tablet_types);
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
                 writer.uint32(/* id 6, wireType 0 =*/48).int32(message.tablet_selection_preference);
             if (message.source_cells != null && message.source_cells.length)
                 for (let i = 0; i < message.source_cells.length; ++i)
@@ -259205,10 +259214,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 6: {
                         if (wireType !== 0)
                             break;
-                        if (value = reader.int32())
-                            message.tablet_selection_preference = value;
-                        else
-                            delete message.tablet_selection_preference;
+                        message.tablet_selection_preference = reader.int32();
+                        message._tablet_selection_preference = "tablet_selection_preference";
                         continue;
                     }
                 case 7: {
@@ -259293,6 +259300,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
+            let properties = {};
             if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
                 if (!$util.isString(message.workflow))
                     return "workflow: string expected";
@@ -259316,9 +259324,11 @@ export const vtctldata = $root.vtctldata = (() => {
                     if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
                         return "tablet_types: enum value[] expected";
             }
-            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference")) {
+                properties._tablet_selection_preference = 1;
                 if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
                     return "tablet_selection_preference: enum value expected";
+            }
             if (message.source_cells != null && $Object.hasOwnProperty.call(message, "source_cells")) {
                 if (!$Array.isArray(message.source_cells))
                     return "source_cells: array expected";
@@ -259431,24 +259441,23 @@ export const vtctldata = $root.vtctldata = (() => {
                             message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
                     }
             }
-            if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
-                switch (object.tablet_selection_preference) {
-                case "ANY":
-                case 0:
-                    message.tablet_selection_preference = 0;
-                    break;
-                case "INORDER":
-                case 1:
-                    message.tablet_selection_preference = 1;
-                    break;
-                case "UNKNOWN":
-                case 3:
-                    message.tablet_selection_preference = 3;
-                    break;
-                default:
-                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
-                        message.tablet_selection_preference = object.tablet_selection_preference;
-                }
+            switch (object.tablet_selection_preference) {
+            case "ANY":
+            case 0:
+                message.tablet_selection_preference = 0;
+                break;
+            case "INORDER":
+            case 1:
+                message.tablet_selection_preference = 1;
+                break;
+            case "UNKNOWN":
+            case 3:
+                message.tablet_selection_preference = 3;
+                break;
+            default:
+                if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                    message.tablet_selection_preference = object.tablet_selection_preference;
+            }
             if (object.source_cells) {
                 if (!$Array.isArray(object.source_cells))
                     throw $TypeError(".vtctldata.VDiffUpdateRequest.source_cells: array expected");
@@ -259499,7 +259508,6 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.workflow = "";
                 object.target_keyspace = "";
                 object.uuid = "";
-                object.tablet_selection_preference = options.enums === $String ? "ANY" : 0;
                 object.clear_source_cells = false;
                 object.clear_target_cells = false;
             }

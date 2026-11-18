@@ -1002,7 +1002,7 @@ func TestUpdateCommandRequest(t *testing.T) {
 			flags: [][2]string{{"tablet-types", "PRIMARY,REPLICA"}},
 			want: newReq(&vtctldatapb.VDiffUpdateRequest{
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
 			}),
 		},
 		{
@@ -1010,26 +1010,24 @@ func TestUpdateCommandRequest(t *testing.T) {
 			flags: [][2]string{{"tablet-types", "RDONLY"}, {"tablet-types-in-preference-order", "false"}},
 			want: newReq(&vtctldatapb.VDiffUpdateRequest{
 				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_ANY,
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_ANY),
 			}),
 		},
 		{
 			name:  "source and target cells on target shards",
 			flags: [][2]string{{"source-cells", "zone1, zone2"}, {"target-cells", "zone3"}, {"target-shards", "-80,80-"}},
 			want: newReq(&vtctldatapb.VDiffUpdateRequest{
-				TargetShards:              []string{"-80", "80-"},
-				SourceCells:               []string{"zone1", "zone2"},
-				TargetCells:               []string{"zone3"},
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				TargetShards: []string{"-80", "80-"},
+				SourceCells:  []string{"zone1", "zone2"},
+				TargetCells:  []string{"zone3"},
 			}),
 		},
 		{
 			name:  "clear source and target cells",
 			flags: [][2]string{{"clear-source-cells", "true"}, {"clear-target-cells", "true"}},
 			want: newReq(&vtctldatapb.VDiffUpdateRequest{
-				ClearSourceCells:          true,
-				ClearTargetCells:          true,
-				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+				ClearSourceCells: true,
+				ClearTargetCells: true,
 			}),
 		},
 	}
