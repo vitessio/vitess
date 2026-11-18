@@ -726,10 +726,12 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 		subs:             make(map[chan *KeyspaceEvent]struct{}),
 	}
 	kss.kew = kew
+
 	events := kew.Subscribe()
 
 	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
 
+	// primaryHealth builds a PRIMARY healthcheck for tablet uid.
 	primaryHealth := func(uid uint32, serving bool, termStart int64) *TabletHealth {
 		return &TabletHealth{
 			Tablet:               &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell", Uid: uid}},
@@ -751,7 +753,7 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 		default:
 		}
 
-		require.Equal(t, want, got, "keyspace event broadcast: %s", msg)
+		require.Equal(t, want, got, "keyspace event broadcast after %s", msg)
 	}
 
 	kss.onHealthCheck(primaryHealth(100, true, 10))
@@ -767,8 +769,8 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	kss.onHealthCheck(primaryHealth(100, true, 10))
 	requireResolved(true, "same primary recovered without a reparent")
 
-	// Stop the primary gracefully and start buffering. A stopping tablet
-	// reports the term of a zero time.
+	// Stop the primary gracefully and start buffering. A stopping primary
+	// reports a negative term.
 	kss.onHealthCheck(primaryHealth(100, false, time.Time{}.Unix()))
 	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
 
@@ -783,10 +785,10 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 	kss.onHealthCheck(primaryHealth(101, true, 20))
 	requireResolved(true, "new primary with a newer term")
 
-	// Fail a healthcheck retry to the dead former primary, then start another
-	// reparent while the current primary still reports serving. A vtgate that
-	// never reached the former primary reports it with no term.
-	kss.onHealthCheck(primaryHealth(100, false, 0))
+	// Fail a healthcheck retry to a dead former primary this vtgate never
+	// reached, then start another reparent while the current primary still
+	// reports serving. An unreached tablet reports no term.
+	kss.onHealthCheck(primaryHealth(99, false, 0))
 	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
 	kss.onHealthCheck(primaryHealth(101, true, 20))
 	requireResolved(false, "stale serving healthcheck from the demoted primary after a former primary failed")
