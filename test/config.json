@@ -816,7 +816,8 @@
     "tabletmanager_query_throttler": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/query_throttler"
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/query_throttler",
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/query_throttler/shard_metric_percentile"
       ],
       "Args": [],
       "Command": [],
