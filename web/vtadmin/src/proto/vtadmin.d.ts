@@ -78196,6 +78196,9 @@ export namespace vtctldata {
         /** UpdateThrottlerConfigRequest app_checked_metrics. */
         app_checked_metrics: string[];
 
+        /** UpdateThrottlerConfigRequest metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -78315,6 +78318,9 @@ export namespace vtctldata {
 
             /** UpdateThrottlerConfigRequest app_checked_metrics */
             app_checked_metrics?: (string[]|null);
+
+            /** UpdateThrottlerConfigRequest metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

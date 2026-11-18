@@ -110,6 +110,7 @@ var (
 	throttledAppRule             topodatapb.ThrottledAppRule
 	unthrottledAppRule           topodatapb.ThrottledAppRule
 	throttledAppDuration         time.Duration
+	shardPercentile              float64
 
 	checkThrottlerOptions vtctldatapb.CheckThrottlerRequest
 	requestHeartbeats     bool
@@ -124,8 +125,19 @@ var (
 )
 
 func validateUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
-	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") {
-		return errors.New("--metric-name flag requires --threshold flag. Set threshold to 0 to disable the metric threshold configuration")
+	if updateThrottlerConfigOptions.MetricName != "" && !cmd.Flags().Changed("threshold") && !cmd.Flags().Changed("shard-percentile") {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "--metric-name flag requires --threshold or --shard-percentile flag. Set threshold to 0 to disable the metric threshold configuration")
+	}
+	if cmd.Flags().Changed("shard-percentile") {
+		if updateThrottlerConfigOptions.MetricName == "" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "--shard-percentile flag requires --metric-name flag")
+		}
+		if cmd.Flags().Changed("custom-query") {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "--shard-percentile flag cannot be used with --custom-query flag")
+		}
+		if err := base.ValidateShardPercentile(updateThrottlerConfigOptions.MetricName, shardPercentile); err != nil {
+			return err
+		}
 	}
 	if cmd.Flags().Changed("app-name") && updateThrottlerConfigOptions.AppName == "" {
 		return errors.New("--app-name must not be empty")
@@ -139,6 +151,9 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	updateThrottlerConfigOptions.CustomQuerySet = cmd.Flags().Changed("custom-query")
+	if cmd.Flags().Changed("shard-percentile") {
+		setShardPercentile(&updateThrottlerConfigOptions, shardPercentile, cmd.Flags().Changed("threshold"))
+	}
 	updateThrottlerConfigOptions.Keyspace = keyspace
 
 	if throttledAppRule.Name != "" {
@@ -154,6 +169,15 @@ func commandUpdateThrottlerConfig(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return nil
+}
+
+// setShardPercentile sets the percentile of req.MetricName in the request, keeping that metric's threshold unless thresholdSet.
+func setShardPercentile(req *vtctldatapb.UpdateThrottlerConfigRequest, percentile float64, thresholdSet bool) {
+	req.MetricShardPercentiles = map[string]float64{req.MetricName: percentile}
+	if !thresholdSet {
+		// With a metric name, the server treats a zero threshold as a request to remove the metric's threshold.
+		req.MetricName = ""
+	}
 }
 
 // parseThrottlerType converts a --throttler-type value to the throttler it selects.
@@ -398,8 +422,9 @@ func init() {
 	// UpdateThrottlerConfig
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Enable, "enable", false, "Enable the throttler")
 	UpdateThrottlerConfig.Flags().BoolVar(&updateThrottlerConfigOptions.Disable, "disable", false, "Disable the throttler")
-	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.MetricName, "metric-name", "", "name of the metric for which we apply a new threshold (requires --threshold). If empty, the default (either 'lag' or 'custom') metric is used.")
+	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.MetricName, "metric-name", "", "name of the metric for which we apply a new threshold or shard percentile (requires --threshold or --shard-percentile). If empty, the default (either 'lag' or 'custom') metric is used.")
 	UpdateThrottlerConfig.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "threshold for the either default check (replication lag seconds) or custom check")
+	UpdateThrottlerConfig.Flags().Float64Var(&shardPercentile, "shard-percentile", 0, "nearest-rank percentile of the tablets' values that the primary uses for the shard scope of --metric-name, between 0 and 100. 0 removes it, and the primary then uses the highest value")
 	UpdateThrottlerConfig.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", "", "custom throttler check query")
 
 	UpdateThrottlerConfig.Flags().StringVar(&unthrottledAppRule.Name, "unthrottle-app", "", "an app name to unthrottle")

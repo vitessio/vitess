@@ -831,7 +831,8 @@
     "tabletmanager_throttler_topo": {
       "File": "unused.go",
       "Packages": [
-        "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo",
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo/shard_metric_percentile"
       ],
       "Args": [],
       "Command": [],

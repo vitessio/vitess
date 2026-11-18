@@ -2150,6 +2150,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
 	}
 
+	for metricName, percentile := range req.MetricShardPercentiles {
+		if err := base.ValidateShardPercentile(metricName, percentile); err != nil {
+			return nil, err
+		}
+	}
+
 	if len(req.AppCheckedMetrics) > 0 {
 		specifiedMetrics := map[base.MetricName]bool{}
 		for _, metricName := range req.AppCheckedMetrics {
@@ -2176,6 +2182,16 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if throttlerConfig.MetricThresholds == nil {
 			throttlerConfig.MetricThresholds = make(map[string]float64)
+		}
+		for metricName, percentile := range req.MetricShardPercentiles {
+			if percentile == 0 {
+				delete(throttlerConfig.MetricShardPercentiles, metricName)
+				continue
+			}
+			if throttlerConfig.MetricShardPercentiles == nil {
+				throttlerConfig.MetricShardPercentiles = make(map[string]float64)
+			}
+			throttlerConfig.MetricShardPercentiles[metricName] = percentile
 		}
 		if req.MetricName == "" {
 			// v20 behavior

@@ -23,11 +23,13 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/proto/querythrottler"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 func TestValidateUpdateQueryThrottlerConfigFlags(t *testing.T) {
@@ -872,4 +874,65 @@ func TestValidateQueryThrottlerConfigContentShardPercentile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateUpdateThrottlerConfigShardPercentile(t *testing.T) {
+	tests := []struct {
+		name        string
+		metricName  string
+		percentile  string
+		threshold   string
+		customQuery string
+		wantErr     string
+	}{
+		{name: "percentile with metric name", metricName: "lag", percentile: "75"},
+		{name: "zero removes the percentile", metricName: "lag", percentile: "0"},
+		{name: "percentile and threshold", metricName: "lag", percentile: "75", threshold: "5"},
+		{name: "metric name alone", metricName: "lag", wantErr: "--metric-name flag requires --threshold or --shard-percentile flag. Set threshold to 0 to disable the metric threshold configuration"},
+		{name: "percentile without metric name", percentile: "75", wantErr: "--shard-percentile flag requires --metric-name flag"},
+		{name: "above 100", metricName: "lag", percentile: "101", wantErr: "shard percentile of lag must be between 0 and 100, got 101"},
+		{name: "scoped metric name", metricName: "shard/lag", percentile: "75", wantErr: "unknown metric name for shard percentile: shard/lag"},
+		{name: "percentile with custom query", metricName: "lag", percentile: "75", customQuery: "select 1", wantErr: "--shard-percentile flag cannot be used with --custom-query flag"},
+		{name: "custom query without percentile", metricName: "lag", threshold: "5", customQuery: "select 1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				updateThrottlerConfigOptions.MetricName = ""
+				updateThrottlerConfigOptions.Threshold = 0
+				updateThrottlerConfigOptions.CustomQuery = ""
+				shardPercentile = 0
+			})
+			cmd := &cobra.Command{}
+			cmd.Flags().StringVar(&updateThrottlerConfigOptions.MetricName, "metric-name", "", "")
+			cmd.Flags().Float64Var(&updateThrottlerConfigOptions.Threshold, "threshold", 0, "")
+			cmd.Flags().Float64Var(&shardPercentile, "shard-percentile", 0, "")
+			cmd.Flags().StringVar(&updateThrottlerConfigOptions.CustomQuery, "custom-query", "", "")
+			for flag, value := range map[string]string{"metric-name": tt.metricName, "shard-percentile": tt.percentile, "threshold": tt.threshold, "custom-query": tt.customQuery} {
+				if value != "" {
+					require.NoError(t, cmd.Flags().Set(flag, value))
+				}
+			}
+
+			err := validateUpdateThrottlerConfig(cmd, []string{"test_keyspace"})
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSetShardPercentile(t *testing.T) {
+	t.Run("without threshold the metric name is not sent", func(t *testing.T) {
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag"}
+		setShardPercentile(req, 75, false)
+		utils.MustMatch(t, &vtctldatapb.UpdateThrottlerConfigRequest{MetricShardPercentiles: map[string]float64{"lag": 75}}, req)
+	})
+	t.Run("with threshold the metric name is kept", func(t *testing.T) {
+		req := &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: 5}
+		setShardPercentile(req, 75, true)
+		utils.MustMatch(t, &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: 5, MetricShardPercentiles: map[string]float64{"lag": 75}}, req)
+	})
 }
