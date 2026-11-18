@@ -211,8 +211,8 @@ type shardState struct {
 	waitForReparent bool
 
 	// primaryNotServing is true when the latest healthcheck from the current
-	// primary of this shard reported not serving. MarkShardNotServing reads it
-	// to skip waiting for a reparent.
+	// primary of this shard reported not serving. MarkShardNotServing does not
+	// set waitForReparent while it is true.
 	primaryNotServing bool
 
 	externallyReparented int64
@@ -1072,7 +1072,8 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 // We use this when we start buffering for a given shard. This helps
 // coordinate between the sharding logic and the keyspace event watcher.
 // We take in a boolean as well to tell us whether this error is because
-// a reparent is ongoing. If it is, we also mark the shard to wait for a reparent.
+// a reparent is ongoing. If it is, and the current primary has not already
+// reported not serving, we also mark the shard to wait for a reparent.
 // The return argument is whether the shard was found and marked not serving successfully or not.
 func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string, isReparentErr bool) bool {
 	kss := kew.getKeyspaceStatus(ctx, keyspace)
@@ -1091,15 +1092,16 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 	// Mark the keyspace inconsistent and the shard not serving.
 	kss.consistent = false
 	sstate.serving = false
+
+	// Wait for a reparent only while the current primary still reports serving.
+	// A primary that already reported not serving can recover with the same term
+	// and no reparent, and onHealthCheck accepts that healthcheck only while
+	// waitForReparent is unset.
 	if isReparentErr && !sstate.primaryNotServing {
 		// If the error was triggered because a reparent operation has started.
 		// We mark the shard to wait for a reparent to finish before marking it serving.
 		// This is required to prevent premature stopping of buffering if we receive
 		// a serving healthcheck from a primary that is being demoted.
-		//
-		// Skip this once the healthcheck has already reported the primary not serving,
-		// as onHealthCheck does. Otherwise a primary that recovers from a transient
-		// healthcheck failure without a reparent never marks the shard serving again.
 		sstate.waitForReparent = true
 	}
 	return true
