@@ -134,11 +134,13 @@ type vreplicator struct {
 	// preserveMessage is set by the controller when this vreplicator runs
 	// for a retry. The stream's message then holds the error that made the
 	// previous run fail, so setState with an empty message does not clear it
-	// while the state stays the same. The kept error is cleared once the
-	// stream makes progress: by the first position save (GenerateUpdatePos
-	// writes message=''), in the copy phase by
+	// while the state stays the same. The position saves of the copy phase
+	// (catch-up, fast-forward and copy) keep it too: they do not show that
+	// this run got past the error. The kept error is cleared once the run
+	// makes progress: in the copy phase by
 	// clearPreservedMessageOnCopyProgress after the first copied rows, and
-	// while replicating by clearPreservedMessageOnIdle on the first idle
+	// in the replicate phase by the first position save or, on a source
+	// with no writes, by clearPreservedMessageOnIdle on the first idle
 	// heartbeat.
 	preserveMessage atomic.Bool
 	// rowsCopiedAtStart is the copy row count when this vreplicator was
@@ -409,7 +411,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
-			return newVPlayer(vr, settings, nil, replication.Position{}, "replicate").play(ctx)
+			return newVPlayer(vr, settings, nil, replication.Position{}, replicatePhase).play(ctx)
 		}
 	}
 }
@@ -667,10 +669,20 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	return nil
 }
 
+// generateUpdatePos returns the statement that saves pos for the stream. It
+// clears the message unless keepMessage is set and the message is the error
+// kept from a failed run (preserveMessage).
+func (vr *vreplicator) generateUpdatePos(pos replication.Position, txTimestamp int64, keepMessage bool) string {
+	if keepMessage && vr.preserveMessage.Load() {
+		return binlogplayer.GenerateUpdatePosKeepMessage(vr.id, pos, time.Now().Unix(), txTimestamp, vr.stats.CopyRowCount.Get(), vr.workflowConfig.StoreCompressedGTID)
+	}
+	return binlogplayer.GenerateUpdatePos(vr.id, pos, time.Now().Unix(), txTimestamp, vr.stats.CopyRowCount.Get(), vr.workflowConfig.StoreCompressedGTID)
+}
+
 // clearPreservedMessageOnCopyProgress clears the message kept from a failed
-// run once this run has copied rows, as GenerateUpdatePos does when it saves
-// a position. Without it, a retry that recovers in the copy phase keeps
-// showing the old error until the next position save.
+// run once this run has copied rows. The position saves of the copy phase
+// keep the message, so without it, a retry that recovers in the copy phase
+// keeps showing the old error until the copy phase ends.
 func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
 	if !vr.preserveMessage.Load() || vr.stats.CopyRowCount.Get() <= vr.rowsCopiedAtStart {
 		return
@@ -679,8 +691,9 @@ func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
 }
 
 // clearPreservedMessageOnIdle clears the message kept from a failed run when
-// the vplayer receives a heartbeat that is not throttled with no transaction
-// open: the source is idle and every event it sent has been applied. Without
+// the vplayer of the replicate phase receives a heartbeat that is not
+// throttled with no transaction open: the source is idle and every event it
+// sent has been applied. Without
 // it, a retry that recovers while replicating, on a source with no writes,
 // keeps showing the old error until the first position save.
 func (vr *vreplicator) clearPreservedMessageOnIdle() {

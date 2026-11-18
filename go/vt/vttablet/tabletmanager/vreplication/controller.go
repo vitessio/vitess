@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -117,7 +118,10 @@ type controller struct {
 	// stream's message holds the error that made the previous run fail.
 	// It is false for the first run of a controller, which the engine
 	// creates on open, on Exec (for example Workflow start or update), and
-	// on tablet restart. Only the run goroutine reads or writes it.
+	// on tablet restart. It is also false after a run that ended because
+	// the source vstreamer gave up while fully throttled (see
+	// isVStreamerThrottleGiveUp): the retry then clears the message as for
+	// a first run. Only the run goroutine reads or writes it.
 	retrying bool
 
 	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
@@ -294,8 +298,20 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
-		ct.retrying = true
+		ct.retrying = !isVStreamerThrottleGiveUp(err)
 	}
+}
+
+// isVStreamerThrottleGiveUp reports whether a run ended because the source
+// vstreamer had been fully throttled for too long and gave up so that the
+// stream is retried. The stream is then only waiting on the throttler, and
+// its message must not keep reporting that as an error across retries.
+// Only the error text reaches us from a remote source tablet, as
+// "vttablet: rpc error: code = Internal desc = stream (at source tablet)
+// error @ <position>: vstreamer has been fully throttled for more than ...",
+// so this matches the text rather than an error value or code.
+func isVStreamerThrottleGiveUp(err error) bool {
+	return err != nil && strings.Contains(err.Error(), vstreamer.FullyThrottledErrorPrefix)
 }
 
 func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {

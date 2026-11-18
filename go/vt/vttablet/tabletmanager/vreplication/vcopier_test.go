@@ -22,7 +22,9 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2023,15 +2025,27 @@ func testCopyInvisibleColumns(t *testing.T) {
 }
 
 // TestPlayerCopyRetryClearsKeptError makes the copy phase fail with a
-// retryable error and checks that, once the cause is gone, the retry clears
-// the kept error after it has copied its first rows, before the copy phase
-// ends.
+// retryable error and reads the committed stream row on a separate connection
+// while the controller retries. Each retry's catch-up and fast-forward save a
+// position before the copy fails again, and neither may clear the kept error:
+// it must stay visible until a retry has copied rows, whether the copy keeps
+// failing or eventually succeeds.
 func TestPlayerCopyRetryClearsKeptError(t *testing.T) {
+	t.Run("copy keeps failing", func(t *testing.T) {
+		testPlayerCopyRetryClearsKeptError(t, false)
+	})
+	t.Run("retry succeeds", func(t *testing.T) {
+		testPlayerCopyRetryClearsKeptError(t, true)
+	})
+}
+
+func testPlayerCopyRetryClearsKeptError(t *testing.T, succeed bool) {
 	defer deleteTablet(addTablet(100))
 
+	// Long enough for the poller to see each error before the next retry.
 	savedRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedRetryDelay }()
-	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+	vttablet.DefaultVReplicationConfig.RetryDelay = 100 * time.Millisecond
 
 	savedWaitRetryTime := waitRetryTime
 	defer func() { waitRetryTime = savedWaitRetryTime }()
@@ -2065,52 +2079,134 @@ func TestPlayerCopyRetryClearsKeptError(t *testing.T) {
 		},
 		OnDdl: binlogdatapb.OnDDLAction_IGNORE,
 	}
+
+	// Samples of the committed stream row, read on a separate connection, by
+	// a poller and right before each packet of rows reaches the copier, which
+	// is after the retry's catch-up and fast-forward.
+	type sample struct {
+		at, state, message string
+		rows               int64
+	}
+	var (
+		mu      sync.Mutex
+		samples []sample
+		id      int64
+	)
+	takeSample := func() {
+		mu.Lock()
+		streamID := id
+		mu.Unlock()
+		if streamID == 0 {
+			return
+		}
+		qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf(
+			"select now(6), state, ifnull(message, ''), (select count(*) from %s.dst) from _vt.vreplication where id=%d", vrepldb, streamID))
+		if err != nil || len(qr.Rows) != 1 {
+			return
+		}
+		rows, _ := qr.Rows[0][3].ToInt64()
+		mu.Lock()
+		defer mu.Unlock()
+		samples = append(samples, sample{qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), qr.Rows[0][2].ToString(), rows})
+	}
+	vstreamRowsSendHook = func(context.Context) { takeSample() }
+	defer func() { vstreamRowsSendHook = nil }()
+	stopPoller := make(chan struct{})
+	var pollerDone sync.WaitGroup
+	pollerDone.Go(func() {
+		for {
+			select {
+			case <-stopPoller:
+				return
+			case <-time.After(5 * time.Millisecond):
+				takeSample()
+			}
+		}
+	})
+
 	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
+	mu.Lock()
+	id = int64(qr.InsertID)
+	mu.Unlock()
 	defer func() {
 		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
 		require.NoError(t, err)
-		expectDeleteQueries(t)
+		// The stream may have been retrying, so skip to the deletes.
+		timeout := time.After(recvTimeout)
+		for {
+			select {
+			case got := <-globalDBQueries:
+				if strings.HasPrefix(got, "delete from _vt.post_copy_action") {
+					drainQuietDBQueries(t)
+					return
+				}
+			case <-timeout:
+				require.FailNow(t, "the stream was not deleted")
+			}
+		}
 	}()
 
-	clearQuery := fmt.Sprintf("update _vt.vreplication set message='' where id=%d", qr.InsertID)
-	timeout := time.After(10 * time.Second)
+	// Drain the query log, which the stream would otherwise block on, and
+	// count the copy errors the stream writes.
+	timeout := time.After(30 * time.Second)
 	copyErrors := 0
-	triggerDropped, cleared := false, false
-	for {
+	for done := false; !done; {
 		var got string
 		select {
 		case got = <-globalDBQueries:
 		case <-timeout:
-			require.FailNow(t, "timed out", "trigger dropped: %t, kept error cleared: %t", triggerDropped, cleared)
+			require.FailNow(t, "timed out", "copy errors: %d", copyErrors)
 		}
 		switch {
-		case !triggerDropped && strings.HasPrefix(got, "update _vt.vreplication set message=") && strings.Contains(got, triggerErr):
-			// The copy failed and its error is the stream's message. The
-			// first retry's catch-up waits until the replication lag is
-			// known and may get an idle heartbeat, which clears the kept
-			// error on its own. Once the first retry has failed too, its
-			// catch-up has left the lag below the tolerance, so remove the
-			// cause: the next retry's catch-up ends at once, as for a stream
-			// that had caught up, and the copied rows are the first progress
-			// of that run.
+		case strings.HasPrefix(got, "update _vt.vreplication set message=") && strings.Contains(got, triggerErr):
 			copyErrors++
-			if copyErrors == 2 {
+			switch {
+			case copyErrors == 3 && succeed:
 				execStatements(t, []string{fmt.Sprintf("drop trigger %s.dst_fail", vrepldb)})
-				triggerDropped = true
+			case copyErrors == 4 && !succeed:
+				done = true
 			}
-		case triggerDropped && got == clearQuery:
-			cleared = true
-		case strings.HasPrefix(got, "update _vt.vreplication set state='Running'"):
-			// Moving to Running clears the message anyway, so the kept error
-			// must be cleared before the copy phase ends.
-			require.True(t, triggerDropped, "the copy did not fail")
-			require.True(t, cleared, "the retry did not clear the kept error after copying rows")
-			qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("select count(*) from %s.dst where length(val) = %d", vrepldb, rowSize))
-			require.NoError(t, err)
-			require.Equal(t, "3", qr.Rows[0][0].ToString())
-			return
+		case succeed && strings.HasPrefix(got, "update _vt.vreplication set state='Running'"):
+			done = true
 		}
 	}
+	close(stopPoller)
+	pollerDone.Wait()
+	takeSample()
+
+	mu.Lock()
+	defer mu.Unlock()
+	slices.SortStableFunc(samples, func(a, b sample) int { return strings.Compare(a.at, b.at) })
+	errorSeen, clearedAfterProgress := false, false
+	for i, s := range samples {
+		if strings.Contains(s.message, triggerErr) {
+			errorSeen = true
+			continue
+		}
+		if !errorSeen {
+			continue
+		}
+		if s.rows == 0 {
+			require.FailNow(t, "the kept error was cleared before the retry copied rows",
+				"sample %d: state=%q message=%q rows=%d", i, s.state, s.message, s.rows)
+		}
+		if s.state == binlogdatapb.VReplicationWorkflowState_Copying.String() && s.message == "" {
+			clearedAfterProgress = true
+		}
+	}
+	require.True(t, errorSeen, "the copy error was never visible")
+	last := samples[len(samples)-1]
+	if !succeed {
+		require.Contains(t, last.message, triggerErr)
+		require.Zero(t, last.rows)
+		return
+	}
+	// The retry clears the kept error once it has copied rows, before the
+	// copy phase ends, and the stream ends up Running with no message.
+	require.True(t, clearedAfterProgress, "the retry did not clear the kept error after copying rows")
+	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Running.String(), last.state)
+	require.Empty(t, last.message)
+	require.EqualValues(t, 3, last.rows)
 }

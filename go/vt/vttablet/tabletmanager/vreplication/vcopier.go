@@ -742,7 +742,7 @@ func (vc *vcopier) updatePos(ctx context.Context, gtid string) error {
 	if err != nil {
 		return err
 	}
-	update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.workflowConfig.StoreCompressedGTID)
+	update := vc.vr.generateUpdatePos(pos, 0, true)
 	_, err = vc.vr.dbClient.Execute(update)
 	return err
 }
@@ -758,7 +758,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get(), vc.vr.workflowConfig.StoreCompressedGTID)
+		update := vc.vr.generateUpdatePos(pos, 0, true)
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}

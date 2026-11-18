@@ -33,7 +33,9 @@ import (
 
 	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -1034,8 +1036,8 @@ func TestRetryMessageHandling(t *testing.T) {
 		}
 	}
 	// heartbeat applies a vstreamer heartbeat as the vplayer of a retry
-	// does, with or without a transaction open.
-	heartbeat := func(throttled, inTransaction bool) func(t *testing.T) {
+	// does in the given phase, with or without a transaction open.
+	heartbeat := func(phase string, throttled, inTransaction bool) func(t *testing.T) {
 		return func(t *testing.T) {
 			playerStats := binlogplayer.NewStats()
 			defer playerStats.Stop()
@@ -1059,9 +1061,9 @@ func TestRetryMessageHandling(t *testing.T) {
 				require.NoError(t, vr.dbClient.Begin())
 				defer func() { require.NoError(t, vr.dbClient.Rollback()) }()
 			}
-			vp := &vplayer{vr: vr}
+			vp := &vplayer{vr: vr, phase: phase}
 			require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT, Throttled: throttled}, false))
-			require.Equal(t, throttled || inTransaction, vr.preserveMessage.Load())
+			require.Equal(t, throttled || inTransaction || phase != replicatePhase, vr.preserveMessage.Load())
 		}
 	}
 
@@ -1092,9 +1094,10 @@ func TestRetryMessageHandling(t *testing.T) {
 		{"retry: setState to a new state clears the message", copying, applyErr, setStateRunning(true), running, ""},
 		{"retry: copy progress clears a kept error", copying, applyErr, copyProgress(10), copying, ""},
 		{"retry: no copy progress keeps the error", copying, applyErr, copyProgress(0), copying, applyErr},
-		{"retry: idle heartbeat clears a kept error", running, applyErr, heartbeat(false, false), running, ""},
-		{"retry: throttled heartbeat keeps the error", running, applyErr, heartbeat(true, false), running, applyErr},
-		{"retry: heartbeat in a transaction keeps the error", running, applyErr, heartbeat(false, true), running, applyErr},
+		{"retry: idle heartbeat clears a kept error", running, applyErr, heartbeat(replicatePhase, false, false), running, ""},
+		{"retry: throttled heartbeat keeps the error", running, applyErr, heartbeat(replicatePhase, true, false), running, applyErr},
+		{"retry: heartbeat in a transaction keeps the error", running, applyErr, heartbeat(replicatePhase, false, true), running, applyErr},
+		{"retry: idle heartbeat in the copy phase keeps the error", copying, applyErr, heartbeat("catchup", false, false), copying, applyErr},
 	}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1172,4 +1175,125 @@ func TestEngineExecRestartClearsOldError(t *testing.T) {
 		state, message := vreplicationRow(t, id)
 		return state == binlogdatapb.VReplicationWorkflowState_Running.String() && message == ""
 	}, 5*time.Second, 10*time.Millisecond, "old error not cleared by a fresh start")
+}
+
+// TestControllerRetryAfterThrottleGiveUpClearsMessage checks the message a
+// retry starts with, read on a separate connection right before the retry
+// streams from the source. After the source vstreamer gave up because it was
+// fully throttled, the retry clears the message as on a first run, whether
+// the error came from a local or a remote source. After another retryable
+// error, the retry keeps it.
+func TestControllerRetryAfterThrottleGiveUpClearsMessage(t *testing.T) {
+	throttleGiveUp := vterrors.Wrapf(
+		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s %v, giving up so that we can retry", vstreamer.FullyThrottledErrorPrefix, 10*time.Minute),
+		"stream (at source tablet) error @ (including the GTID we failed to process) %v", "MySQL56/00000000-0000-0000-0000-000000000001:1-5")
+	tcases := []struct {
+		name      string
+		err       error
+		keepError bool
+	}{
+		{"local throttle give-up", throttleGiveUp, false},
+		{"remote throttle give-up", tabletconn.ErrorFromGRPC(vterrors.ToGRPC(throttleGiveUp)), false},
+		{"other retryable error", vterrors.New(vtrpcpb.Code_UNKNOWN, "vttablet: rpc error: code = Unknown desc = retryable stream failure"), true},
+	}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer deleteTablet(addTablet(100))
+
+			savedRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+			defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedRetryDelay }()
+			vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+
+			// Every run fails on the source with tc.err. Right before the
+			// retry streams, read the message the retry has left.
+			var (
+				mu       sync.Mutex
+				streamID int64
+				calls    int
+			)
+			retryMessage := make(chan string, 1)
+			vstreamErrorsByTablet = map[uint32]error{100: tc.err}
+			vstreamHook = func(context.Context) {
+				mu.Lock()
+				calls++
+				call, id := calls, streamID
+				mu.Unlock()
+				if call != 2 {
+					return
+				}
+				qr, err := env.Mysqld.FetchSuperQuery(context.Background(), fmt.Sprintf("select ifnull(message, '') from _vt.vreplication where id=%d", id))
+				if err == nil && len(qr.Rows) == 1 {
+					retryMessage <- qr.Rows[0][0].ToString()
+				}
+			}
+			defer func() {
+				vstreamHook = nil
+				vstreamErrorsByTablet = nil
+			}()
+
+			bls := &binlogdatapb.BinlogSource{Keyspace: env.KeyspaceName, Shard: env.ShardName, Filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{Match: "t1"}},
+			}}
+			mu.Lock()
+			qr, err := playerEngine.Exec(binlogplayer.CreateVReplication("test", bls, primaryPosition(t), 9223372036854775807, 9223372036854775807, 0, vrepldb,
+				binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false))
+			if err == nil {
+				streamID = int64(qr.InsertID)
+			}
+			mu.Unlock()
+			require.NoError(t, err)
+			defer func() {
+				_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+				require.NoError(t, err)
+				timeout := time.After(recvTimeout)
+				for {
+					select {
+					case got := <-globalDBQueries:
+						if strings.HasPrefix(got, "delete from _vt.post_copy_action") {
+							drainQuietDBQueries(t)
+							return
+						}
+					case <-timeout:
+						require.FailNow(t, "the stream was not deleted")
+					}
+				}
+			}()
+
+			// Drain the query log until the retry has read its message.
+			var written, message string
+			timeout := time.After(10 * time.Second)
+			for got := false; !got; {
+				select {
+				case q := <-globalDBQueries:
+					if written == "" && strings.HasPrefix(q, "update _vt.vreplication set message=") && strings.Contains(q, "stream") {
+						written = q
+					}
+				case message = <-retryMessage:
+					got = true
+				case <-timeout:
+					require.FailNow(t, "the stream did not retry")
+				}
+			}
+			t.Logf("message written by the failed run: %s", written)
+			if tc.keepError {
+				require.Equal(t, binlogplayer.MessageTruncate(tc.err.Error()), message)
+				return
+			}
+			require.Empty(t, message, "the retry kept the message of a throttle give-up")
+		})
+	}
+}
+
+// drainQuietDBQueries drains the queries a test's stream left in
+// globalDBQueries, such as the commit of its delete, so that they do not
+// reach the expectations of the next test.
+func drainQuietDBQueries(t *testing.T) {
+	t.Helper()
+	for {
+		select {
+		case <-globalDBQueries:
+		case <-time.After(200 * time.Millisecond):
+			return
+		}
+	}
 }
