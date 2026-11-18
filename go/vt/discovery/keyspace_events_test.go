@@ -795,6 +795,16 @@ func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
 
 	kss.onHealthCheck(primaryHealth(102, true, 30))
 	requireResolved(true, "new primary with a newer term after a former primary failed")
+
+	// Fail the current primary and fail over to a new one, then start a
+	// reparent while the new primary still reports serving.
+	kss.onHealthCheck(primaryHealth(102, false, 30))
+	kss.onHealthCheck(primaryHealth(103, true, 40))
+	requireResolved(true, "new primary after the current primary failed")
+
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(103, true, 40))
+	requireResolved(false, "stale serving healthcheck from the demoted primary after a failover")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
