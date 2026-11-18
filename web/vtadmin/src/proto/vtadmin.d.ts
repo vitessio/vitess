@@ -23266,6 +23266,9 @@ export namespace topodata {
         /** ThrottlerConfig metric_thresholds. */
         metric_thresholds: { [k: string]: number };
 
+        /** ThrottlerConfig metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new ThrottlerConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -23370,6 +23373,9 @@ export namespace topodata {
 
             /** ThrottlerConfig metric_thresholds */
             metric_thresholds?: ({ [k: string]: number }|null);
+
+            /** ThrottlerConfig metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

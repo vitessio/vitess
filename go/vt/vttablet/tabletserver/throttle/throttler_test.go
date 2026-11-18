@@ -2897,3 +2897,84 @@ func TestQueryThrottlerProbeMetricsPrefix(t *testing.T) {
 		return probesTotal.Get() > probes && probeRecentlyChecked.Get() > recentlyChecked && heartbeatRequests.Get() > requests
 	}, 30*time.Second, 10*time.Millisecond, "a shard probe of the dedicated query throttler, and the heartbeat request it makes, must count under its own prefix")
 }
+
+func TestAggregateMetricsMetricShardPercentiles(t *testing.T) {
+	const selfAlias = "zone1-0000000100"
+	tabletsWithValues := func(selfValue float64, otherValues ...float64) base.TabletResultMap {
+		metricsWithValue := func(value float64) base.MetricResultMap {
+			return base.MetricResultMap{
+				base.LagMetricName:     base.NewSimpleMetricResult(value),
+				base.LoadAvgMetricName: base.NewSimpleMetricResult(value),
+			}
+		}
+		tablets := base.TabletResultMap{selfAlias: metricsWithValue(selfValue)}
+		for i, value := range otherValues {
+			tablets[fmt.Sprintf("zone1-%010d", 101+i)] = metricsWithValue(value)
+		}
+		return tablets
+	}
+	withUnreachableOthers := func(tablets base.TabletResultMap) base.TabletResultMap {
+		for alias := range tablets {
+			if alias == selfAlias {
+				continue
+			}
+			unreachable := func() base.MetricResult {
+				return (&base.ThrottleMetric{}).WithError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, "unreachable"))
+			}
+			tablets[alias] = base.MetricResultMap{base.LagMetricName: unreachable(), base.LoadAvgMetricName: unreachable()}
+		}
+		return tablets
+	}
+	tcs := []struct {
+		name                string
+		previousPercentiles map[string]float64
+		percentiles         map[string]float64
+		isLeader            bool
+		tablets             base.TabletResultMap
+		expectShardLag      float64
+		expectShardLoadAvg  float64
+	}{
+		{name: "unset uses the worst tablet", isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 30, expectShardLoadAvg: 30},
+		{name: "p100 uses the worst tablet", percentiles: map[string]float64{"lag": 100}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 30, expectShardLoadAvg: 30},
+		{name: "removing the percentile restores the worst tablet", previousPercentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 30, expectShardLoadAvg: 30},
+		{name: "p75 ignores a single lagging replica", percentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 0.3, expectShardLoadAvg: 30},
+		{name: "p75 throttles on two of four lagging replicas", percentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 20, 30), expectShardLag: 20, expectShardLoadAvg: 30},
+		{name: "each metric uses its own percentile", percentiles: map[string]float64{"lag": 75, "loadavg": 50}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 0.3, expectShardLoadAvg: 0.2},
+		{name: "the leader's own value is not ranked with the other tablets", percentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(0, 0.1, 0.2, 30), expectShardLag: 30, expectShardLoadAvg: 30},
+		{name: "the leader's own value is a floor", percentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(50, 0.1, 0.2, 0.3), expectShardLag: 50, expectShardLoadAvg: 50},
+		{name: "a busy leader is not hidden on a non-lag metric", percentiles: map[string]float64{"loadavg": 99}, isLeader: true, tablets: tabletsWithValues(500, 10, 10, 10, 10), expectShardLag: 500, expectShardLoadAvg: 500},
+		{name: "a busy leader is not hidden by a single replica", percentiles: map[string]float64{"loadavg": 50}, isLeader: true, tablets: tabletsWithValues(500, 10), expectShardLag: 500, expectShardLoadAvg: 500},
+		{name: "leader without replicas uses its own value", percentiles: map[string]float64{"lag": 75}, isLeader: true, tablets: tabletsWithValues(4), expectShardLag: 4, expectShardLoadAvg: 4},
+		{name: "leader with every replica skipped uses its own value", percentiles: map[string]float64{"lag": 75, "loadavg": 75}, isLeader: true, tablets: withUnreachableOthers(tabletsWithValues(4, 0.1, 0.2, 0.3)), expectShardLag: 4, expectShardLoadAvg: 4},
+		{name: "non-leader uses its own value", percentiles: map[string]float64{"lag": 75}, tablets: tabletsWithValues(4), expectShardLag: 4, expectShardLoadAvg: 4},
+		{name: "non-leader uses the worst tablet", percentiles: map[string]float64{"lag": 75}, tablets: tabletsWithValues(30, 0.1, 0.2, 0.3), expectShardLag: 30, expectShardLoadAvg: 30},
+		{name: "non-leader does not apply the percentile", percentiles: map[string]float64{"lag": 75}, tablets: tabletsWithValues(0, 0.1, 0.2, 0.3, 30), expectShardLag: 30, expectShardLoadAvg: 30},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			throttler := newTestThrottler()
+			throttler.tabletAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+			throttler.isLeader.Store(tc.isLeader)
+			throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors = true
+			if tc.previousPercentiles != nil {
+				throttler.applyThrottlerConfig(t.Context(), &topodatapb.ThrottlerConfig{MetricShardPercentiles: tc.previousPercentiles})
+			}
+			throttler.applyThrottlerConfig(t.Context(), &topodatapb.ThrottlerConfig{MetricShardPercentiles: tc.percentiles})
+			throttler.inventory.TabletMetrics = tc.tablets
+
+			require.NoError(t, throttler.aggregateMetrics())
+
+			shardLag, err := throttler.getAggregatedMetric(base.LagMetricName.AggregatedName(base.ShardScope)).Get()
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectShardLag, shardLag)
+			shardLoadAvg, err := throttler.getAggregatedMetric(base.LoadAvgMetricName.AggregatedName(base.ShardScope)).Get()
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectShardLoadAvg, shardLoadAvg)
+
+			selfLag, err := throttler.getAggregatedMetric(base.LagMetricName.AggregatedName(base.SelfScope)).Get()
+			require.NoError(t, err)
+			expectSelf, _ := tc.tablets[selfAlias][base.LagMetricName].Get()
+			assert.Equal(t, expectSelf, selfLag)
+		})
+	}
+}

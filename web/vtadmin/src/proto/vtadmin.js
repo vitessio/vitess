@@ -58921,6 +58921,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Object.<string,topodata.ThrottledAppRule.$Properties>|null} [throttled_apps] ThrottlerConfig throttled_apps
          * @property {Object.<string,topodata.ThrottlerConfig.MetricNames.$Properties>|null} [app_checked_metrics] ThrottlerConfig app_checked_metrics
          * @property {Object.<string,number>|null} [metric_thresholds] ThrottlerConfig metric_thresholds
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] ThrottlerConfig metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -58949,6 +58950,7 @@ export const topodata = $root.topodata = (() => {
             this.throttled_apps = {};
             this.app_checked_metrics = {};
             this.metric_thresholds = {};
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -59012,6 +59014,14 @@ export const topodata = $root.topodata = (() => {
         ThrottlerConfig.prototype.metric_thresholds = $util.emptyObject;
 
         /**
+         * ThrottlerConfig metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof topodata.ThrottlerConfig
+         * @instance
+         */
+        ThrottlerConfig.prototype.metric_shard_percentiles = $util.emptyObject;
+
+        /**
          * Creates a new ThrottlerConfig instance using the specified properties.
          * @function create
          * @memberof topodata.ThrottlerConfig
@@ -59064,6 +59074,9 @@ export const topodata = $root.topodata = (() => {
             if (message.metric_thresholds != null && $Object.hasOwnProperty.call(message, "metric_thresholds"))
                 for (let keys = $Object.keys(message.metric_thresholds), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_thresholds[keys[i]]).ldelim();
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 8, wireType 2 =*/66).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -59265,6 +59278,42 @@ export const topodata = $root.topodata = (() => {
                         message.metric_thresholds[key] = value;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -59353,6 +59402,14 @@ export const topodata = $root.topodata = (() => {
                     if (typeof message.metric_thresholds[key[i]] !== "number")
                         return "metric_thresholds: number{k:string} expected";
             }
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -59420,6 +59477,16 @@ export const topodata = $root.topodata = (() => {
                     message.metric_thresholds[keys[i]] = $Number(object.metric_thresholds[keys[i]]);
                 }
             }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".topodata.ThrottlerConfig.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -59444,6 +59511,7 @@ export const topodata = $root.topodata = (() => {
                 object.throttled_apps = {};
                 object.app_checked_metrics = {};
                 object.metric_thresholds = {};
+                object.metric_shard_percentiles = {};
             }
             if (options.defaults) {
                 object.enabled = false;
@@ -59482,6 +59550,14 @@ export const topodata = $root.topodata = (() => {
                     if (keys2[j] === "__proto__")
                         $util.makeProp(object.metric_thresholds, keys2[j]);
                     object.metric_thresholds[keys2[j]] = options.json && !$isFinite(message.metric_thresholds[keys2[j]]) ? $String(message.metric_thresholds[keys2[j]]) : message.metric_thresholds[keys2[j]];
+                }
+            }
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
                 }
             }
             return object;
