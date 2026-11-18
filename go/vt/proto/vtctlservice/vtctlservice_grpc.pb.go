@@ -625,7 +625,7 @@ type VtctldClient interface {
 	VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
-	// VDiffUpdate merges picker options (tablet types and cells) into an
+	// VDiffUpdate merges tablet picker options (tablet types and cells) into an
 	// existing VDiff. Only stopped or completed VDiffs can be updated: if
 	// the VDiff is pending/started, in the error state, or has a live
 	// controller on an affected shard, the update is rejected. Otherwise
@@ -2337,7 +2337,7 @@ type VtctldServer interface {
 	VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
-	// VDiffUpdate merges picker options (tablet types and cells) into an
+	// VDiffUpdate merges tablet picker options (tablet types and cells) into an
 	// existing VDiff. Only stopped or completed VDiffs can be updated: if
 	// the VDiff is pending/started, in the error state, or has a live
 	// controller on an affected shard, the update is rejected. Otherwise

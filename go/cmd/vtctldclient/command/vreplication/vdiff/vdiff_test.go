@@ -874,7 +874,7 @@ func TestUpdateCommandFlags(t *testing.T) {
 		require.Contains(t, err.Error(), "invalid UUID provided")
 	})
 
-	t.Run("requires a picker option", func(t *testing.T) {
+	t.Run("requires a tablet picker option", func(t *testing.T) {
 		updateOptions.ClearSourceCells = false
 		updateOptions.ClearTargetCells = false
 		updateOptions.SourceCells = nil
@@ -882,10 +882,10 @@ func TestUpdateCommandFlags(t *testing.T) {
 		updateOptions.TabletTypes = nil
 		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "no picker options specified to update")
+		require.Contains(t, err.Error(), "no tablet picker options specified to update")
 	})
 
-	t.Run("clear source cells is a picker option", func(t *testing.T) {
+	t.Run("clear source cells is a tablet picker option", func(t *testing.T) {
 		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
 		t.Cleanup(func() {
 			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))

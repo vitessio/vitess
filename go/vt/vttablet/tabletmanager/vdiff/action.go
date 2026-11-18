@@ -495,7 +495,7 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 	return nil
 }
 
-// handleUpdateAction merges picker options into an existing VDiff record.
+// handleUpdateAction merges tablet picker options into an existing VDiff record.
 // Only stopped or completed VDiffs can be updated. If the VDiff is
 // pending/started, in the error state, or a live controller exists on
 // this tablet, the update is rejected. Otherwise the merged options are
@@ -512,8 +512,8 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vdiff UUID is required")
 	}
 	updates := req.GetOptions().GetPickerOptions()
-	if !pickerHasUpdates(updates) {
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+	if !tabletPickerHasUpdates(updates) {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no tablet picker options specified to update")
 	}
 
 	vde.mu.Lock()
@@ -558,7 +558,7 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	if options.PickerOptions == nil {
 		options.PickerOptions = &tabletmanagerdatapb.VDiffPickerOptions{}
 	}
-	mergePickerOptions(options.PickerOptions, updates)
+	mergeTabletPickerOptions(options.PickerOptions, updates)
 
 	optionsJSON, err := json.Marshal(options)
 	if err != nil {
@@ -576,7 +576,7 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 		return err
 	}
 
-	insertVDiffLog(ctx, dbClient, id, fmt.Sprintf("Updated picker options: tablet_types=%s source_cell=%s target_cell=%s",
+	insertVDiffLog(ctx, dbClient, id, fmt.Sprintf("Updated tablet picker options: tablet_types=%s source_cell=%s target_cell=%s",
 		options.PickerOptions.TabletTypes, options.PickerOptions.SourceCell, options.PickerOptions.TargetCell))
 
 	resp.Id = id
@@ -639,16 +639,16 @@ func (vde *Engine) hasLiveControllerLocked(id int64) bool {
 	}
 }
 
-func pickerHasUpdates(updates *tabletmanagerdatapb.VDiffPickerOptions) bool {
+func tabletPickerHasUpdates(updates *tabletmanagerdatapb.VDiffPickerOptions) bool {
 	if updates == nil {
 		return false
 	}
 	return updates.TabletTypes != "" || updates.SourceCell != "" || updates.TargetCell != ""
 }
 
-// mergePickerOptions copies non-empty fields from updates into existing.
-// Other picker fields and all core/report options are left unchanged.
-func mergePickerOptions(existing, updates *tabletmanagerdatapb.VDiffPickerOptions) {
+// mergeTabletPickerOptions copies non-empty fields from updates into existing.
+// Other tablet picker fields and all core/report options are left unchanged.
+func mergeTabletPickerOptions(existing, updates *tabletmanagerdatapb.VDiffPickerOptions) {
 	if existing == nil || updates == nil {
 		return
 	}

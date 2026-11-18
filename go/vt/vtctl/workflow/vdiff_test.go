@@ -793,13 +793,13 @@ func TestVDiffUpdate(t *testing.T) {
 			wantCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
-			name: "no picker options",
+			name: "no tablet picker options",
 			req: &vtctldatapb.VDiffUpdateRequest{
 				TargetKeyspace: targetKeyspace.KeyspaceName,
 				Workflow:       workflow,
 				Uuid:           vduuid,
 			},
-			wantErr: "no picker options specified to update",
+			wantErr: "no tablet picker options specified to update",
 		},
 		{
 			name: "clear source cells and source cells together",

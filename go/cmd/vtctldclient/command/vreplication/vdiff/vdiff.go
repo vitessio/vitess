@@ -261,11 +261,12 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 	// update makes a VDiffUpdate gRPC call to a vtctld.
 	update = &cobra.Command{
 		Use:   "update",
-		Short: "Update picker options (tablet types and cells) on an existing VDiff.",
-		Long: `Update picker options (tablet types and cells) on an existing VDiff.
+		Short: "Update tablet picker options (tablet types and cells) on an existing VDiff.",
+		Long: `Update tablet picker options (tablet types and cells) on an existing VDiff.
 
-The specified picker options are merged into the stored _vt.vdiff.options JSON
-on each target shard primary. Other options (core and report) are left unchanged.
+The specified tablet picker options are merged into the stored
+_vt.vdiff.options JSON on each target shard primary. Other options (core and
+report) are left unchanged.
 
 Only stopped or completed VDiffs can be updated. If the VDiff is pending,
 started, or in the error state on an affected shard, or a live controller
@@ -326,7 +327,7 @@ cluster (for Mount/Migrate workflows, the external cluster), and
 				return errors.New("--tablet-types-in-preference-order requires --tablet-types")
 			}
 			if !hasTabletTypes && !hasSourceCells && !hasTargetCells && !hasClearSource && !hasClearTarget {
-				return errors.New("no picker options specified to update; provide --tablet-types, --source-cells, --target-cells, --clear-source-cells, and/or --clear-target-cells")
+				return errors.New("no tablet picker options specified to update; provide --tablet-types, --source-cells, --target-cells, --clear-source-cells, and/or --clear-target-cells")
 			}
 			if !hasTabletTypes {
 				updateOptions.TabletTypes = nil
@@ -874,7 +875,7 @@ func registerCommands(root *cobra.Command) {
 	base.AddCommand(stop)
 
 	update.Flags().StringSliceVar(&updateOptions.SourceCells, "source-cells", nil, "The source cell(s) to compare from. When omitted, the existing value is left unchanged.")
-	update.Flags().StringSliceVar(&updateOptions.TargetCells, "target-cells", nil, "The target cell(s) to compare with. When omitted, the existing value is left unchanged.")
+	update.Flags().StringSliceVar(&updateOptions.TargetCells, "target-cells", nil, "The target cell(s) to compare to. When omitted, the existing value is left unchanged.")
 	update.Flags().BoolVar(&updateOptions.ClearSourceCells, "clear-source-cells", false, "Reset source cells to all cells in the source cluster (for Mount/Migrate workflows, the external cluster). Cannot be combined with --source-cells.")
 	update.Flags().BoolVar(&updateOptions.ClearTargetCells, "clear-target-cells", false, "Reset target cells to all cells in the local cluster. Cannot be combined with --target-cells.")
 	update.Flags().Var((*topoprotopb.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "Tablet types to use on the source and target (PRIMARY, REPLICA, RDONLY). When omitted, the existing value is left unchanged.")

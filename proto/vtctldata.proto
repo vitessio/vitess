@@ -2220,8 +2220,8 @@ message VDiffUpdateResponse {
   message ShardResult {
     string shard = 1;
     // VDiff state on this shard after the update. The update is persist-only;
-    // lastpk and progress are left untouched. The new picker options take
-    // effect on the next VDiff resume.
+    // lastpk and progress are left untouched. The new tablet picker options
+    // take effect on the next VDiff resume.
     string state = 2;
   }
   repeated ShardResult results = 1;

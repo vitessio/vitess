@@ -384,13 +384,13 @@ func TestPerformVDiffAction(t *testing.T) {
 			},
 		},
 		{
-			name: "update without picker options",
+			name: "update without tablet picker options",
 			req: &tabletmanagerdatapb.VDiffRequest{
 				Action:    string(UpdateAction),
 				VdiffUuid: uuid,
 				Options:   &tabletmanagerdatapb.VDiffOptions{},
 			},
-			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update"),
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no tablet picker options specified to update"),
 		},
 		{
 			name: "update missing uuid",
@@ -463,7 +463,7 @@ func TestPerformVDiffAction(t *testing.T) {
 	}
 }
 
-func TestMergePickerOptions(t *testing.T) {
+func TestMergeTabletPickerOptions(t *testing.T) {
 	existing := &tabletmanagerdatapb.VDiffPickerOptions{
 		TabletTypes: "replica,rdonly,primary",
 		SourceCell:  "zone1",
@@ -471,35 +471,35 @@ func TestMergePickerOptions(t *testing.T) {
 	}
 
 	t.Run("nil updates", func(t *testing.T) {
-		got := protoClonePicker(existing)
-		mergePickerOptions(got, nil)
+		got := protoCloneTabletPickerOptions(existing)
+		mergeTabletPickerOptions(got, nil)
 		require.Equal(t, existing, got)
 	})
 
 	t.Run("tablet types only", func(t *testing.T) {
-		got := protoClonePicker(existing)
-		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+		got := protoCloneTabletPickerOptions(existing)
+		mergeTabletPickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
 		require.Equal(t, "in_order:primary", got.TabletTypes)
 		require.Equal(t, "zone1", got.SourceCell)
 		require.Equal(t, "zone2", got.TargetCell)
 	})
 
 	t.Run("cells only", func(t *testing.T) {
-		got := protoClonePicker(existing)
-		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{SourceCell: "zone3", TargetCell: "zone4"})
+		got := protoCloneTabletPickerOptions(existing)
+		mergeTabletPickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{SourceCell: "zone3", TargetCell: "zone4"})
 		require.Equal(t, "replica,rdonly,primary", got.TabletTypes)
 		require.Equal(t, "zone3", got.SourceCell)
 		require.Equal(t, "zone4", got.TargetCell)
 	})
 
 	t.Run("empty fields do not clobber", func(t *testing.T) {
-		got := protoClonePicker(existing)
-		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{})
+		got := protoCloneTabletPickerOptions(existing)
+		mergeTabletPickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{})
 		require.Equal(t, existing, got)
 	})
 }
 
-func protoClonePicker(in *tabletmanagerdatapb.VDiffPickerOptions) *tabletmanagerdatapb.VDiffPickerOptions {
+func protoCloneTabletPickerOptions(in *tabletmanagerdatapb.VDiffPickerOptions) *tabletmanagerdatapb.VDiffPickerOptions {
 	return &tabletmanagerdatapb.VDiffPickerOptions{
 		TabletTypes: in.TabletTypes,
 		SourceCell:  in.SourceCell,
@@ -521,7 +521,7 @@ func TestHandleUpdateAction(t *testing.T) {
 		wantControllers int
 	}{
 		{
-			name:      "merges picker options on stopped",
+			name:      "merges tablet picker options on stopped",
 			state:     "stopped",
 			wantState: "stopped",
 		},
@@ -531,7 +531,7 @@ func TestHandleUpdateAction(t *testing.T) {
 			wantErr: "only stopped or completed vdiffs can be updated",
 		},
 		{
-			name:            "merges picker options on completed leftover controller",
+			name:            "merges tablet picker options on completed leftover controller",
 			state:           "completed",
 			leftoverDone:    true,
 			wantState:       "completed",
@@ -576,7 +576,7 @@ func TestHandleUpdateAction(t *testing.T) {
 				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 			}
 			require.NoError(t, protojson.Unmarshal([]byte(existingJSON), options))
-			mergePickerOptions(options.PickerOptions, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+			mergeTabletPickerOptions(options.PickerOptions, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
 			wantJSON, err := json.Marshal(options)
 			require.NoError(t, err)
 
@@ -683,7 +683,7 @@ func expectUpdateOptionsQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, ex
 	vdiffenv.dbClient.ExpectRequest(updateQuery, singleRowAffected, nil)
 	vdiffenv.dbClient.ExpectRequest(
 		fmt.Sprintf("insert into _vt.vdiff_log(vdiff_id, message) values (1, %s)",
-			encodeString(fmt.Sprintf("Updated picker options: tablet_types=%s source_cell=%s target_cell=%s", tabletTypes, sourceCell, targetCell))),
+			encodeString(fmt.Sprintf("Updated tablet picker options: tablet_types=%s source_cell=%s target_cell=%s", tabletTypes, sourceCell, targetCell))),
 		singleRowAffected,
 		nil,
 	)

@@ -644,7 +644,7 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 }
 
 // VDiffUpdate is part of the vtctlservicepb.VtctldServer interface.
-// It merges picker options (tablet types and cells) into the stored
+// It merges tablet picker options (tablet types and cells) into the stored
 // _vt.vdiff.options JSON on each target shard primary. Other options
 // are left unchanged. Only stopped or completed VDiffs can be updated:
 // if the VDiff is pending/started, in the error state, or has a live
@@ -687,7 +687,7 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	}
 	if len(req.TabletTypes) == 0 && len(req.SourceCells) == 0 && !req.ClearSourceCells &&
 		len(req.TargetCells) == 0 && !req.ClearTargetCells {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no tablet picker options specified to update")
 	}
 
 	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
@@ -710,27 +710,27 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 		return nil, err
 	}
 
-	picker := &tabletmanagerdatapb.VDiffPickerOptions{}
+	tabletPicker := &tabletmanagerdatapb.VDiffPickerOptions{}
 	if len(req.TabletTypes) > 0 {
-		picker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
+		tabletPicker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 	}
 	if req.ClearSourceCells {
 		cells, err := allTopoCells(ctx, sourceTopo)
 		if err != nil {
 			return nil, err
 		}
-		picker.SourceCell = cells
+		tabletPicker.SourceCell = cells
 	} else if len(req.SourceCells) > 0 {
-		picker.SourceCell = strings.Join(req.SourceCells, ",")
+		tabletPicker.SourceCell = strings.Join(req.SourceCells, ",")
 	}
 	if req.ClearTargetCells {
 		cells, err := allTopoCells(ctx, s.ts)
 		if err != nil {
 			return nil, err
 		}
-		picker.TargetCell = cells
+		tabletPicker.TargetCell = cells
 	} else if len(req.TargetCells) > 0 {
-		picker.TargetCell = strings.Join(req.TargetCells, ",")
+		tabletPicker.TargetCell = strings.Join(req.TargetCells, ",")
 	}
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
@@ -739,7 +739,7 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 		Action:    string(vdiff.UpdateAction),
 		VdiffUuid: req.Uuid,
 		Options: &tabletmanagerdatapb.VDiffOptions{
-			PickerOptions: picker,
+			PickerOptions: tabletPicker,
 		},
 	}
 

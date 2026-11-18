@@ -17473,8 +17473,8 @@ type VDiffUpdateResponse_ShardResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Shard string                 `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
 	// VDiff state on this shard after the update. The update is persist-only;
-	// lastpk and progress are left untouched. The new picker options take
-	// effect on the next VDiff resume.
+	// lastpk and progress are left untouched. The new tablet picker options
+	// take effect on the next VDiff resume.
 	State         string `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
