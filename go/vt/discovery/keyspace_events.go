@@ -446,9 +446,8 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		kss.consistent = false
 	}
 
-	// Ignore a former primary that still reports PRIMARY. A dead one reports
-	// not serving on every healthcheck retry, which must not let the next
-	// reparent skip waitForReparent.
+	// Record the serving state of the current primary only. The healthcheck
+	// keeps reporting a dead former primary as a not serving PRIMARY.
 	if topoproto.TabletAliasEqual(th.Tablet.GetAlias(), sstate.currentPrimary) {
 		sstate.primaryNotServing = !th.Serving
 	}
