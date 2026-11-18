@@ -87,9 +87,14 @@ A rule names a metric bare ("lag") or with a scope ("shard/lag", "self/lag"). "c
 
 Tablets do not throttle statements whose rejection would cost more than running them, and dry_run does not count them: statements inside a transaction (explicit transactions, statements in a session with autocommit=0 from its first statement other than a SELECT that names no table, SET, USE, PREPARE, DEALLOCATE PREPARE, SHOW CREATE or a SHOW statement that reads only server state, and DML that VTGate runs in a transaction of its own under autocommit: an INSERT, UPDATE or DELETE that spans several shards, unless it has the MULTI_SHARD_AUTOCOMMIT directive, and a write to a table with an owned lookup vindex, unless that vindex sets autocommit=true), sequence fetches, statements that take or release an advisory lock, and SELECT statements that name no table, even one that calls a stored function or BENCHMARK(). Statements that VTGate runs outside the user's transaction, or as autocommit statements of their own, can still be throttled, such as the reads of a lookup vindex with autocommit=true, its inserts when they go to a single shard or it also sets multi_shard_autocommit=true, a single-shard write after them, and each shard's part of a MULTI_SHARD_AUTOCOMMIT statement.
 
-On a primary, "lag" (or "shard/lag") is the highest of its own heartbeat lag and the replication lag of the replicas it probes, which --throttle-tablet-types selects (default: replica). A single lagging replica therefore makes the primary reject the share of matching queries that a PRIMARY lag rule sets. A replica that cannot be probed, whose lag cannot be read, or that does not run the query throttler itself, for example while it is not serving, is left out. On a replica, "lag" is that replica's own lag.`,
+On a primary, "lag" (or "shard/lag") is the highest of its own heartbeat lag and the replication lag of the replicas it probes, which --throttle-tablet-types selects (default: replica). A single lagging replica therefore makes the primary reject the share of matching queries that a PRIMARY lag rule sets, unless metric_shard_percentiles sets a percentile for lag. A replica that cannot be probed, whose lag cannot be read, or that does not run the query throttler itself, for example while it is not serving, is left out. On a replica, "lag" is that replica's own lag.
+
+tablet_strategy_config.metric_shard_percentiles maps bare metric names, such as "lag", to the nearest-rank percentile of the probed tablets' values that the primary uses for that metric in the shard scope, instead of the highest value. Each value must be between 0 and 100. A missing metric, 0 and 100 select the highest value. A percentile has no effect on a rule that reads the self scope, which is the default scope of every metric except lag. While a metric uses a percentile, the primary uses the larger of its own value and the percentile of the other tablets. With few replicas, the percentile can still select the highest value: p75 tolerates one lagging replica only from four replicas up.`,
 		Example: `# Throttle 50% of INSERTs on primaries when replication lag is above 5s, and all of them above 10s.
 UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","dry_run":false,"tablet_strategy_config":{"tablet_rules":{"PRIMARY":{"statement_rules":{"INSERT":{"metric_rules":{"lag":{"thresholds":[{"above":5,"throttle":50},{"above":10,"throttle":100}]}}}}}}}}' my_keyspace
+
+# The same rule, using the 75th percentile of the replicas' lag instead of the highest.
+UpdateQueryThrottlerConfig --config '{"enabled":true,"strategy":"TABLET_THROTTLER","tablet_strategy_config":{"metric_shard_percentiles":{"lag":75},"tablet_rules":{"PRIMARY":{"statement_rules":{"INSERT":{"metric_rules":{"lag":{"thresholds":[{"above":5,"throttle":50},{"above":10,"throttle":100}]}}}}}}}}' my_keyspace
 
 # Disable the query throttler.
 UpdateQueryThrottlerConfig --config '{"enabled":false}' my_keyspace`,
@@ -269,6 +274,12 @@ func validateQueryThrottlerConfigContent(cfg *querythrottler.Config) error {
 
 	if len(tsc.GetTabletRules()) == 0 {
 		return errors.New("tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	for metricName, percentile := range tsc.GetMetricShardPercentiles() {
+		if err := base.ValidateShardPercentile(metricName, percentile); err != nil {
+			return err
+		}
 	}
 
 	// This mirrors grpcvtctldserver.validateQueryThrottlerConfig, which is where each rule

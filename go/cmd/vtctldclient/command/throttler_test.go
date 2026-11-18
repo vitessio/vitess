@@ -570,7 +570,7 @@ func withMetric(cfg *querythrottler.Config, metric string) *querythrottler.Confi
 // in UpdateQueryThrottlerConfig.Example must parse and pass validation.
 func TestUpdateQueryThrottlerConfigExamples(t *testing.T) {
 	matches := regexp.MustCompile(`--config '([^']*)'`).FindAllStringSubmatch(UpdateQueryThrottlerConfig.Example, -1)
-	require.Len(t, matches, 2)
+	require.Len(t, matches, 3)
 	for _, m := range matches {
 		cfg, err := parseQueryThrottlerConfig([]byte(m[1]))
 		require.NoError(t, err, m[1])
@@ -830,6 +830,46 @@ func TestValidateQueryThrottlerConfigContent_RejectsUnenforceableRules(t *testin
 				return
 			}
 			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestValidateQueryThrottlerConfigContentShardPercentile(t *testing.T) {
+	configWithPercentiles := func(enabled bool, percentiles map[string]float64) *querythrottler.Config {
+		return &querythrottler.Config{
+			Enabled:  enabled,
+			Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+				MetricShardPercentiles: percentiles,
+				TabletRules: map[string]*querythrottler.StatementRuleSet{
+					"PRIMARY": {StatementRules: map[string]*querythrottler.MetricRuleSet{
+						"SELECT": {MetricRules: map[string]*querythrottler.MetricRule{
+							"lag": {Thresholds: []*querythrottler.ThrottleThreshold{{Above: 5, Throttle: 100}}},
+						}},
+					}},
+				},
+			},
+		}
+	}
+	tests := []struct {
+		name    string
+		config  *querythrottler.Config
+		wantErr string
+	}{
+		{name: "unset", config: configWithPercentiles(true, nil)},
+		{name: "valid, including a metric that no rule uses", config: configWithPercentiles(true, map[string]float64{"lag": 75, "loadavg": 100})},
+		{name: "scoped metric name", config: configWithPercentiles(true, map[string]float64{"shard/lag": 75}), wantErr: "unknown metric name for shard percentile: shard/lag"},
+		{name: "above 100", config: configWithPercentiles(true, map[string]float64{"lag": 101}), wantErr: "shard percentile of lag must be between 0 and 100, got 101"},
+		{name: "disabled config is not validated", config: configWithPercentiles(false, map[string]float64{"lag": 150})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateQueryThrottlerConfigContent(tt.config)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+			}
 		})
 	}
 }

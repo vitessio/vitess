@@ -6043,6 +6043,12 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
 	}
 
+	for metricName, percentile := range tsc.GetMetricShardPercentiles() {
+		if err := base.ValidateShardPercentile(metricName, percentile); err != nil {
+			return err
+		}
+	}
+
 	// seenBareMetrics maps a bare metric name ("lag") to the first rule key that produced
 	// it, across the whole config, so scope collisions are caught globally.
 	seenBareMetrics := make(map[string]string)

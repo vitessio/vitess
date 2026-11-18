@@ -22,6 +22,9 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // MetricName is a formalized name for a metric, such as "lag" or "threads_running". A metric name
@@ -139,4 +142,16 @@ func DisaggregateMetricName(aggregatedMetricName string) (scope Scope, metricNam
 		return UndefinedScope, DefaultMetricName, ErrNoSuchMetric
 	}
 	return breakdown.Scope, breakdown.Metric, nil
+}
+
+// ValidateShardPercentile returns an error unless metricName is a known bare metric name and percentile is between 0 and 100.
+func ValidateShardPercentile(metricName string, percentile float64) error {
+	if name := MetricName(metricName); name == DefaultMetricName || !KnownMetricNames.Contains(name) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown metric name for shard percentile: %s", metricName)
+	}
+	// Negated so that NaN is rejected as well.
+	if !(percentile >= 0 && percentile <= 100) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "shard percentile of %s must be between 0 and 100, got %v", metricName, percentile)
+	}
+	return nil
 }
