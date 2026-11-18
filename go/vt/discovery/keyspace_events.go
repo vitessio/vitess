@@ -404,8 +404,8 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		kss.shards[th.Target.Shard] = sstate
 	}
 
-	// Ignore a primary whose term is older than the latest one seen. A former
-	// primary reports PRIMARY with its old term until it streams its new type.
+	// Ignore a primary with an older known term. A stopping primary reports a
+	// negative term.
 	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
 		if th.Serving {
 			log.Warn("ignoring a serving primary with an older term than the highest known primary term",
@@ -1109,7 +1109,7 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 	kss.consistent = false
 	sstate.serving = false
 
-	// Skip waitForReparent once the current primary has reported not serving.
+	// Skip waitForReparent while the current primary reports not serving.
 	// onHealthCheck marks the shard serving on a same-term recovery only while
 	// waitForReparent is unset.
 	if isReparentErr && !sstate.primaryNotServing {
