@@ -157,10 +157,10 @@ func (kss *keyspaceState) Format(f fmt.State, verb rune) {
 
 	fmt.Fprintf(f, "Keyspace(%s) = deleted: %v, consistent: %v, shards: [\n", kss.keyspace, kss.deleted, kss.consistent)
 	for shard, ss := range kss.shards {
-		fmt.Fprintf(f, "  Shard(%s) = target: [%s/%s %v], serving: %v, externally_reparented: %d, current_primary: %s\n",
+		fmt.Fprintf(f, "  Shard(%s) = target: [%s/%s %v], serving: %v, wait_for_reparent: %v, primary_not_serving: %v, externally_reparented: %d, current_primary: %s\n",
 			shard,
 			ss.target.Keyspace, ss.target.Shard, ss.target.TabletType,
-			ss.serving, ss.externallyReparented,
+			ss.serving, ss.waitForReparent, ss.primaryNotServing, ss.externallyReparented,
 			ss.currentPrimary.String(),
 		)
 	}
@@ -407,6 +407,15 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// Ignore a primary whose term is older than the latest one seen. A former
 	// primary reports PRIMARY with its old term until it streams its new type.
 	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
+		if th.Serving {
+			log.Warn("Ignoring a serving primary with an older term than the newest primary",
+				slog.String("tablet", topoproto.TabletAliasString(th.Tablet.GetAlias())),
+				slog.String("keyspace", th.Target.Keyspace),
+				slog.String("shard", th.Target.Shard),
+				slog.Time("primary_term_start_time", time.Unix(th.PrimaryTermStartTime, 0).UTC()),
+				slog.Time("newest_primary_term_start_time", time.Unix(sstate.externallyReparented, 0).UTC()))
+		}
+
 		return
 	}
 
