@@ -408,12 +408,13 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// primary reports PRIMARY with its old term until it streams its new type.
 	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
 		if th.Serving {
-			log.Warn("Ignoring a serving primary with an older term than the newest primary",
+			log.Warn("ignoring a serving primary with an older term than the highest known primary term",
 				slog.String("tablet", topoproto.TabletAliasString(th.Tablet.GetAlias())),
 				slog.String("keyspace", th.Target.Keyspace),
 				slog.String("shard", th.Target.Shard),
+				slog.String("primary_tablet", topoproto.TabletAliasString(sstate.currentPrimary)),
 				slog.Time("primary_term_start_time", time.Unix(th.PrimaryTermStartTime, 0).UTC()),
-				slog.Time("newest_primary_term_start_time", time.Unix(sstate.externallyReparented, 0).UTC()))
+				slog.Time("highest_primary_term_start_time", time.Unix(sstate.externallyReparented, 0).UTC()))
 		}
 
 		return
