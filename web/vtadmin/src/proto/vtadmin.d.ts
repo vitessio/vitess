@@ -25018,6 +25018,9 @@ export namespace querythrottler {
         /** TabletStrategyConfig tablet_rules. */
         tablet_rules: { [k: string]: querythrottler.StatementRuleSet.$Properties };
 
+        /** TabletStrategyConfig metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new TabletStrategyConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -25104,6 +25107,9 @@ export namespace querythrottler {
 
             /** TabletStrategyConfig tablet_rules */
             tablet_rules?: ({ [k: string]: querythrottler.StatementRuleSet.$Properties }|null);
+
+            /** TabletStrategyConfig metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

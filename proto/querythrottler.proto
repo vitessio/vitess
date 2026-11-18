@@ -21,6 +21,9 @@ message Config {
 // TabletStrategyConfig holds per-tablet-type throttling rules
 message TabletStrategyConfig {
   map<string, StatementRuleSet> tablet_rules = 1;
+  // metric_shard_percentiles maps bare metric names to the nearest-rank percentile of the tablets' values that
+  // the PRIMARY uses for that metric's shard scope. A missing metric, or a value of 0 or 100, means the worst tablet.
+  map<string, double> metric_shard_percentiles = 2;
 }
 
 // StatementRuleSet maps SQL statement types to metric rules

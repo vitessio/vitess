@@ -139,10 +139,13 @@ func (x *Config) GetDryRun() bool {
 
 // TabletStrategyConfig holds per-tablet-type throttling rules
 type TabletStrategyConfig struct {
-	state         protoimpl.MessageState       `protogen:"open.v1"`
-	TabletRules   map[string]*StatementRuleSet `protobuf:"bytes,1,rep,name=tablet_rules,json=tabletRules,proto3" json:"tablet_rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState       `protogen:"open.v1"`
+	TabletRules map[string]*StatementRuleSet `protobuf:"bytes,1,rep,name=tablet_rules,json=tabletRules,proto3" json:"tablet_rules,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// metric_shard_percentiles maps bare metric names to the nearest-rank percentile of the tablets' values that
+	// the PRIMARY uses for that metric's shard scope. A missing metric, or a value of 0 or 100, means the worst tablet.
+	MetricShardPercentiles map[string]float64 `protobuf:"bytes,2,rep,name=metric_shard_percentiles,json=metricShardPercentiles,proto3" json:"metric_shard_percentiles,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *TabletStrategyConfig) Reset() {
@@ -178,6 +181,13 @@ func (*TabletStrategyConfig) Descriptor() ([]byte, []int) {
 func (x *TabletStrategyConfig) GetTabletRules() map[string]*StatementRuleSet {
 	if x != nil {
 		return x.TabletRules
+	}
+	return nil
+}
+
+func (x *TabletStrategyConfig) GetMetricShardPercentiles() map[string]float64 {
+	if x != nil {
+		return x.MetricShardPercentiles
 	}
 	return nil
 }
@@ -379,12 +389,16 @@ const file_querythrottler_proto_rawDesc = "" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12>\n" +
 	"\bstrategy\x18\x02 \x01(\x0e2\".querythrottler.ThrottlingStrategyR\bstrategy\x12Z\n" +
 	"\x16tablet_strategy_config\x18\x03 \x01(\v2$.querythrottler.TabletStrategyConfigR\x14tabletStrategyConfig\x12\x17\n" +
-	"\adry_run\x18\x04 \x01(\bR\x06dryRun\"\xd2\x01\n" +
+	"\adry_run\x18\x04 \x01(\bR\x06dryRun\"\x99\x03\n" +
 	"\x14TabletStrategyConfig\x12X\n" +
-	"\ftablet_rules\x18\x01 \x03(\v25.querythrottler.TabletStrategyConfig.TabletRulesEntryR\vtabletRules\x1a`\n" +
+	"\ftablet_rules\x18\x01 \x03(\v25.querythrottler.TabletStrategyConfig.TabletRulesEntryR\vtabletRules\x12z\n" +
+	"\x18metric_shard_percentiles\x18\x02 \x03(\v2@.querythrottler.TabletStrategyConfig.MetricShardPercentilesEntryR\x16metricShardPercentiles\x1a`\n" +
 	"\x10TabletRulesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x126\n" +
-	"\x05value\x18\x02 \x01(\v2 .querythrottler.StatementRuleSetR\x05value:\x028\x01\"\xd3\x01\n" +
+	"\x05value\x18\x02 \x01(\v2 .querythrottler.StatementRuleSetR\x05value:\x028\x01\x1aI\n" +
+	"\x1bMetricShardPercentilesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\xd3\x01\n" +
 	"\x10StatementRuleSet\x12]\n" +
 	"\x0fstatement_rules\x18\x01 \x03(\v24.querythrottler.StatementRuleSet.StatementRulesEntryR\x0estatementRules\x1a`\n" +
 	"\x13StatementRulesEntry\x12\x10\n" +
@@ -420,7 +434,7 @@ func file_querythrottler_proto_rawDescGZIP() []byte {
 }
 
 var file_querythrottler_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_querythrottler_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_querythrottler_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_querythrottler_proto_goTypes = []any{
 	(ThrottlingStrategy)(0),      // 0: querythrottler.ThrottlingStrategy
 	(*Config)(nil),               // 1: querythrottler.Config
@@ -430,24 +444,26 @@ var file_querythrottler_proto_goTypes = []any{
 	(*MetricRule)(nil),           // 5: querythrottler.MetricRule
 	(*ThrottleThreshold)(nil),    // 6: querythrottler.ThrottleThreshold
 	nil,                          // 7: querythrottler.TabletStrategyConfig.TabletRulesEntry
-	nil,                          // 8: querythrottler.StatementRuleSet.StatementRulesEntry
-	nil,                          // 9: querythrottler.MetricRuleSet.MetricRulesEntry
+	nil,                          // 8: querythrottler.TabletStrategyConfig.MetricShardPercentilesEntry
+	nil,                          // 9: querythrottler.StatementRuleSet.StatementRulesEntry
+	nil,                          // 10: querythrottler.MetricRuleSet.MetricRulesEntry
 }
 var file_querythrottler_proto_depIdxs = []int32{
-	0, // 0: querythrottler.Config.strategy:type_name -> querythrottler.ThrottlingStrategy
-	2, // 1: querythrottler.Config.tablet_strategy_config:type_name -> querythrottler.TabletStrategyConfig
-	7, // 2: querythrottler.TabletStrategyConfig.tablet_rules:type_name -> querythrottler.TabletStrategyConfig.TabletRulesEntry
-	8, // 3: querythrottler.StatementRuleSet.statement_rules:type_name -> querythrottler.StatementRuleSet.StatementRulesEntry
-	9, // 4: querythrottler.MetricRuleSet.metric_rules:type_name -> querythrottler.MetricRuleSet.MetricRulesEntry
-	6, // 5: querythrottler.MetricRule.thresholds:type_name -> querythrottler.ThrottleThreshold
-	3, // 6: querythrottler.TabletStrategyConfig.TabletRulesEntry.value:type_name -> querythrottler.StatementRuleSet
-	4, // 7: querythrottler.StatementRuleSet.StatementRulesEntry.value:type_name -> querythrottler.MetricRuleSet
-	5, // 8: querythrottler.MetricRuleSet.MetricRulesEntry.value:type_name -> querythrottler.MetricRule
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	0,  // 0: querythrottler.Config.strategy:type_name -> querythrottler.ThrottlingStrategy
+	2,  // 1: querythrottler.Config.tablet_strategy_config:type_name -> querythrottler.TabletStrategyConfig
+	7,  // 2: querythrottler.TabletStrategyConfig.tablet_rules:type_name -> querythrottler.TabletStrategyConfig.TabletRulesEntry
+	8,  // 3: querythrottler.TabletStrategyConfig.metric_shard_percentiles:type_name -> querythrottler.TabletStrategyConfig.MetricShardPercentilesEntry
+	9,  // 4: querythrottler.StatementRuleSet.statement_rules:type_name -> querythrottler.StatementRuleSet.StatementRulesEntry
+	10, // 5: querythrottler.MetricRuleSet.metric_rules:type_name -> querythrottler.MetricRuleSet.MetricRulesEntry
+	6,  // 6: querythrottler.MetricRule.thresholds:type_name -> querythrottler.ThrottleThreshold
+	3,  // 7: querythrottler.TabletStrategyConfig.TabletRulesEntry.value:type_name -> querythrottler.StatementRuleSet
+	4,  // 8: querythrottler.StatementRuleSet.StatementRulesEntry.value:type_name -> querythrottler.MetricRuleSet
+	5,  // 9: querythrottler.MetricRuleSet.MetricRulesEntry.value:type_name -> querythrottler.MetricRule
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_querythrottler_proto_init() }
@@ -461,7 +477,7 @@ func file_querythrottler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_querythrottler_proto_rawDesc), len(file_querythrottler_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
