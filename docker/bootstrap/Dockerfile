@@ -176,7 +176,7 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keyserver.ubuntu.c
     } | debconf-set-selections \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        libperconaserverclient22 \
+        libperconaserverclient24 \
         percona-server-rocksdb \
         percona-server-server \
         percona-xtrabackup-84 \
