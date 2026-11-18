@@ -37,6 +37,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -951,10 +953,10 @@ func vreplicationRow(t *testing.T, id int) (string, string) {
 func TestRetryMessageHandling(t *testing.T) {
 	ctx := t.Context()
 	tablet := addTablet(100)
-	defer deleteTablet(tablet)
+	t.Cleanup(func() { deleteTablet(tablet) })
 
 	savedPickerDelay := discovery.GetTabletPickerRetryDelay()
-	defer discovery.SetTabletPickerRetryDelay(savedPickerDelay)
+	t.Cleanup(func() { discovery.SetTabletPickerRetryDelay(savedPickerDelay) })
 	discovery.SetTabletPickerRetryDelay(10 * time.Millisecond)
 
 	// Inserted directly, so the engine does not start a controller for it.
@@ -965,9 +967,10 @@ func TestRetryMessageHandling(t *testing.T) {
 	qr, err := env.Mysqld.FetchSuperQuery(ctx, insert)
 	require.NoError(t, err)
 	id := int(qr.InsertID)
-	defer func() {
-		require.NoError(t, env.Mysqld.ExecuteSuperQuery(context.Background(), fmt.Sprintf("delete from _vt.vreplication where id=%d", id)))
-	}()
+	t.Cleanup(func() {
+		// t.Context() is already canceled when cleanup functions run.
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(context.WithoutCancel(ctx), fmt.Sprintf("delete from _vt.vreplication where id=%d", id)))
+	})
 
 	const (
 		applyErr    = "error applying event: retryable failure"
@@ -980,7 +983,7 @@ func TestRetryMessageHandling(t *testing.T) {
 
 	dbClient := &realDBClient{nolog: true}
 	require.NoError(t, dbClient.Connect())
-	defer dbClient.Close()
+	t.Cleanup(dbClient.Close)
 
 	newCt := func(retrying bool, keyspace string) *controller {
 		blpStats := binlogplayer.NewStats()
@@ -1030,6 +1033,37 @@ func TestRetryMessageHandling(t *testing.T) {
 			require.Equal(t, rowsCopied == 0, vr.preserveMessage.Load())
 		}
 	}
+	// heartbeat applies a vstreamer heartbeat as the vplayer of a retry
+	// does, with or without a transaction open.
+	heartbeat := func(throttled, inTransaction bool) func(t *testing.T) {
+		return func(t *testing.T) {
+			playerStats := binlogplayer.NewStats()
+			defer playerStats.Stop()
+			vr := &vreplicator{
+				id:                         int32(id),
+				stats:                      playerStats,
+				dbClient:                   newVDBClient(dbClient, playerStats, 0),
+				workflowConfig:             vttablet.DefaultVReplicationConfig,
+				throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
+			}
+			defer vr.throttleUpdatesRateLimiter.Stop()
+			vr.preserveMessage.Store(true)
+			if throttled && globalStats.ThrottledCount == nil {
+				// The engine tests replace globalStats with an empty one, and
+				// a throttled heartbeat increments its ThrottledCount.
+				savedGlobalStats := globalStats
+				globalStats = &vrStats{ThrottledCount: stats.NewCounter("", "")}
+				defer func() { globalStats = savedGlobalStats }()
+			}
+			if inTransaction {
+				require.NoError(t, vr.dbClient.Begin())
+				defer func() { require.NoError(t, vr.dbClient.Rollback()) }()
+			}
+			vp := &vplayer{vr: vr}
+			require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT, Throttled: throttled}, false))
+			require.Equal(t, throttled || inTransaction, vr.preserveMessage.Load())
+		}
+	}
 
 	type testCase struct {
 		name        string
@@ -1058,6 +1092,9 @@ func TestRetryMessageHandling(t *testing.T) {
 		{"retry: setState to a new state clears the message", copying, applyErr, setStateRunning(true), running, ""},
 		{"retry: copy progress clears a kept error", copying, applyErr, copyProgress(10), copying, ""},
 		{"retry: no copy progress keeps the error", copying, applyErr, copyProgress(0), copying, applyErr},
+		{"retry: idle heartbeat clears a kept error", running, applyErr, heartbeat(false, false), running, ""},
+		{"retry: throttled heartbeat keeps the error", running, applyErr, heartbeat(true, false), running, applyErr},
+		{"retry: heartbeat in a transaction keeps the error", running, applyErr, heartbeat(false, true), running, applyErr},
 	}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1131,13 +1168,8 @@ func TestEngineExecRestartClearsOldError(t *testing.T) {
 	))
 
 	// Nothing but the restart can clear the message within this deadline.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
+	require.Eventually(t, func() bool {
 		state, message := vreplicationRow(t, id)
-		if state == binlogdatapb.VReplicationWorkflowState_Running.String() && message == "" {
-			break
-		}
-		require.True(t, time.Now().Before(deadline), "old error not cleared by a fresh start: state=%q message=%q", state, message)
-		time.Sleep(10 * time.Millisecond)
-	}
+		return state == binlogdatapb.VReplicationWorkflowState_Running.String() && message == ""
+	}, 5*time.Second, 10*time.Millisecond, "old error not cleared by a fresh start")
 }

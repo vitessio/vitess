@@ -2021,3 +2021,96 @@ func testCopyInvisibleColumns(t *testing.T) {
 		{"2", "20", "200", "2000"},
 	})
 }
+
+// TestPlayerCopyRetryClearsKeptError makes the copy phase fail with a
+// retryable error and checks that, once the cause is gone, the retry clears
+// the kept error after it has copied its first rows, before the copy phase
+// ends.
+func TestPlayerCopyRetryClearsKeptError(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	savedRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedRetryDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+
+	savedWaitRetryTime := waitRetryTime
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+	waitRetryTime = 10 * time.Millisecond
+
+	const triggerErr = "retryable copy failure"
+	// Each row is larger than the vstreamer packet size, so each one is sent
+	// in its own packet and the copy has more rows to stream after the first
+	// ones are copied.
+	rowSize := 2 * vttablet.VStreamerDefaultPacketSize
+	execStatements(t, []string{
+		"create table src(id int, val longblob, primary key(id))",
+		fmt.Sprintf("insert into src values(1, repeat('a', %d)), (2, repeat('b', %d)), (3, repeat('c', %d))", rowSize, rowSize, rowSize),
+		fmt.Sprintf("create table %s.dst(id int, val longblob, primary key(id))", vrepldb),
+		// SIGNAL 45000 is not an unrecoverable error, so the controller retries.
+		fmt.Sprintf("create trigger %s.dst_fail before insert on %s.dst for each row signal sqlstate '45000' set message_text='%s'", vrepldb, vrepldb, triggerErr),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "dst",
+				Filter: "select * from src",
+			}},
+		},
+		OnDdl: binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+	defer func() {
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+		require.NoError(t, err)
+		expectDeleteQueries(t)
+	}()
+
+	clearQuery := fmt.Sprintf("update _vt.vreplication set message='' where id=%d", qr.InsertID)
+	timeout := time.After(10 * time.Second)
+	copyErrors := 0
+	triggerDropped, cleared := false, false
+	for {
+		var got string
+		select {
+		case got = <-globalDBQueries:
+		case <-timeout:
+			require.FailNow(t, "timed out", "trigger dropped: %t, kept error cleared: %t", triggerDropped, cleared)
+		}
+		switch {
+		case !triggerDropped && strings.HasPrefix(got, "update _vt.vreplication set message=") && strings.Contains(got, triggerErr):
+			// The copy failed and its error is the stream's message. The
+			// first retry's catch-up waits until the replication lag is
+			// known and may get an idle heartbeat, which clears the kept
+			// error on its own. Once the first retry has failed too, its
+			// catch-up has left the lag below the tolerance, so remove the
+			// cause: the next retry's catch-up ends at once, as for a stream
+			// that had caught up, and the copied rows are the first progress
+			// of that run.
+			copyErrors++
+			if copyErrors == 2 {
+				execStatements(t, []string{fmt.Sprintf("drop trigger %s.dst_fail", vrepldb)})
+				triggerDropped = true
+			}
+		case triggerDropped && got == clearQuery:
+			cleared = true
+		case strings.HasPrefix(got, "update _vt.vreplication set state='Running'"):
+			// Moving to Running clears the message anyway, so the kept error
+			// must be cleared before the copy phase ends.
+			require.True(t, triggerDropped, "the copy did not fail")
+			require.True(t, cleared, "the retry did not clear the kept error after copying rows")
+			qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("select count(*) from %s.dst where length(val) = %d", vrepldb, rowSize))
+			require.NoError(t, err)
+			require.Equal(t, "3", qr.Rows[0][0].ToString())
+			return
+		}
+	}
+}

@@ -1030,6 +1030,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 		if !vp.vr.dbClient.InTransaction {
+			// A throttled heartbeat does not mean that the source has resent
+			// the event that made the previous run fail.
+			if !event.Throttled {
+				vp.vr.clearPreservedMessageOnIdle()
+			}
 			vp.numAccumulatedHeartbeats++
 			if err := vp.recordHeartbeat(); err != nil {
 				return err

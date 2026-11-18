@@ -136,8 +136,10 @@ type vreplicator struct {
 	// previous run fail, so setState with an empty message does not clear it
 	// while the state stays the same. The kept error is cleared once the
 	// stream makes progress: by the first position save (GenerateUpdatePos
-	// writes message='') or, in the copy phase, by
-	// clearPreservedMessageOnCopyProgress after the first copied rows.
+	// writes message=''), in the copy phase by
+	// clearPreservedMessageOnCopyProgress after the first copied rows, and
+	// while replicating by clearPreservedMessageOnIdle on the first idle
+	// heartbeat.
 	preserveMessage atomic.Bool
 	// rowsCopiedAtStart is the copy row count when this vreplicator was
 	// created, so the copy phase can tell when this run has copied rows.
@@ -673,9 +675,25 @@ func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
 	if !vr.preserveMessage.Load() || vr.stats.CopyRowCount.Get() <= vr.rowsCopiedAtStart {
 		return
 	}
+	vr.clearPreservedMessage()
+}
+
+// clearPreservedMessageOnIdle clears the message kept from a failed run when
+// the vplayer receives a heartbeat that is not throttled with no transaction
+// open: the source is idle and every event it sent has been applied. Without
+// it, a retry that recovers while replicating, on a source with no writes,
+// keeps showing the old error until the first position save.
+func (vr *vreplicator) clearPreservedMessageOnIdle() {
+	if !vr.preserveMessage.Load() {
+		return
+	}
+	vr.clearPreservedMessage()
+}
+
+func (vr *vreplicator) clearPreservedMessage() {
 	query := fmt.Sprintf("update _vt.vreplication set message='' where id=%v", vr.id)
 	if _, err := vr.dbClient.Execute(query); err != nil {
-		log.Warn("Unable to clear the message after copy progress", vr.logAttrs(slog.Any("error", err))...)
+		log.Warn("Unable to clear the message kept from the previous run", vr.logAttrs(slog.Any("error", err))...)
 		return
 	}
 	vr.preserveMessage.Store(false)
