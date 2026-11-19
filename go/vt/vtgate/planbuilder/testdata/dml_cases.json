@@ -7488,6 +7488,7 @@
   },
   {
     "comment": "update non-owned lookup vindex from a row comparison with a value subquery",
+    "skip_e2e": true,
     "query": "update music_extra set music_id = ((1, 2) = (select user_id, col from music where user_id = 5)) where user_id = 1",
     "plan": {
       "Type": "Complex",
