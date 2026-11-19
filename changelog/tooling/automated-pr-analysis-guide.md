@@ -50,7 +50,7 @@ Deploy agents in batches of 5-10 PRs simultaneously for maximum parallelization 
 
 #### Template Standardization
 
-By using a template, we can guide the agents to no be wordy and write a lot of unneccesary info to the reports that would then just take time to read and ignore. The agent profile describes a specific template to use.
+By using a template, we can guide the agents to no be wordy and write a lot of unnecessary info to the reports that would then just take time to read and ignore. The agent profile describes a specific template to use.
 
 ### Key Principles
 
