@@ -985,6 +985,44 @@ func TestCompilerSingle(t *testing.T) {
 			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
 			result:     `INT64(0)`,
 		},
+		{
+			// LOWER over a binary value stays binary, so bit functions see the bytes.
+			expression: `BIT_COUNT(LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `INT64(5)`,
+		},
+		{
+			expression: `HEX(~LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `VARCHAR("9EBD")`,
+		},
+		{
+			expression: `HEX(UPPER(column0) | LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `VARCHAR("6142")`,
+		},
+		{
+			expression: `JSON_ARRAY(LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `JSON("[\"base64:type15:YUI=\"]")`,
+		},
+		{
+			// LOWER over a number converts it to text instead of failing.
+			expression: `LOWER(column0) = 1`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `INT64(1)`,
+		},
+		{
+			// LOWER over a date is the date's text, compared as a string.
+			expression: `LOWER(column0) = '2020-1-2'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `LOWER(column0) = '2020-01-02'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
+			result:     `INT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

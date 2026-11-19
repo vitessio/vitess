@@ -44,6 +44,20 @@ func TestUnicodeBinChangeCase(t *testing.T) {
 
 			assert.Equal(t, encode(`{"A": "ÉƀЖ😀"}`), coll.ToUpper(nil, encode(`{"a": "éƀж😀"}`)))
 			assert.Equal(t, encode(`{"a": "éƀж😀"}`), coll.ToLower(nil, encode(`{"A": "ÉƀЖ😀"}`)))
+
+			// A mapping that changes the length of the encoding.
+			assert.Equal(t, encode("i"), coll.ToLower(nil, encode("İ")))
+			assert.Equal(t, encode("aib"), coll.ToLower(nil, encode("aİb")))
 		})
 	}
+}
+
+// TestUnicodeBinChangeCaseMalformed checks that malformed input is copied
+// through unchanged while the valid text around it changes case.
+func TestUnicodeBinChangeCaseMalformed(t *testing.T) {
+	coll, ok := Lookup(collations.MySQL8().LookupByName("utf8mb4_bin")).(CaseAwareCollation)
+	require.True(t, ok)
+
+	assert.Equal(t, []byte("A\xFFB"), coll.ToUpper(nil, []byte("a\xFFb")))
+	assert.Equal(t, []byte("a\xFFb"), coll.ToLower(nil, []byte("A\xFFB")))
 }
