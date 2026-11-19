@@ -282,7 +282,9 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 			return printBackupResult(out, errOut, outputJSON, manifest, backupName, status)
 		default:
 			if status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
-				return errors.Join(err, printBackupResult(out, errOut, outputJSON, manifest, backupName, status))
+				if printErr := printBackupResult(out, errOut, outputJSON, manifest, backupName, status); printErr != nil {
+					return errors.Join(err, printErr)
+				}
 			}
 			return err
 		}

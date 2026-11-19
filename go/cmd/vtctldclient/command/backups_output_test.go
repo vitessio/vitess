@@ -27,10 +27,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // fakeBackupStream is an in-memory backupResponseStream for tests.
@@ -207,12 +210,14 @@ func TestConsumeBackupStream_JSONStoredThenError(t *testing.T) {
 			eventResp(),
 			{BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
 		},
-		err: errors.New("backup completed, but tablet restoration failed"),
+		err: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "backup completed, but tablet restoration failed"),
 	}
 
 	var out, errOut bytes.Buffer
 	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.ErrorContains(t, err, "tablet restoration failed")
+	assert.Same(t, stream.err, err)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 
 	var got struct {
 		Status     string `json:"status"`
@@ -233,12 +238,14 @@ func TestConsumeBackupStream_TextStoredThenError(t *testing.T) {
 			event,
 			{BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
 		},
-		err: errors.New("backup completed, but tablet restoration failed"),
+		err: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "backup completed, but tablet restoration failed"),
 	}
 
 	var out, errOut bytes.Buffer
 	err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
 	require.ErrorContains(t, err, "tablet restoration failed")
+	assert.Same(t, stream.err, err)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
 	assert.Equal(t, fmt.Sprintf("ks/- (zone1-0000000100): %v\n", event.Event), out.String())
 	assert.Empty(t, errOut.String())
 }
@@ -276,4 +283,5 @@ func TestConsumeBackupStream_WriteError(t *testing.T) {
 	err = consumeBackupStream(stream, true /* outputJSON */, failingWriter{}, io.Discard)
 	require.ErrorContains(t, err, "tablet restoration failed")
 	require.ErrorContains(t, err, "no space left on device")
+	assert.ErrorIs(t, err, stream.err)
 }
