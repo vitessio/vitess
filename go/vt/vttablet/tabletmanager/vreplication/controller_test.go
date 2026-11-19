@@ -35,6 +35,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -949,6 +950,18 @@ func vreplicationRow(t *testing.T, id int) (string, string) {
 	return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString()
 }
 
+// setGlobalThrottledCount gives globalStats a ThrottledCount for the test if
+// it has none: the engine tests replace globalStats with an empty one, and
+// recording a throttle increments its ThrottledCount.
+func setGlobalThrottledCount(t *testing.T) {
+	if globalStats.ThrottledCount != nil {
+		return
+	}
+	savedGlobalStats := globalStats
+	globalStats = &vrStats{ThrottledCount: stats.NewCounter("", "")}
+	t.Cleanup(func() { globalStats = savedGlobalStats })
+}
+
 // TestRetryMessageHandling runs the message writes of a stream's run against
 // MySQL, on a _vt.vreplication row that no controller is running, so that the
 // predicates are checked against real rows, including NULL messages.
@@ -1035,36 +1048,64 @@ func TestRetryMessageHandling(t *testing.T) {
 			require.Equal(t, rowsCopied == 0, vr.preserveMessage.Load())
 		}
 	}
+	// newVR returns a vreplicator for the stream, for a retry if retrying
+	// is set, that can record a throttle.
+	newVR := func(t *testing.T, retrying bool) *vreplicator {
+		playerStats := binlogplayer.NewStats()
+		t.Cleanup(playerStats.Stop)
+		vr := &vreplicator{
+			id:                         int32(id),
+			stats:                      playerStats,
+			dbClient:                   newVDBClient(dbClient, playerStats, 0),
+			workflowConfig:             vttablet.DefaultVReplicationConfig,
+			throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
+		}
+		t.Cleanup(vr.throttleUpdatesRateLimiter.Stop)
+		vr.preserveMessage.Store(retrying)
+		setGlobalThrottledCount(t)
+		return vr
+	}
 	// heartbeat applies a vstreamer heartbeat as the vplayer of a retry
 	// does in the given phase, with or without a transaction open.
 	heartbeat := func(phase string, throttled, inTransaction bool) func(t *testing.T) {
 		return func(t *testing.T) {
-			playerStats := binlogplayer.NewStats()
-			defer playerStats.Stop()
-			vr := &vreplicator{
-				id:                         int32(id),
-				stats:                      playerStats,
-				dbClient:                   newVDBClient(dbClient, playerStats, 0),
-				workflowConfig:             vttablet.DefaultVReplicationConfig,
-				throttleUpdatesRateLimiter: timer.NewRateLimiter(time.Second),
-			}
-			defer vr.throttleUpdatesRateLimiter.Stop()
-			vr.preserveMessage.Store(true)
-			if throttled && globalStats.ThrottledCount == nil {
-				// The engine tests replace globalStats with an empty one, and
-				// a throttled heartbeat increments its ThrottledCount.
-				savedGlobalStats := globalStats
-				globalStats = &vrStats{ThrottledCount: stats.NewCounter("", "")}
-				defer func() { globalStats = savedGlobalStats }()
-			}
+			vr := newVR(t, true)
 			if inTransaction {
 				require.NoError(t, vr.dbClient.Begin())
 				defer func() { require.NoError(t, vr.dbClient.Rollback()) }()
 			}
 			vp := &vplayer{vr: vr, phase: phase}
 			require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_HEARTBEAT, Throttled: throttled}, false))
-			require.Equal(t, throttled || inTransaction || phase != replicatePhase, vr.preserveMessage.Load())
+			require.Equal(t, !throttled && (inTransaction || phase != replicatePhase), vr.preserveMessage.Load())
 		}
+	}
+	// throttled records a throttle of the given component, as the copy
+	// phase does for a denied vcopier check or a throttled rowstreamer
+	// (TestPlayerCopyRetryThrottledClearsKeptError runs the denied vcopier
+	// check end to end).
+	throttled := func(retrying bool, app throttlerapp.Name) func(t *testing.T) {
+		return func(t *testing.T) {
+			vr := newVR(t, retrying)
+			require.NoError(t, vr.updateTimeThrottled(app, "throttled for the test"))
+			require.False(t, vr.preserveMessage.Load())
+		}
+	}
+	// deniedVPlayerThrottleCheck runs the vplayer of a retry in the
+	// replicate phase while the throttler denies its checks.
+	deniedVPlayerThrottleCheck := func(t *testing.T) {
+		vr := newVR(t, true)
+		throttler := &fakeThrottleChecker{}
+		throttler.deny.Store(true)
+		vr.vre = &Engine{throttlerClient: throttler}
+		vp := &vplayer{vr: vr, phase: replicatePhase, throttlerAppName: throttlerapp.VPlayerName.ConcatenateString(vr.throttlerAppName())}
+		runCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+		defer cancel()
+		// The relay log is not read while the checks are denied.
+		require.ErrorIs(t, vp.applyEvents(runCtx, nil), context.DeadlineExceeded)
+		require.False(t, vr.preserveMessage.Load())
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, fmt.Sprintf("select component_throttled from _vt.vreplication where id=%d", id))
+		require.NoError(t, err)
+		require.Equal(t, throttlerapp.VPlayerName.String(), qr.Rows[0][0].ToString())
 	}
 
 	type testCase struct {
@@ -1095,9 +1136,16 @@ func TestRetryMessageHandling(t *testing.T) {
 		{"retry: copy progress clears a kept error", copying, applyErr, copyProgress(10), copying, ""},
 		{"retry: no copy progress keeps the error", copying, applyErr, copyProgress(0), copying, applyErr},
 		{"retry: idle heartbeat clears a kept error", running, applyErr, heartbeat(replicatePhase, false, false), running, ""},
-		{"retry: throttled heartbeat keeps the error", running, applyErr, heartbeat(replicatePhase, true, false), running, applyErr},
+		{"retry: throttled heartbeat clears a kept error", running, applyErr, heartbeat(replicatePhase, true, false), running, ""},
+		{"retry: throttled heartbeat in the copy phase clears a kept error", copying, applyErr, heartbeat("catchup", true, false), copying, ""},
 		{"retry: heartbeat in a transaction keeps the error", running, applyErr, heartbeat(replicatePhase, false, true), running, applyErr},
 		{"retry: idle heartbeat in the copy phase keeps the error", copying, applyErr, heartbeat("catchup", false, false), copying, applyErr},
+		// A retry that is throttled may wait for as long as the throttling
+		// lasts, and time_throttled then explains why it does not progress.
+		{"retry: denied vplayer throttle check clears a kept error", running, applyErr, deniedVPlayerThrottleCheck, running, ""},
+		{"retry: vcopier throttle clears a kept error", copying, applyErr, throttled(true, throttlerapp.VCopierName), copying, ""},
+		{"retry: throttled rowstreamer clears a kept error", copying, applyErr, throttled(true, throttlerapp.RowStreamerName), copying, ""},
+		{"first run: throttle keeps the message", copying, pickedOther, throttled(false, throttlerapp.VCopierName), copying, pickedOther},
 	}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {

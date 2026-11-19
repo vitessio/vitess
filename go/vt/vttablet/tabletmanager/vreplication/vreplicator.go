@@ -141,7 +141,9 @@ type vreplicator struct {
 	// clearPreservedMessageOnCopyProgress after the first copied rows, and
 	// in the replicate phase by the first position save or, on a source
 	// with no writes, by clearPreservedMessageOnIdle on the first idle
-	// heartbeat.
+	// heartbeat. It is also cleared once the run is throttled, by
+	// updateTimeThrottled, as the run may then wait without making progress
+	// for as long as the throttling lasts.
 	preserveMessage atomic.Bool
 	// rowsCopiedAtStart is the copy row count when this vreplicator was
 	// created, so the copy phase can tell when this run has copied rows.
@@ -691,9 +693,8 @@ func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
 }
 
 // clearPreservedMessageOnIdle clears the message kept from a failed run when
-// the vplayer of the replicate phase receives a heartbeat that is not
-// throttled with no transaction open: the source is idle and every event it
-// sent has been applied. Without
+// the vplayer of the replicate phase receives a heartbeat with no transaction
+// open: the source is idle and every event it sent has been applied. Without
 // it, a retry that recovers while replicating, on a source with no writes,
 // keeps showing the old error until the first position save.
 func (vr *vreplicator) clearPreservedMessageOnIdle() {
@@ -838,6 +839,10 @@ func (vr *vreplicator) throttlerAppName() string {
 // tablet throttler over time. It also increments the global throttled count to keep
 // track of how many times in total vreplication has been throttled across all workflows
 // (both ones that currently exist and ones that no longer do).
+// Once time_throttled is saved, it also clears the message kept from a failed
+// run (preserveMessage): time_throttled and component_throttled then explain
+// why the stream is not progressing, whereas the kept error would stay for as
+// long as the throttling lasts.
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reasonThrottled string) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
@@ -850,6 +855,9 @@ func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reaso
 		}
 		if _, err := vr.dbClient.ExecuteFetch(update, maxRows); err != nil {
 			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		if vr.preserveMessage.Load() {
+			vr.clearPreservedMessage()
 		}
 		return nil
 	})

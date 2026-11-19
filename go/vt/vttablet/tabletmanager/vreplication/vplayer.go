@@ -1041,11 +1041,10 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 		if !vp.vr.dbClient.InTransaction {
-			// A throttled heartbeat does not mean that the source has resent
-			// the event that made the previous run fail. In the copy phase,
-			// the copy itself has to make progress (see
-			// clearPreservedMessageOnCopyProgress).
-			if !event.Throttled && vp.phase == replicatePhase {
+			// In the copy phase, the copy itself has to make progress (see
+			// clearPreservedMessageOnCopyProgress). A throttled heartbeat
+			// has already cleared the kept error in updateTimeThrottled.
+			if vp.phase == replicatePhase {
 				vp.vr.clearPreservedMessageOnIdle()
 			}
 			vp.numAccumulatedHeartbeats++

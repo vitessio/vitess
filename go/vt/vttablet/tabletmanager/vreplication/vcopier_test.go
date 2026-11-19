@@ -40,7 +40,10 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log/logtest"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
@@ -2209,4 +2212,136 @@ func testPlayerCopyRetryClearsKeptError(t *testing.T, succeed bool) {
 	require.Equal(t, binlogdatapb.VReplicationWorkflowState_Running.String(), last.state)
 	require.Empty(t, last.message)
 	require.EqualValues(t, 3, last.rows)
+}
+
+// appThrottleChecker is a throttleChecker that denies, while deny is set, the
+// checks of the apps whose name starts with app, and allows all others.
+type appThrottleChecker struct {
+	fakeThrottleChecker
+	app throttlerapp.Name
+}
+
+func (f *appThrottleChecker) ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
+	if !strings.HasPrefix(appName.String(), f.app.String()) {
+		return &throttle.CheckResult{
+			ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+			AppName:      appName.String(),
+		}, true
+	}
+	return f.fakeThrottleChecker.ThrottleCheckOKOrWaitAppName(ctx, appName)
+}
+
+// TestPlayerCopyRetryThrottledClearsKeptError makes the copy phase fail with
+// a retryable error, then denies the vcopier's throttler checks. The retry's
+// copy then waits on the throttler without copying rows, for as long as the
+// throttling lasts, so it must clear the kept error once it is throttled:
+// time_throttled and component_throttled explain why the stream does not
+// progress.
+func TestPlayerCopyRetryThrottledClearsKeptError(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	savedRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedRetryDelay }()
+	vttablet.DefaultVReplicationConfig.RetryDelay = 100 * time.Millisecond
+
+	savedWaitRetryTime := waitRetryTime
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+	waitRetryTime = 10 * time.Millisecond
+
+	setGlobalThrottledCount(t)
+	throttler := &appThrottleChecker{app: throttlerapp.VCopierName}
+	savedThrottlerClient := playerEngine.throttlerClient
+	defer func() { playerEngine.throttlerClient = savedThrottlerClient }()
+	playerEngine.throttlerClient = throttler
+
+	const triggerErr = "retryable copy failure"
+	execStatements(t, []string{
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(1, 'a'), (2, 'b'), (3, 'c')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		// SIGNAL 45000 is not an unrecoverable error, so the controller retries.
+		fmt.Sprintf("create trigger %s.dst_fail before insert on %s.dst for each row signal sqlstate '45000' set message_text='%s'", vrepldb, vrepldb, triggerErr),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "dst",
+				Filter: "select * from src",
+			}},
+		},
+		OnDdl: binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogdatapb.VReplicationWorkflowState_Init, playerEngine.dbName, 0, 0)
+	qr, err := playerEngine.Exec(query)
+	require.NoError(t, err)
+	defer func() {
+		_, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID))
+		require.NoError(t, err)
+		// The stream may have been retrying, so skip to the deletes.
+		timeout := time.After(recvTimeout)
+		for {
+			select {
+			case got := <-globalDBQueries:
+				if strings.HasPrefix(got, "delete from _vt.post_copy_action") {
+					drainQuietDBQueries(t)
+					return
+				}
+			case <-timeout:
+				require.FailNow(t, "the stream was not deleted")
+			}
+		}
+	}()
+	defer throttler.deny.Store(false)
+
+	streamRow := func() (message, component string, rows int64) {
+		qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf(
+			"select ifnull(message, ''), component_throttled, (select count(*) from %s.dst) from _vt.vreplication where id=%d", vrepldb, qr.InsertID))
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		rows, err = qr.Rows[0][2].ToInt64()
+		require.NoError(t, err)
+		return qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString(), rows
+	}
+
+	// Drain the query log, which the stream would otherwise block on. Once
+	// the copy has failed twice, so that the kept error has been through a
+	// retry, deny the vcopier's checks: the next retry's catch-up and
+	// fast-forward still run, and its copy then waits on the throttler.
+	timeout := time.After(15 * time.Second)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	copyErrors := 0
+	for {
+		select {
+		case got := <-globalDBQueries:
+			if strings.HasPrefix(got, "update _vt.vreplication set message=") && strings.Contains(got, triggerErr) {
+				copyErrors++
+				if copyErrors == 2 {
+					message, _, _ := streamRow()
+					require.Contains(t, message, triggerErr)
+					throttler.deny.Store(true)
+				}
+			}
+		case <-tick.C:
+			if !throttler.deny.Load() {
+				continue
+			}
+			message, component, rows := streamRow()
+			require.Zero(t, rows)
+			if component == throttlerapp.VCopierName.String() && message == "" {
+				return
+			}
+		case <-timeout:
+			message, component, rows := streamRow()
+			require.FailNow(t, "the throttled retry did not clear the kept error",
+				"copy errors: %d, message: %q, component_throttled: %q, rows: %d", copyErrors, message, component, rows)
+		}
+	}
 }
