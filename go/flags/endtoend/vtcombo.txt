@@ -203,7 +203,7 @@ Flags:
       --log-structured                                                   enable structured JSON logging (default true)
       --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
-      --max-memory-rows int                                              Maximum number of rows held in memory for intermediate and final results. (default 300000)
+      --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --message-stream-grace-period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)

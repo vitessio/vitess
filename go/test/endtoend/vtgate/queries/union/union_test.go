@@ -175,6 +175,16 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 			for _, second := range []string{"id2", "5"} {
 				mcmp.Exec("select id1 as a, " + second + " as id1 from t1 union all select id3, id4 from t2 order by a limit 3")
 			}
+			for _, second := range []string{
+				"select cast(id3 as signed) from t2",
+				"(select cast(id3 as signed) from t2 order by cast(id3 as signed) limit 1)",
+				"select cast(id as signed) from ref",
+			} {
+				// UNION ORDER BY ordinals are parameterized before planning in
+				// normalized execution. Use the expression's output name here;
+				// the planner regression covers the original ORDER BY 1 too.
+				mcmp.ExecWithColumnCompare("select cast(id1 as signed) from t1 union all " + second + " order by `cast(id1 as signed)` limit 3")
+			}
 			// The outer ordering must not change which rows an arm's LIMIT selects.
 			for _, query := range []string{
 				"(select id1 as id from t1 order by id1 desc limit 2) union all (select id3 from t2) order by id limit 3",
@@ -401,20 +411,30 @@ func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
 		require.NoError(t, err)
 	}
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
-	mcmp.Exec("begin")
 	t.Cleanup(func() { mcmp.Exec("rollback") })
-	mcmp.Exec("insert into t1(id1, id2) values (2001, 2001)")
 	query := "select id from ref union all select id1 from t1"
-	_, err := mcmp.VtConn.ExecuteFetch(query, count*2, true)
-	require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 2000")
-	var mysqlErr *sqlerror.SQLError
-	require.ErrorAs(t, err, &mysqlErr)
-	require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
-	// The failed SELECT must preserve both the transaction and earlier writes.
-	mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
-	mcmp.Exec("commit")
-	mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
-	mcmp.Exec("delete from t1 where id1 = 2001")
+	for _, tc := range []struct{ name, query string }{
+		{"small chunks", query},
+		// Each shard sends many 32 KiB chunks. Delaying the written row at
+		// the end of each scan keeps its MySQL fetch active at overflow.
+		{"active tablet stream", "select id, repeat('x', 1024) from ref union all select t.id1, concat(repeat('x', 1024), if(t.id1 = 2001, sleep(0.1), 0)) from t1 t join ref r on r.id <= 10"},
+	} {
+		mcmp.Run(tc.name, func(mcmp *utils.MySQLCompare) {
+			t := mcmp.AsT()
+			mcmp.Exec("begin")
+			mcmp.Exec("insert into t1(id1, id2) values (2001, 2001)")
+			_, err := mcmp.VtConn.ExecuteFetch(tc.query, 20000, true)
+			require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 2000")
+			var mysqlErr *sqlerror.SQLError
+			require.ErrorAs(t, err, &mysqlErr)
+			require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			// The failed SELECT must preserve both the transaction and earlier writes.
+			mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+			mcmp.Exec("commit")
+			mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+			mcmp.Exec("delete from t1 where id1 = 2001")
+		})
+	}
 	mcmp.Exec("rollback")
 	mcmp.Exec("begin")
 	override := strings.Replace(query, "select id", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id", 1)

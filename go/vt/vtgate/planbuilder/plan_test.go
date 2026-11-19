@@ -246,7 +246,43 @@ func (s *planTestSuite) TestUnionArmOrderingQualifiesColumns() {
 			if strings.Contains(route.Query, "from `user`") {
 				found = true
 				s.Require().Contains(route.Query, "order by `user`.col asc")
+				s.Require().Contains(route.Query, "select col as a, "+second+" as col from `user`")
 				s.Require().Contains(route.Query, "limit :__upper_limit")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// Qualifying a mapped order must preserve unaliased expression field names,
+// including when a later arm refuses the pushdown.
+func (s *planTestSuite) TestUnionArmOrderingPreservesSelectExpressions() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{
+		"select cast(id as signed) from unsharded",
+		"(select cast(id as signed) from unsharded limit 1)",
+		"select cast(id as signed) from ref",
+	} {
+		query := "select cast(id as signed) from user union all " + second + " order by 1 limit 3"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if !strings.Contains(route.Query, "from `user`") {
+				continue
+			}
+			found = true
+			stmt, err := env.Parser().Parse(route.Query)
+			s.Require().NoError(err)
+			selectExpr := stmt.(*sqlparser.Select).GetColumns()[0].(*sqlparser.AliasedExpr)
+			s.Require().Equal("cast(id as signed)", sqlparser.String(selectExpr))
+			if strings.Contains(second, "limit 1") {
+				s.Require().NotContains(route.Query, ":__upper_limit")
+			} else {
+				s.Require().Contains(route.Query, "order by cast(`user`.id as signed) asc")
 			}
 		}
 		s.Require().True(found)

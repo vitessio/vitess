@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"sync"
 
@@ -327,9 +326,6 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	var mu sync.Mutex
 	bufferedRows := 0
 	var bufferErr error
-	// Scatter treats RESOURCE_EXHAUSTED shard errors as transaction failures.
-	// Stop only this stream here; return the cached client error after it ends.
-	bufferFull := errors.New("concatenate row buffer is full")
 	for idx, source := range c.Sources {
 		vars := copyBindVars(bindVars)
 		err := vcursor.StreamExecutePrimitive(ctx, source, vars, true, func(resultChunk *sqltypes.Result) error {
@@ -341,11 +337,13 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 			mu.Lock()
 			defer mu.Unlock()
 			if bufferErr != nil {
-				return bufferFull
+				// Drain the active arm without retaining more rows. Cancelling
+				// a tablet stream can close its transactional MySQL connection.
+				return nil
 			}
 			if vcursor.ExceedsMaxMemoryRows(bufferedRows + len(resultChunk.Rows)) {
 				bufferErr = vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
-				return bufferFull
+				return nil
 			}
 			// Field types are resolved after every arm finishes. Bound the rows
 			// retained across all arms before appending another chunk.
@@ -354,7 +352,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 			return nil
 		})
-		// Sources may aggregate callback errors and lose their SQL error state.
+		// Return the local buffer error after draining the active source.
 		mu.Lock()
 		cachedErr := bufferErr
 		mu.Unlock()

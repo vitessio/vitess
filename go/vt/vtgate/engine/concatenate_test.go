@@ -240,7 +240,7 @@ func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
 			{name: "boundary", limit: 4},
 			{name: "across-arms", limit: 3, wantError: true},
 			{name: "oversized-chunk", limit: 1, wantError: true},
-			{name: "aggregated-error", limit: 3, wrapErrors: true, wantError: true},
+			{name: "aggregated-source-error", limit: 3, wrapErrors: true, wantError: true},
 			{name: "concurrent-callbacks", limit: 3, async: true, wantError: true},
 			{name: "empty", limit: 0, empty: true},
 			{name: "explicit-override", limit: 1, ignore: true},
@@ -253,9 +253,14 @@ func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
 				}
 				left := &fakePrimitive{results: []*sqltypes.Result{first}, async: tc.async}
 				if tc.async {
-					left.results = append(left.results, first)
+					left.results = append(left.results, first, first)
 				}
 				right := &fakePrimitive{results: []*sqltypes.Result{second}}
+				if tc.wrapErrors {
+					right.results = append(right.results, nil)
+					right.allResultsInOneCall = true
+					right.sendErr = errors.New("source failed after overflow")
+				}
 				concatenate := NewConcatenate([]Primitive{left, right}, nil)
 				cursor := &concatenateMemoryVCursor{limit: tc.limit, ignore: tc.ignore, wrapErrors: tc.wrapErrors}
 				cursor.inTx = session == "transaction"
@@ -275,6 +280,13 @@ func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
 					require.Equal(t, sqlerror.ERNetPacketTooLarge, sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError).Number())
 					require.Empty(t, rows, "a failed buffered union must not deliver partial results")
 					require.False(t, cursor.rollback.Load(), "a local row buffer error must not roll back the caller's transaction")
+					require.False(t, cursor.interrupted.Load(), "drain the current arm instead of cancelling its tablet stream")
+					if tc.async {
+						require.EqualValues(t, 6, cursor.drainedRows.Load(), "include a chunk after the one that exceeds the budget")
+					}
+					if tc.wrapErrors {
+						require.Equal(t, 2, right.curResult, "exercise the aggregated source error after overflow")
+					}
 					if tc.limit == 1 || tc.async {
 						require.Zero(t, right.curResult, "stop before starting another arm")
 					}
@@ -301,6 +313,8 @@ type concatenateMemoryVCursor struct {
 	limit              int
 	ignore, wrapErrors bool
 	rollback           atomic.Bool
+	interrupted        atomic.Bool
+	drainedRows        atomic.Int32
 }
 
 func (c *concatenateMemoryVCursor) MaxMemoryRows() int { return c.limit }
@@ -310,7 +324,11 @@ func (c *concatenateMemoryVCursor) ExceedsMaxMemoryRows(rows int) bool {
 
 func (c *concatenateMemoryVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
 	err := c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, func(result *sqltypes.Result) error {
+		c.drainedRows.Add(int32(len(result.Rows)))
 		err := callback(result)
+		if err != nil {
+			c.interrupted.Store(true)
+		}
 		// ScatterConn.endAction marks these shard errors for rollback.
 		if code := vterrors.Code(err); code == vtrpcpb.Code_RESOURCE_EXHAUSTED || code == vtrpcpb.Code_ABORTED {
 			c.rollback.Store(true)

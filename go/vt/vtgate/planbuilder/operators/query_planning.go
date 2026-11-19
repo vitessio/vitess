@@ -718,20 +718,24 @@ func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order [
 			// ORDER BY resolves bare names against select aliases first. Preserve
 			// the expression's table binding when an arm aliases another column
 			// to that name.
-			mapped.Inner.Expr = ctx.SemTable.Clone(expr).(sqlparser.Expr)
-			err := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-				col, ok := node.(*sqlparser.ColName)
-				if !ok || !col.Qualifier.IsEmpty() {
-					return true, nil
+			var qualifyErr error
+			mapped.Inner.Expr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+				col, ok := cursor.Node().(*sqlparser.ColName)
+				if !ok || !col.Qualifier.IsEmpty() || qualifyErr != nil {
+					return
 				}
 				table, err := ctx.SemTable.TableInfoForExpr(col)
 				if err != nil {
-					return false, err
+					qualifyErr = err
+					return
 				}
-				col.Qualifier, err = table.Name()
-				return false, err
-			}, mapped.Inner.Expr)
-			if err != nil {
+				qualified := *col
+				qualified.Qualifier, qualifyErr = table.Name()
+				if qualifyErr == nil {
+					cursor.Replace(&qualified)
+				}
+			}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
+			if qualifyErr != nil {
 				return nil, false
 			}
 			mapped.SimplifiedExpr = mapped.Inner.Expr
