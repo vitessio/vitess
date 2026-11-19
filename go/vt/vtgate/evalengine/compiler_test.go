@@ -988,6 +988,26 @@ func TestCompilerSingle(t *testing.T) {
 			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
 			result:     `INT64(1)`,
 		},
+		{
+			// A BLOB in the binary collation is a VARBINARY result, in both paths.
+			expression: `BIT_COUNT(LOWER(CAST(column0 AS BINARY)))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`123`))},
+			result:     `INT64(10)`,
+		},
+		{
+			// A BLOB in a Unicode collation is a text result, in both paths.
+			expression: `JSON_ARRAY(LOWER(JSON_UNQUOTE('"ABC"') COLLATE utf8mb4_0900_ai_ci))`,
+			result:     `JSON("[\"abc\"]")`,
+		},
+		{
+			// The text converted from JSON has the same collation in both paths.
+			expression: `column0 IN (LOWER(column1))`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`{"a": "b"}`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"A": "B"}`)),
+			},
+			result: `INT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1037,6 +1057,39 @@ func TestCompilerSingle(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestChangeCaseNumericGeneralCI checks that LOWER and UPPER convert a number
+// to text under a collation that has no case mapping of its own.
+func TestChangeCaseNumericGeneralCI(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	tz, _ := time.LoadLocation("Europe/Madrid")
+
+	for _, tc := range []struct{ expression, result string }{
+		{`LOWER(1)`, `VARCHAR("1")`},
+		{`UPPER(1e20)`, `VARCHAR("1E20")`},
+		{`LOWER(1e20)`, `VARCHAR("1e20")`},
+	} {
+		for _, fold := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/fold=%v", tc.expression, fold), func(t *testing.T) {
+				expr, err := venv.Parser().ParseExpr(tc.expression)
+				require.NoError(t, err)
+
+				cfg := &evalengine.Config{
+					Collation:         collations.ID(45), // utf8mb4_general_ci
+					Environment:       venv,
+					NoConstantFolding: !fold,
+				}
+				converted, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+
+				env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
+				res, err := env.Evaluate(converted)
+				require.NoError(t, err)
+				assert.Equal(t, tc.result, res.String())
+			})
+		}
 	}
 }
 
