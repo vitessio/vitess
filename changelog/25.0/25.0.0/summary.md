@@ -893,7 +893,7 @@ For the tablet throttler, `vtctldclient UpdateThrottlerConfig` has a new `--shar
 
 For the query throttler's `TABLET_THROTTLER` strategy, `tablet_strategy_config` has a new `metric_shard_percentiles` field with the same meaning, for example `"metric_shard_percentiles":{"lag":75}`. Every rule on that metric's shard scope uses the percentile. A rule on a self-scoped metric, such as `self/lag` or a bare `loadavg`, is not affected. `vtctldclient UpdateQueryThrottlerConfig` validates the map in the same way.
 
-A percentile only changes which value the primary compares with the threshold. A replica ignores the percentile. With p75 and four replicas, the primary uses the third lowest value, so a single lagging replica still does not throttle, but two lagging replicas do.
+A percentile only changes which value the primary compares with the threshold. A replica ignores the percentile. On the primary, `GetThrottlerStatus` reports the percentiles in the new `metric_shard_percentiles` field. On other tablets, the field is empty. With p75 and four replicas, the primary uses the third lowest value, so a single lagging replica still does not throttle, but two lagging replicas do.
 
 A tolerated replica gets no protection from the throttler. The throttler does not slow writes for it, so it can keep falling behind for as long as the percentile tolerates it. The aggregated shard metric, for example `vttablet_throttler_aggregated_shard_lag`, does not show its lag either. So set up separate alerting on the lag of each replica.
 

@@ -2978,3 +2978,28 @@ func TestAggregateMetricsMetricShardPercentiles(t *testing.T) {
 		})
 	}
 }
+
+// TestStatusMetricShardPercentiles checks that Status reports a copy of the applied percentiles on the leader only, which later changes to either map do not affect.
+func TestStatusMetricShardPercentiles(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.isLeader.Store(true)
+	assert.Empty(t, throttler.Status().MetricShardPercentiles)
+
+	throttlerConfig := &topodatapb.ThrottlerConfig{MetricShardPercentiles: map[string]float64{"lag": 75}}
+	throttler.applyThrottlerConfig(t.Context(), throttlerConfig)
+
+	throttler.isLeader.Store(false)
+	assert.Empty(t, throttler.Status().MetricShardPercentiles, "a non-leader does not apply the percentiles")
+
+	throttler.isLeader.Store(true)
+	status := throttler.Status()
+	assert.Equal(t, map[string]float64{"lag": 75}, status.MetricShardPercentiles)
+
+	// Mutate the status map and ensure it does not affect the throttler's internal state.
+	status.MetricShardPercentiles["lag"] = 50
+	assert.Equal(t, map[string]float64{"lag": 75}, throttler.Status().MetricShardPercentiles)
+
+	// Mutate the original config map and ensure it does not affect the throttler's internal state.
+	throttlerConfig.MetricShardPercentiles["lag"] = 25
+	assert.Equal(t, map[string]float64{"lag": 75}, throttler.Status().MetricShardPercentiles)
+}

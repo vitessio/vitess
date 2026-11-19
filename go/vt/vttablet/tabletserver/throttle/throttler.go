@@ -253,9 +253,11 @@ type ThrottlerStatus struct {
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsThresholds map[string]float64
 	MetricsHealth     base.MetricHealthMap
-	ThrottledApps     []base.AppThrottle
-	AppCheckedMetrics map[string]string
-	RecentApps        map[string](*base.RecentApp)
+
+	MetricShardPercentiles map[string]float64
+	ThrottledApps          []base.AppThrottle
+	AppCheckedMetrics      map[string]string
+	RecentApps             map[string](*base.RecentApp)
 }
 
 // NewThrottler creates a Throttler
@@ -1785,11 +1787,23 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Threshold:               throttler.GetMetricsThreshold(),
 		MetricNameUsedAsDefault: throttler.metricNameUsedAsDefault().String(),
 
-		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
-		MetricsThresholds: throttler.metricThresholdsSnapshot(),
-		MetricsHealth:     throttler.metricsHealthSnapshot(),
-		ThrottledApps:     throttler.ThrottledApps(),
-		AppCheckedMetrics: throttler.appCheckedMetricsSnapshot(),
-		RecentApps:        throttler.recentAppsSnapshot(),
+		AggregatedMetrics:      throttler.aggregatedMetricsSnapshot(),
+		MetricsThresholds:      throttler.metricThresholdsSnapshot(),
+		MetricsHealth:          throttler.metricsHealthSnapshot(),
+		ThrottledApps:          throttler.ThrottledApps(),
+		AppCheckedMetrics:      throttler.appCheckedMetricsSnapshot(),
+		RecentApps:             throttler.recentAppsSnapshot(),
+		MetricShardPercentiles: throttler.metricShardPercentilesSnapshot(),
 	}
+}
+
+// metricShardPercentilesSnapshot returns a snapshot of the metric shard percentiles, or nil when the throttler is not the leader, which does not apply them.
+func (throttler *Throttler) metricShardPercentilesSnapshot() map[string]float64 {
+	if !throttler.isLeader.Load() {
+		return nil
+	}
+	if p := throttler.metricShardPercentiles.Load(); p != nil {
+		return maps.Clone(*p)
+	}
+	return nil
 }

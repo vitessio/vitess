@@ -44185,6 +44185,9 @@ export namespace tabletmanagerdata {
         /** GetThrottlerStatusResponse throttler_type. */
         throttler_type: tabletmanagerdata.ThrottlerType;
 
+        /** GetThrottlerStatusResponse metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -44325,6 +44328,9 @@ export namespace tabletmanagerdata {
 
             /** GetThrottlerStatusResponse throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
+
+            /** GetThrottlerStatusResponse metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

@@ -112756,6 +112756,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [recently_checked] GetThrottlerStatusResponse recently_checked
          * @property {Object.<string,tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties>|null} [recent_apps] GetThrottlerStatusResponse recent_apps
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusResponse throttler_type
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] GetThrottlerStatusResponse metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -112787,6 +112788,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             this.throttled_apps = {};
             this.app_checked_metrics = {};
             this.recent_apps = {};
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -112946,6 +112948,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetThrottlerStatusResponse.prototype.throttler_type = 0;
 
         /**
+         * GetThrottlerStatusResponse metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof tabletmanagerdata.GetThrottlerStatusResponse
+         * @instance
+         */
+        GetThrottlerStatusResponse.prototype.metric_shard_percentiles = $util.emptyObject;
+
+        /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.GetThrottlerStatusResponse
@@ -113029,6 +113039,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 }
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 19, wireType 0 =*/152).int32(message.throttler_type);
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 20, wireType 2 =*/162).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -113419,6 +113432,42 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.throttler_type;
                         continue;
                     }
+                case 20: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -113562,6 +113611,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
                 if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -113701,6 +113758,16 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
                         message.throttler_type = object.throttler_type;
                 }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".tabletmanagerdata.GetThrottlerStatusResponse.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -113728,6 +113795,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.throttled_apps = {};
                 object.app_checked_metrics = {};
                 object.recent_apps = {};
+                object.metric_shard_percentiles = {};
             }
             if (options.defaults) {
                 object.tablet_alias = "";
@@ -113819,6 +113887,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             }
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
                 object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
+                }
+            }
             return object;
         };
 
