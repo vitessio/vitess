@@ -598,9 +598,6 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 
-	case evalNumeric:
-		return evalToVarchar(e, call.collate, false)
-
 	case *evalBytes:
 		b = e
 
@@ -625,6 +622,10 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		newcase = csa.ToLower(nil, b.bytes)
 	}
+	if b.isBinary() {
+		// A binary argument stays binary, and is no longer a hex or bit literal.
+		return newEvalRaw(sqltypes.VarBinary, newcase, b.col), nil
+	}
 	return newEvalText(newcase, b.col), nil
 }
 
@@ -636,21 +637,22 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
-	col := str.Col
+	// A textual or binary argument keeps its type, size and collation.
+	res := ctype{Type: str.Type, Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag)}
 	switch {
 	case str.isTextual():
 	case str.Type == sqltypes.TypeJSON:
 		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
-		col = collationJSON
+		res = ctype{Type: sqltypes.VarChar, Col: collationJSON, Flag: nullableFlags(str.Flag)}
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
-		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+		res = ctype{Type: sqltypes.VarChar, Col: typedCoercionCollation(sqltypes.VarChar, c.collation), Flag: nullableFlags(str.Flag)}
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
+	return res, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {

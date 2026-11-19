@@ -2683,7 +2683,12 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 			} else {
 				str.bytes = csa.ToUpper(nil, str.bytes)
 			}
-			str.tt = int16(sqltypes.VarChar)
+			if str.isBinary() {
+				// A binary argument stays binary, and is no longer a hex or bit literal.
+				str.flag = 0
+			} else {
+				str.tt = int16(sqltypes.VarChar)
+			}
 			return 1
 		}, "FN UPPER VARCHAR(SP-1)")
 	} else {
@@ -2697,7 +2702,12 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 			} else {
 				str.bytes = csa.ToLower(nil, str.bytes)
 			}
-			str.tt = int16(sqltypes.VarChar)
+			if str.isBinary() {
+				// A binary argument stays binary, and is no longer a hex or bit literal.
+				str.flag = 0
+			} else {
+				str.tt = int16(sqltypes.VarChar)
+			}
 			return 1
 		}, "FN LOWER VARCHAR(SP-1)")
 	}
