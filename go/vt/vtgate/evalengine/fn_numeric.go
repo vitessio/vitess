@@ -845,61 +845,58 @@ func clampRounding(round int64) int64 {
 	return round
 }
 
-func roundSigned(v int64, round int64) int64 {
-	if round >= 0 {
-		return v
+// roundSigned rounds v half away from zero to a multiple of 10^-round, like
+// MySQL does for integers. It fails when the result does not fit in an int64.
+func roundSigned(v int64, round int64) (int64, error) {
+	if v >= 0 {
+		u, ok := roundUnsigned0(uint64(v), round)
+		if !ok || u > math.MaxInt64 {
+			return 0, roundOutOfRangeError("BIGINT", v, round)
+		}
+		return int64(u), nil
 	}
-	round = clampRounding(round)
-
-	if v == 0 {
-		return 0
+	u, ok := roundUnsigned0(-uint64(v), round)
+	if !ok || u > math.MaxInt64+1 {
+		return 0, roundOutOfRangeError("BIGINT", v, round)
 	}
-	for i := round; i < -1 && v != 0; i++ {
-		v /= 10
-	}
-
-	if v == 0 {
-		return 0
-	}
-	if v%10 <= -5 {
-		v -= 10
-	} else if v%10 >= 5 {
-		v += 10
-	}
-
-	v /= 10
-	for i := round; i < 0; i++ {
-		v *= 10
-	}
-	return v
+	return -int64(u), nil
 }
 
-func roundUnsigned(v uint64, round int64) uint64 {
+// roundUnsigned is roundSigned for unsigned values.
+func roundUnsigned(v uint64, round int64) (uint64, error) {
+	u, ok := roundUnsigned0(v, round)
+	if !ok {
+		return 0, roundOutOfRangeError("BIGINT UNSIGNED", v, round)
+	}
+	return u, nil
+}
+
+// roundUnsigned0 follows MySQL's my_unsigned_round. ok is false when the
+// rounded value does not fit in a uint64.
+func roundUnsigned0(v uint64, round int64) (uint64, bool) {
 	if round >= 0 {
-		return v
+		return v, true
 	}
-	round = clampRounding(round)
+	if round < -19 {
+		// 10^20 is larger than any uint64
+		return 0, true
+	}
+	to := uint64(1)
+	for range -round {
+		to *= 10
+	}
+	tmp := v / to * to
+	if v-tmp < to/2 {
+		return tmp, true
+	}
+	if tmp > math.MaxUint64-to {
+		return 0, false
+	}
+	return tmp + to, true
+}
 
-	if v == 0 {
-		return 0
-	}
-	for i := round; i < -1 && v != 0; i++ {
-		v /= 10
-	}
-
-	if v == 0 {
-		return 0
-	}
-
-	if v%10 >= 5 {
-		v += 10
-	}
-
-	v /= 10
-	for i := round; i < 0; i++ {
-		v *= 10
-	}
-	return v
+func roundOutOfRangeError[N int64 | uint64](typ string, v N, round int64) error {
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in 'round(%d,%d)'", typ, v, round)
 }
 
 func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
@@ -934,9 +931,17 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 
 	switch arg := arg.(type) {
 	case *evalInt64:
-		return newEvalInt64(roundSigned(arg.i, round)), nil
+		i, err := roundSigned(arg.i, round)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalInt64(i), nil
 	case *evalUint64:
-		return newEvalUint64(roundUnsigned(arg.u, round)), nil
+		u, err := roundUnsigned(arg.u, round)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalUint64(u), nil
 	case *evalDecimal:
 		if arg.dec.IsZero() {
 			return arg, nil
