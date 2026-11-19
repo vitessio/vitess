@@ -2671,46 +2671,32 @@ func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 	}, "FN INSERT VARCHAR(SP-4) INT64(SP-3) INT64(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_LUCASE(upcase bool) {
+// Fn_LUCASE changes the case of the string on the stack. When col is set, it
+// becomes the collation of the string (for a value that was just converted to
+// text), and asciiFallback allows such a value to be case-mapped as ASCII when
+// its collation has no case mapping of its own.
+func (asm *assembler) Fn_LUCASE(upcase bool, col *collations.TypedCollation, asciiFallback bool) {
+	name := "LOWER"
 	if upcase {
-		asm.emit(func(env *ExpressionEnv) int {
-			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-
-			coll := colldata.Lookup(str.col.Collation)
-			csa, ok := coll.(colldata.CaseAwareCollation)
-			if !ok {
-				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
-			} else {
-				str.bytes = csa.ToUpper(nil, str.bytes)
-			}
-			if str.isBinary() {
-				// A binary argument stays binary, and is no longer a hex or bit literal.
-				str.flag = 0
-			} else {
-				str.tt = int16(sqltypes.VarChar)
-			}
-			return 1
-		}, "FN UPPER VARCHAR(SP-1)")
-	} else {
-		asm.emit(func(env *ExpressionEnv) int {
-			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-
-			coll := colldata.Lookup(str.col.Collation)
-			csa, ok := coll.(colldata.CaseAwareCollation)
-			if !ok {
-				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
-			} else {
-				str.bytes = csa.ToLower(nil, str.bytes)
-			}
-			if str.isBinary() {
-				// A binary argument stays binary, and is no longer a hex or bit literal.
-				str.flag = 0
-			} else {
-				str.tt = int16(sqltypes.VarChar)
-			}
-			return 1
-		}, "FN LOWER VARCHAR(SP-1)")
+		name = "UPPER"
 	}
+	asm.emit(func(env *ExpressionEnv) int {
+		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		if col != nil {
+			str.col = *col
+		}
+
+		newcase, err := changeCaseBytes(str.col.Collation, str.bytes, upcase, asciiFallback)
+		if err != nil {
+			env.vm.err = err
+		} else {
+			str.bytes = newcase
+		}
+		str.tt = int16(changeCaseType(str.col.Collation))
+		// The result is no longer a hex or bit literal.
+		str.flag = 0
+		return 1
+	}, "FN "+name+" VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_MULTICMP_b(args int, lessThan bool) {
