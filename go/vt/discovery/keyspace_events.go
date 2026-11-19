@@ -404,8 +404,9 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		kss.shards[th.Target.Shard] = sstate
 	}
 
-	// Ignore a primary with an older known term. A stopping primary reports a
-	// negative term.
+	// Ignore a primary with an older known term. Terms come from each primary's
+	// clock and are assumed to increase across reparents. A stopping primary
+	// reports a negative term.
 	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
 		if th.Serving {
 			log.Warn("ignoring a serving primary with an older term than the highest known primary term",
