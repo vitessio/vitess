@@ -70,6 +70,8 @@ const (
 	WatchRecursive
 	NewLeaderParticipation
 	Close
+	// CheckLock is a lock descriptor's Check: its error reports the lock as lost.
+	CheckLock
 )
 
 // Factory is a memory-based implementation of topo.Factory.  It
