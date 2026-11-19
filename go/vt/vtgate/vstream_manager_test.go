@@ -36,12 +36,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -1343,6 +1343,7 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 }
 
 func TestVStreamJournalOneToMany(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	ctx := t.Context()
 	cell := "aa"
 	ks := "TestVStream"
@@ -1363,12 +1364,19 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
+	// The copy phase's primary key values, which are logged under last_pk
+	// rather than with the journal's shard GTIDs.
+	tablePKs := []*binlogdatapb.TableLastPK{{
+		TableName: "t0",
+		Lastpk:    sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "varchar"), "journal-sentinel")),
+	}}
 	want1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: ks,
 				Shard:    "-20",
 				Gtid:     "gtid01",
+				TablePKs: tablePKs,
 			}},
 		}},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "TestVStream.f0"}},
@@ -1421,11 +1429,12 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			Keyspace: ks,
 			Shard:    "-20",
 			Gtid:     "pos",
+			TablePKs: tablePKs,
 		}},
 	}
 
 	vstreamCtx, vstreamCancel := context.WithCancel(ctx)
-	defer vstreamCancel()
+	t.Cleanup(vstreamCancel)
 
 	receivedEvents := make([]*binlogdatapb.VStreamResponse, 0)
 	err := vsm.VStream(vstreamCtx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
@@ -1465,6 +1474,15 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			}},
 		},
 	}, receivedEvents[2].Events[0])
+
+	// shard_gtids is not a data key, so the copy phase's primary key values
+	// must only be under last_pk.
+	removing := logs.Record(t, "Removing shard gtids")
+	assert.Equal(t, "INFO", removing["level"])
+	assert.Contains(t, removing["shard_gtids"], `shard:"-20"`)
+	assert.Contains(t, removing["shard_gtids"], `gtid:"gtid01"`)
+	assert.NotContains(t, removing["shard_gtids"], "journal-sentinel")
+	assert.Contains(t, removing["last_pk"], "journal-sentinel")
 }
 
 func TestVStreamsCountDropsShardStreamEndedByJournal(t *testing.T) {
@@ -2719,10 +2737,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 	// Capture the vstream warning log. Otherwise we need to re-implement the vstream error
 	// handling in SandboxConn's implementation and then we're not actually testing the
 	// production code.
-	logger := logutil.NewMemoryLogger()
-	log.Warn = func(msg string, _ ...slog.Attr) {
-		logger.Warningf("%s", msg)
-	}
+	logs := logtest.Capture(t, slog.LevelWarn)
 
 	cell := "aa"
 	ks := "TestVStream"
@@ -2814,7 +2829,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 			}
 
 			vstreamCtx, vstreamCancel := context.WithTimeout(ctx, 1*time.Second)
-			defer vstreamCancel()
+			t.Cleanup(vstreamCancel)
 
 			// SandboxConn's VStream implementation always waits for the context to timeout.
 			err := vsm.VStream(vstreamCtx, tabletType, vgtid, nil, nil, func(events []*binlogdatapb.VEvent) error {
@@ -2827,7 +2842,16 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				// which may not have run yet when VStream returns on context
 				// expiry, so poll for it.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					assert.Contains(c, logger.String(), tc.wantErr)
+					var found map[string]any
+					for _, record := range logs.Records(c) {
+						if record["msg"] == "Tablet state changed, attempting to restart" && strings.Contains(fmt.Sprint(record["error"]), tc.wantErr) {
+							found = record
+						}
+					}
+					if assert.NotNil(c, found, "logs:\n%s", logs.String()) {
+						assert.Equal(c, "WARN", found["level"])
+						assert.Equal(c, tabletAlias, found["tablet"])
+					}
 				}, 30*time.Second, 10*time.Millisecond)
 			} else {
 				// Otherwise we simply expect the context to timeout
@@ -2835,7 +2859,7 @@ func TestVStreamManagerHealthCheckResponseHandling(t *testing.T) {
 				require.ErrorIs(t, vterrors.UnwrapAll(err), context.DeadlineExceeded)
 			}
 
-			logger.Clear()
+			logs.Reset()
 		})
 	}
 }

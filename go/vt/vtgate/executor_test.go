@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -39,8 +40,11 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -141,11 +145,18 @@ func TestPlanKey(t *testing.T) {
 }
 
 func TestExecutorResultsExceeded(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
 	save := warnMemoryRows
 	warnMemoryRows = 3
 	defer func() { warnMemoryRows = save }()
+
+	// The logger is throttled and shared by the whole package, so use a fresh
+	// one to make sure the warning is emitted here.
+	savedLogger := exceedMemoryRowsLogger
+	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", time.Minute)
+	t.Cleanup(func() { exceedMemoryRowsLogger = savedLogger })
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
@@ -159,9 +170,24 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, initial, warnings.Counts()["ResultsExceeded"], "warnings count")
 
-	_, err = executorExecSession(ctx, executor, session, "select * from main1", nil)
+	const msg = "query exceeds warning threshold of max memory rows"
+	_, err = executorExecSession(ctx, executor, session, "select * from main1 where name = 'rows-sentinel'", nil)
 	require.NoError(t, err)
 	assert.Equal(t, initial+1, warnings.Counts()["ResultsExceeded"], "warnings count")
+	record := logs.Record(t, msg)
+	assert.Equal(t, "WARN", record["level"])
+	assert.Contains(t, record["query"], "main1")
+	assert.NotContains(t, logs.String(), "rows-sentinel")
+
+	logs.Reset()
+	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", time.Minute)
+	sbclookup.SetResults([]*sqltypes.Result{result2})
+	err = executor.StreamExecute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from main1 where name = 'rows-sentinel'", nil, false, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	record = logs.Record(t, msg)
+	assert.Equal(t, "WARN", record["level"])
+	assert.Contains(t, record["query"], "main1")
+	assert.NotContains(t, logs.String(), "rows-sentinel")
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
@@ -3845,4 +3871,49 @@ func TestExecutorShowShards(t *testing.T) {
 			assert.Truef(t, tt.want.Equal(got), "Results got - %v", got)
 		})
 	}
+}
+
+// TestExecutorShowIgnoredWhereClause checks that the ignored where clause of
+// SHOW VITESS_SHARDS and SHOW VITESS_TABLETS stays out of the log.
+func TestExecutorShowIgnoredWhereClause(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+
+	for _, tc := range []struct {
+		query, msg string
+	}{{
+		query: "show vitess_shards where keyspace = 'where-sentinel'",
+		msg:   "SHOW VITESS_SHARDS where clause. Ignoring this (for now).",
+	}, {
+		query: "show vitess_tablets where hostname = 'where-sentinel'",
+		msg:   "SHOW VITESS_TABLETS where clause. Ignoring this (for now).",
+	}} {
+		_, err := executorExecSession(ctx, executor, session, tc.query, nil)
+		require.NoError(t, err, tc.query)
+		record := logs.Record(t, tc.msg)
+		assert.Equal(t, "INFO", record["level"])
+	}
+
+	assert.NotContains(t, logs.String(), "sentinel")
+	assert.NotContains(t, logs.String(), "0x")
+}
+
+func TestExecutorShowReplicationStatusNoResult(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	executor, _, replica := createExecutorEnvWithPrimaryReplicaConn(t, t.Context(), 0)
+	replica.SetResults([]*sqltypes.Result{nil})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+
+	_, err := executorExecSession(t.Context(), executor, session, "show vitess_replication_status", nil)
+	require.NoError(t, err)
+
+	// The tablet returned no result and no error, so there's no error to log.
+	record := logs.Record(t, "Could not get replication status")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, topoproto.TabletAliasString(replica.Tablet().Alias), record["tablet"])
+	assert.NotEmpty(t, record["tablet_host_port"])
+	assert.NotContains(t, record, "error")
+	assert.NotContains(t, record, "error_code")
+	assert.NotContains(t, logs.String(), "<nil>")
 }

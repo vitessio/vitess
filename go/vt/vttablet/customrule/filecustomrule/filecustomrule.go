@@ -18,7 +18,7 @@ limitations under the License.
 package filecustomrule
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"time"
@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -76,14 +77,17 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 func ParseRules(path string) (*rules.Rules, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Error reading file %v: %v", path, err))
+		log.Warn("Error reading file", slog.String("path", path), slog.Any("error", err))
 		// Don't update any internal cache, just return error
 		return nil, err
 	}
 	qrs := rules.New()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Error unmarshaling query rules %v", err))
+		log.Warn("Error unmarshaling query rules",
+			slog.String("path", path),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 	return qrs, nil
@@ -105,7 +109,7 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 	fcr.currentRuleSet = qrs.Copy()
 	// Push query rules to vttablet
 	qsc.SetQueryRules(FileCustomRuleSource, qrs.Copy())
-	log.Info("Custom rule loaded from file: " + fcr.path)
+	log.Info("Custom rule loaded from file", slog.String("path", fcr.path))
 	return nil
 }
 
@@ -129,7 +133,7 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable create new fsnotify watcher: %v", err))
+			log.Error("Unable to create new fsnotify watcher", slog.Any("error", err))
 			os.Exit(1)
 		}
 		servenv.OnTerm(func() { watcher.Close() })
@@ -145,21 +149,27 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 						continue
 					}
 					if err := fileCustomRule.Open(tsc, fileRulePath); err != nil {
-						log.Info(fmt.Sprintf("Failed to load custom rules from %q: %v", fileRulePath, err))
+						log.Info("Failed to load custom rules from file",
+							slog.String("path", fileRulePath),
+							slog.Any("error", err),
+							slog.String("error_code", vterrors.Code(err).String()))
 					} else {
-						log.Info(fmt.Sprintf("Loaded custom rules from %q", fileRulePath))
+						log.Info("Loaded custom rules from file", slog.String("path", fileRulePath))
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {
 						return
 					}
-					log.Error(fmt.Sprintf("Error watching %v: %v", fileRulePath, err))
+					log.Error("Error watching file", slog.String("path", fileRulePath), slog.Any("error", err))
 				}
 			}
 		}(qsc)
 
 		if err = watcher.Add(baseDir); err != nil {
-			log.Error(fmt.Sprintf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err))
+			log.Error("Unable to set up watcher",
+				slog.String("dir", baseDir),
+				slog.String("file_name", ruleFileName),
+				slog.Any("error", err))
 			os.Exit(1)
 		}
 	}

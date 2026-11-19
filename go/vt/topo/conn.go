@@ -147,7 +147,7 @@ type Conn interface {
 	// it in between), the consul client waits its lock retry time (5s) once
 	// before TryLock returns NodeExists. Consul has no wait queue, so TryLock
 	// attempts also compete with waiting `Lock` callers, which the same 5s
-	// wait can delay. The memorytopo implementation blocks like `Lock`, and
+	// wait can delay. The memorytopo implementation also fails fast, and
 	// the faketopo one always succeeds.
 	TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error)
 

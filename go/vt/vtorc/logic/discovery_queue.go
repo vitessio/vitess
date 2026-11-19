@@ -26,7 +26,7 @@ push() operation never blocks while pop() blocks on an empty queue.
 package logic
 
 import (
-	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -98,10 +98,9 @@ func (q *DiscoveryQueue) Consume() *topodatapb.TabletAlias {
 
 	timeOnQueue := time.Since(item.PushedAt)
 	if timeOnQueue > config.GetInstancePollTime() {
-		log.Warn(fmt.Sprintf("tablet %v spent %.4fs waiting on a discovery queue",
-			topoproto.TabletAliasString(item.TabletAlias),
-			timeOnQueue.Seconds(),
-		))
+		log.Warn("tablet spent too long waiting on a discovery queue",
+			slog.String("tablet", topoproto.TabletAliasString(item.TabletAlias)),
+			slog.Duration("duration", timeOnQueue))
 	}
 
 	return item.TabletAlias

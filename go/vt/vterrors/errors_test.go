@@ -17,15 +17,20 @@ limitations under the License.
 package vterrors
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"testing"
 
+	"github.com/lmittmann/tint"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -333,6 +338,133 @@ func TestWrapping(t *testing.T) {
 	assertContains(t, errorWithStack, "bar", true)
 	assertContains(t, errorWithStack, "baz", true)
 	assertContains(t, errorWithStack, "TestWrapping", true)
+}
+
+func TestLogValue(t *testing.T) {
+	stackText := func(s *stack) string { return fmt.Sprintf("%v", s) }
+	fundamentalErr := Errorf(vtrpcpb.Code_UNAVAILABLE, "foo").(*fundamental)
+	wrappingErr := Wrapf(Errorf(vtrpcpb.Code_UNAVAILABLE, "foo"), "bar").(*wrapping)
+	eofErr := Wrap(io.EOF, "reading").(*wrapping)
+	vitessErr := Wrap(VT13001("x"), "outer").(*wrapping)
+	stdlibErr := Wrap(fmt.Errorf("ctx: %w", Errorf(vtrpcpb.Code_UNAVAILABLE, "foo")), "outer").(*wrapping)
+	var typedNil *fundamental
+	var typedNilWrapping *wrapping
+
+	tests := []struct {
+		name string
+		err  error
+		// json is the JSON handler's error value without --log-err-stacks, and
+		// jsonWithStacks is the value with it.
+		json, jsonWithStacks string
+		isNil                bool
+	}{{
+		name:           "fundamental",
+		err:            fundamentalErr,
+		json:           "foo",
+		jsonWithStacks: "foo\nfoo" + stackText(fundamentalErr.stack),
+	}, {
+		name:           "Wrapf over fundamental",
+		err:            wrappingErr,
+		json:           "bar: foo",
+		jsonWithStacks: "bar: foo\nfoo" + stackText(wrappingErr.cause.(*fundamental).stack) + "\nbar" + stackText(wrappingErr.stack),
+	}, {
+		name:           "Wrap over io.EOF",
+		err:            eofErr,
+		json:           "reading: EOF",
+		jsonWithStacks: "reading: EOF\nreading" + stackText(eofErr.stack),
+	}, {
+		// The text format doesn't print the stack inside a VitessError.
+		name:           "Wrap over VT13001",
+		err:            vitessErr,
+		json:           "outer: VT13001: [BUG] x",
+		jsonWithStacks: "outer: VT13001: [BUG] x\nouter" + stackText(vitessErr.stack),
+	}, {
+		// Nor the stack of an error inside an error from another package.
+		name:           "Wrap over fmt.Errorf",
+		err:            stdlibErr,
+		json:           stdlibErr.Error(),
+		jsonWithStacks: stdlibErr.Error() + "\nouter" + stackText(stdlibErr.stack),
+	}, {
+		name:           "typed nil",
+		err:            typedNil,
+		json:           "<nil>",
+		jsonWithStacks: "<nil>",
+		isNil:          true,
+	}, {
+		name:           "typed nil wrapping",
+		err:            typedNilWrapping,
+		json:           "<nil>",
+		jsonWithStacks: "<nil>",
+		isNil:          true,
+	}}
+
+	noTime := func(_ []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.TimeKey {
+			return slog.Attr{}
+		}
+		return a
+	}
+	textHandlers := map[string]func(*bytes.Buffer) slog.Handler{
+		"tint": func(buf *bytes.Buffer) slog.Handler {
+			return tint.NewTextHandler(buf, &tint.Options{
+				AddSource:   true,
+				TimeFormat:  "2006-01-02 15:04:05.000 MST",
+				NoColor:     true,
+				ReplaceAttr: noTime,
+			})
+		},
+		"slog text": func(buf *bytes.Buffer) slog.Handler {
+			return slog.NewTextHandler(buf, &slog.HandlerOptions{AddSource: true, ReplaceAttr: noTime})
+		},
+	}
+	logLine := func(h slog.Handler, buf *bytes.Buffer, attr slog.Attr) string {
+		buf.Reset()
+		slog.New(h).Error("failed", attr)
+		return buf.String()
+	}
+	jsonError := func(t *testing.T, err error) string {
+		var buf bytes.Buffer
+		slog.New(slog.NewJSONHandler(&buf, nil)).Error("failed", slog.Any("error", err))
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &record))
+		logged, ok := record["error"].(string)
+		require.True(t, ok, "error is not a string in %s", buf.String())
+		return logged
+	}
+
+	for _, tt := range tests {
+		for _, stacks := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stacks=%t", tt.name, stacks), func(t *testing.T) {
+				setLogErrStacks(stacks)
+				defer setLogErrStacks(false)
+
+				want := tt.json
+				if stacks {
+					want = tt.jsonWithStacks
+				}
+				assert.Equal(t, want, jsonError(t, tt.err), "json")
+				if !tt.isNil {
+					if stacks {
+						assert.Contains(t, jsonError(t, tt.err), "TestLogValue", "json")
+					}
+					// Handlers and ReplaceAttr functions see the resolved value.
+					resolved, ok := slog.AnyValue(tt.err).Resolve().Any().(error)
+					require.True(t, ok, "resolved value is not an error")
+					require.ErrorIs(t, resolved, tt.err, "resolved")
+				}
+
+				// The text handlers and glog print the %+v format, as they do for
+				// an error that is not an slog.LogValuer.
+				for name, newHandler := range textHandlers {
+					var buf bytes.Buffer
+					h := newHandler(&buf)
+					want := logLine(h, &buf, slog.String("error", fmt.Sprintf("%+v", tt.err)))
+					assert.Equal(t, want, logLine(h, &buf, slog.Any("error", tt.err)), name)
+				}
+				assert.Equal(t, "error="+fmt.Sprintf("%+v", tt.err), fmt.Sprint(slog.Any("error", tt.err)), "glog")
+			})
+		}
+	}
 }
 
 func assertContains(t *testing.T, s, substring string, contains bool) {

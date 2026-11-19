@@ -18,15 +18,28 @@ package logic
 
 import (
 	"context"
+	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
+	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/process"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 )
 
 func TestWaitForLocksRelease(t *testing.T) {
@@ -111,4 +124,97 @@ func TestRefreshAllInformation(t *testing.T) {
 	require.True(t, process.FirstDiscoveryCycleComplete.Load())
 	_, discoveredOnce = process.HealthTest()
 	require.True(t, discoveredOnce)
+}
+
+var (
+	discoveryTMC         = &testutil.TabletManagerClient{}
+	registerDiscoveryTMC sync.Once
+)
+
+// TestDiscoverInstanceLogs checks the level of the Discovered line, that the
+// replica's last SQL error, which can quote row values, is under
+// last_sql_error and never in a message, and that a tablet that was shut down,
+// which has no instance and no error, is logged without instance fields or
+// error attributes.
+func TestDiscoverInstanceLogs(t *testing.T) {
+	t.Cleanup(db.ClearVTOrcDatabase)
+	inst.InitializeForgetAliasesCache()
+	prevKeys := recentDiscoveryOperationKeys
+	recentDiscoveryOperationKeys = cache.New(config.GetInstancePollTime(), time.Second)
+	t.Cleanup(func() { recentDiscoveryOperationKeys = prevKeys })
+
+	const protocol = "vtorc-discover-instance-test"
+	registerDiscoveryTMC.Do(func() {
+		tmclient.RegisterTabletManagerClientFactory(protocol, func() tmclient.TabletManagerClient { return discoveryTMC })
+	})
+	// Setting and resetting the protocol writes the flags that the timer of a
+	// failed instance read reads. Wait for an earlier test's timer, and for
+	// this test's before the reset.
+	waitForLastAttemptedCheck()
+	resetProtocol := tmclienttest.SetProtocol(t.Name(), protocol)
+	inst.InitializeTMC()
+	t.Cleanup(func() {
+		waitForLastAttemptedCheck()
+		resetProtocol()
+		inst.InitializeTMC()
+	})
+
+	// The instance-is-nil line is logged once a minute per tablet, so the
+	// shut down tablet gets a new UID on each run of the test.
+	offset := newRunUIDOffset()
+	saveTablet := func(uid uint32, shutdown bool) *topodatapb.Tablet {
+		if shutdown {
+			uid += offset
+		}
+		tablet := &topodatapb.Tablet{
+			Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Hostname:      "localhost",
+			Keyspace:      "ks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_REPLICA,
+			MysqlHostname: "localhost",
+			MysqlPort:     6709,
+		}
+		if shutdown {
+			tablet.TabletShutdownTime = &vttimepb.Time{Seconds: 1}
+		}
+		require.NoError(t, inst.SaveTablet(tablet))
+		return tablet
+	}
+	discoveryTMC.FullStatusResult = &replicationdatapb.FullStatus{
+		TabletType: topodatapb.TabletType_REPLICA,
+		ReplicationStatus: &replicationdatapb.Status{
+			LastSqlError: "Duplicate entry 'row-value-sentinel' for key 'PRIMARY'",
+		},
+	}
+
+	t.Run("discovered", func(t *testing.T) {
+		tablet := saveTablet(100, false)
+		logs := logtest.Capture(t, slog.LevelInfo)
+		DiscoverInstance(tablet.Alias, true)
+
+		record := logs.Record(t, "Discovered")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Contains(t, record["last_sql_error"], "row-value-sentinel")
+		for _, record := range logs.Records(t) {
+			assert.NotContains(t, record["msg"], "row-value-sentinel")
+		}
+	})
+
+	t.Run("shut down tablet", func(t *testing.T) {
+		// VTOrc doesn't poll a tablet that was shut down: there is no
+		// instance and no error.
+		tablet := saveTablet(300, true)
+		logs := logtest.Capture(t, slog.LevelInfo)
+		DiscoverInstance(tablet.Alias, true)
+
+		record := logs.Record(t, "Discovered")
+		assert.Equal(t, topoproto.TabletAliasString(tablet.Alias), record["tablet"])
+		assert.NotContains(t, record, "mysql_hostname")
+
+		record = logs.Record(t, "DiscoverInstance: instance is nil")
+		assert.Equal(t, topoproto.TabletAliasString(tablet.Alias), record["tablet"])
+		assert.NotContains(t, record, "error")
+		assert.NotContains(t, record, "error_code")
+	})
 }

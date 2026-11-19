@@ -14,21 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vstreamer
+package consts
 
-import "log/slog"
-
-// lazyString defers building an expensive attribute value, such as proto text
-// or JSON, until the record is written, so log.V calls that are turned off
-// don't pay for it.
-type lazyString func() string
-
-func (f lazyString) LogValue() slog.Value {
-	return slog.StringValue(f())
-}
-
-// String returns the value for loggers that format attributes with fmt, such
-// as the glog backend.
-func (f lazyString) String() string {
-	return f()
-}
+// Prefix is a named constant from another package.
+const Prefix = "stream "

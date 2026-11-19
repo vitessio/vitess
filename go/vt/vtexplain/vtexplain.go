@@ -22,6 +22,7 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -259,21 +261,24 @@ func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]s
 		} else {
 			stmt, err = parser.Parse(sql)
 			if err != nil {
-				log.Error(fmt.Sprintf("ERROR: failed to parse sql: %s, got error: %v", sql, err))
+				log.Error("ERROR: failed to parse sql",
+					slog.String("query", sql),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				continue
 			}
 		}
 		ddl, ok := stmt.(sqlparser.DDLStatement)
 		if !ok {
-			log.Info("ignoring non-DDL statement: " + sql)
+			log.Info("ignoring non-DDL statement", slog.String("query", sql))
 			continue
 		}
 		if ddl.GetAction() != sqlparser.CreateDDLAction {
-			log.Info(fmt.Sprintf("ignoring %s table statement", ddl.GetAction().ToString()))
+			log.Info("ignoring table statement", slog.String("ddl_action", ddl.GetAction().ToString()))
 			continue
 		}
 		if ddl.GetTableSpec() == nil && ddl.GetOptLike() == nil {
-			log.Error("invalid create table statement: " + sql)
+			log.Error("invalid create table statement", slog.String("query", sql))
 			continue
 		}
 		parsedDDLs = append(parsedDDLs, ddl)

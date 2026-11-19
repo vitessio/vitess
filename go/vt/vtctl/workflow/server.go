@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"sort"
@@ -1618,6 +1619,19 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		opts = append(opts, IgnoreSourceKeyspace())
 	}
 
+	// Lock the workflow for deletion before reading its state. SwitchTraffic
+	// holds this lock while it switches traffic, so a state read before the
+	// lock can say that writes are not switched when they are by the time we
+	// get the lock, and we would then drop the target tables that take writes.
+	lockName := fmt.Sprintf("%s/%s", req.GetKeyspace(), req.GetWorkflow())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowDelete")
+	if lockErr != nil {
+		s.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	var err error
+	defer workflowUnlock(&err)
+
 	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
@@ -1632,15 +1646,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		// If only reads have been switched, then we can delete the
 		// workflow and its related artifacts.
 	}
-
-	// Lock the workflow for deletion.
-	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowDelete")
-	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
-	}
-	defer workflowUnlock(&err)
 
 	if state.WorkflowType == TypeMigrate {
 		_, err := s.finalizeMigrateWorkflow(ctx, ts, "", true, keepData, req.GetKeepRoutingRules(), false)
@@ -3619,7 +3624,10 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	defer cancel()
 	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, s.Logger(), destKeyspace, destShard, destPrimaryPos, nil, true)
 	if !ok {
-		s.Logger().Error(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard: failed to reload schema on all replicas"))
+		s.Logger().Error("CopySchemaShard: failed to reload schema on all replicas",
+			slog.String("keyspace", destKeyspace),
+			slog.String("shard", destShard),
+			slog.String("error_code", vtrpcpb.Code_INTERNAL.String()))
 	}
 
 	return err
@@ -3795,7 +3803,12 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest, ts *trafficSwitcher, state *State) (err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) error {
-		ts.Logger().Error(err)
+		ts.Logger().Error("failed to mirror traffic",
+			slog.String("workflow", ts.workflow),
+			slog.String("keyspace", ts.targetKeyspace),
+			slog.String("reason", message),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 

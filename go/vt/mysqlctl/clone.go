@@ -80,7 +80,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		return replication.Position{}, errors.New("--clone-from-primary and --clone-from-tablet are mutually exclusive")
 	case cloneFromPrimary:
 		// Look up the primary tablet from topology.
-		log.Info(fmt.Sprintf("Looking up primary tablet for shard %s/%s for use as CLONE REMOTE donor", keyspace, shard))
+		log.Info("Looking up primary tablet for shard for use as CLONE REMOTE donor", slog.String("keyspace", keyspace), slog.String("shard", shard))
 		si, err := topoServer.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("failed to get shard %s/%s: %v", keyspace, shard, err)
@@ -89,10 +89,10 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 			return replication.Position{}, fmt.Errorf("shard %s/%s has no primary", keyspace, shard)
 		}
 		donorAlias = si.PrimaryAlias
-		log.Info(fmt.Sprintf("Found primary tablet %s for use as CLONE REMOTE donor", topoproto.TabletAliasString(donorAlias)))
+		log.Info("Found primary tablet for use as CLONE REMOTE donor", slog.String("donor_tablet", topoproto.TabletAliasString(donorAlias)))
 	case cloneFromTablet != "":
 		// Parse the explicit donor tablet alias.
-		log.Info(fmt.Sprintf("Using tablet %s for use as CLONE REMOTE donor", cloneFromTablet))
+		log.Info("Using tablet for use as CLONE REMOTE donor", slog.String("donor_tablet", cloneFromTablet))
 		donorAlias, err = topoproto.ParseTabletAlias(cloneFromTablet)
 		if err != nil {
 			return replication.Position{}, fmt.Errorf("invalid tablet alias %q: %v", cloneFromTablet, err)
@@ -122,7 +122,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		UseSSL:        cloneConfig.UseSSL,
 	}
 
-	log.Info(fmt.Sprintf("Clone executor configured for donor %s:%d", executor.DonorHost, executor.DonorPort))
+	log.Info("Clone executor configured for donor", slog.String("donor_host", executor.DonorHost), slog.Int("donor_port", executor.DonorPort))
 
 	// Execute the clone operation.
 	// Note: ExecuteClone will wait for mysqld to restart and for the CLONE plugin to report successful completion
@@ -140,7 +140,7 @@ func CloneFromDonor(ctx context.Context, topoServer *topo.Server, mysqld MysqlDa
 		return replication.Position{}, fmt.Errorf("failed to get position after clone: %v", err)
 	}
 
-	log.Info(fmt.Sprintf("Clone completed successfully at position %v", pos))
+	log.Info("Clone completed successfully at position", slog.String("position", replication.EncodePosition(pos)))
 	return pos, nil
 }
 
@@ -222,7 +222,7 @@ func (c *CloneExecutor) validateDonorRemote(ctx context.Context) error {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "clone plugin is not active on donor (status: %s)", status)
 	}
 
-	log.Info(fmt.Sprintf("Donor %s:%d validated successfully (MySQL %s)", c.DonorHost, c.DonorPort, versionStr))
+	log.Info("Donor validated successfully", slog.String("donor_host", c.DonorHost), slog.Int("donor_port", c.DonorPort), slog.String("mysql_version", versionStr))
 	return nil
 }
 
@@ -299,7 +299,7 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, my
 		return vterrors.Wrapf(err, "donor validation failed")
 	}
 
-	log.Info(fmt.Sprintf("Starting CLONE REMOTE from %s:%d", c.DonorHost, c.DonorPort))
+	log.Info("Starting CLONE REMOTE", slog.String("donor_host", c.DonorHost), slog.Int("donor_port", c.DonorPort))
 
 	// CLONE INSTANCE is a write statement on the recipient, and super_read_only
 	// blocks it for every user with no privilege (SUPER, CONNECTION_ADMIN, ...)
@@ -337,7 +337,7 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, my
 	// Build the CLONE INSTANCE command
 	cloneCmd := c.buildCloneCommand()
 
-	log.Info(fmt.Sprintf("Executing CLONE INSTANCE FROM %s:%d (this may take a while)", c.DonorHost, c.DonorPort))
+	log.Info("Executing CLONE INSTANCE FROM donor (this may take a while)", slog.String("donor_host", c.DonorHost), slog.Int("donor_port", c.DonorPort))
 
 	// Execute the clone command. When clone completes, MySQL restarts automatically
 	// which will cause the connection to drop. We ignore this error and verify
@@ -358,7 +358,7 @@ func (c *CloneExecutor) ExecuteClone(ctx context.Context, mysqld MysqlDaemon, my
 		return vterrors.Wrapf(err, "clone success verification failed")
 	}
 
-	log.Info(fmt.Sprintf("CLONE REMOTE completed successfully from %s:%d", c.DonorHost, c.DonorPort))
+	log.Info("CLONE REMOTE completed successfully", slog.String("donor_host", c.DonorHost), slog.Int("donor_port", c.DonorPort))
 	return nil
 }
 
@@ -462,7 +462,7 @@ func (c *CloneExecutor) checkClonePluginInstalled(ctx context.Context, mysqld My
 func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDaemon, timeout time.Duration) error {
 	const pollInterval = time.Second
 
-	log.Info(fmt.Sprintf("Waiting for clone to complete (timeout: %v)", timeout))
+	log.Info("Waiting for clone to complete", slog.Duration("timeout", timeout))
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -480,7 +480,7 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 			result, err := mysqld.FetchSuperQuery(ctx, cloneStatusQuery)
 			if err != nil {
 				// Connection failures are expected during MySQL restart
-				log.Info(fmt.Sprintf("Clone status query failed (MySQL may be restarting): %v", err))
+				log.Info("Clone status query failed (MySQL may be restarting)", slog.Any("error", err))
 				continue
 			}
 
@@ -492,7 +492,7 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 
 			if len(result.Rows[0]) < 3 {
 				// Unexpected row format
-				log.Warn(fmt.Sprintf("Unexpected clone_status row format: got %d columns, expected 3", len(result.Rows[0])))
+				log.Warn("Unexpected clone_status row format: expected 3 columns", slog.Int("column_count", len(result.Rows[0])))
 				continue
 			}
 
@@ -500,14 +500,14 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 			errorNo := result.Rows[0][1].ToString()
 			errorMsg := result.Rows[0][2].ToString()
 
-			log.Info(fmt.Sprintf("Clone status: STATE=%s, ERROR_NO=%s", state, errorNo))
+			log.Info("Clone status", slog.String("clone_state", state), slog.String("clone_error_no", errorNo))
 
 			switch {
 			case strings.EqualFold(state, "Completed"):
 				if errorNo != "0" {
 					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "clone completed with error %s: %s", errorNo, errorMsg)
 				}
-				log.Info(fmt.Sprintf("Clone completed successfully from %s:%d", c.DonorHost, c.DonorPort))
+				log.Info("Clone completed successfully from donor", slog.String("donor_host", c.DonorHost), slog.Int("donor_port", c.DonorPort))
 				return nil
 			case strings.EqualFold(state, "Failed"):
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "clone failed with error %s: %s", errorNo, errorMsg)
@@ -516,7 +516,7 @@ func (c *CloneExecutor) waitForCloneComplete(ctx context.Context, mysqld MysqlDa
 				continue
 			default:
 				// Unknown state, keep waiting but log it
-				log.Warn("Unknown clone state: " + state)
+				log.Warn("Unknown clone state", slog.String("clone_state", state))
 				continue
 			}
 		}

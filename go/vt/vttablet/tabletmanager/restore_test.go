@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -151,6 +154,8 @@ func TestInvokeRestoreDoneHook_Timestamps(t *testing.T) {
 	}
 }
 
+// TestStartReplicationKeepsRestoredBinlogs checks that finalization leaves the
+// GTIDs to mysqlctl.Restore, which keeps restored binlogs: it never resets them.
 func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	ts := memorytopo.NewServer(t.Context(), "cell1")
 	t.Cleanup(ts.Close)
@@ -163,13 +168,25 @@ func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	// The shard has no primary, so initializeReplication returns before reparenting.
 	fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
 	fake.ExpectedExecuteSuperQueryCurrent = 0
-	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, true))
+	require.NoError(t, tm.startReplication(t.Context(), logutil.NewMemoryLogger(), pos, topodatapb.TabletType_REPLICA))
 	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
+}
 
-	// Without restored binlogs, the position is still set (RESET + gtid_purged).
-	fake.SetReplicationPositionPos = pos
-	fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL", "FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}
-	fake.ExpectedExecuteSuperQueryCurrent = 0
-	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, false))
-	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
+// TestRestoreManifestAttrs checks that "Restore: got a restore manifest" leaves
+// out a nil error and empty positions, which main printed as <nil> and empty
+// values, and logs the error when there is one.
+func TestRestoreManifestAttrs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	m := &mysqlctl.BackupManifest{BackupName: "2026-11-04.150000.zone1-0000000101", BackupMethod: "builtin"}
+
+	logutil.NewConsoleLogger().Info("Restore: got a restore manifest", restoreManifestAttrs(m, nil, time.Minute)...)
+	r := logs.Record(t, "Restore: got a restore manifest")
+	for _, key := range []string{"error", "error_code", "position", "purged_position", "from_position", "from_backup"} {
+		assert.NotContains(t, r, key)
+	}
+
+	logs.Reset()
+	logutil.NewConsoleLogger().Info("Restore: got a restore manifest", restoreManifestAttrs(nil, mysqlctl.ErrNoBackup, 0)...)
+	r = logs.Record(t, "Restore: got a restore manifest")
+	assert.Equal(t, mysqlctl.ErrNoBackup.Error(), r["error"])
 }

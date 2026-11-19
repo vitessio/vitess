@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1007,7 +1008,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go scanLinesToLogger("test", reader, logger, wg.Done)
+	go scanLinesToLogger("test", "stdout", reader, logger, wg.Done)
 
 	for i := range 100 {
 		_, err := fmt.Fprintf(writer, "foobar %d\n", i)
@@ -1020,7 +1021,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
-		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+		require.Equal(t, fmt.Sprintf(`command stdout command=test stdout="foobar %d"`, i), event.Value)
 	}
 }
 
@@ -1070,7 +1071,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 			},
 			wantErr:    false,
-			wantLogMsg: "Skipping backup init SQL queries",
+			wantLogMsg: `Skipping backup init SQL queries as the backup tablet type is not in the provided list queries="[OPTIMIZE TABLE foo]" tablet_type=PRIMARY tablet_types="[replica rdonly]"`,
 		},
 		{
 			name: "missing timeout",
@@ -1105,7 +1106,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				}
 			},
 			wantErr:    false,
-			wantLogMsg: "Successfully completed init SQL queries: \"OPTIMIZE LOCAL TABLE foo\"",
+			wantLogMsg: `Successfully completed init SQL queries queries="[OPTIMIZE LOCAL TABLE foo]"`,
 		},
 		{
 			name: "successful execution with multiple queries in order",
@@ -1354,7 +1355,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		// Check that the appropriate log message was generated.
 		found := false
 		for _, event := range logger.Events {
-			if strings.Contains(event.Value, "Canceling init SQL work due to hitting the configured timeout") {
+			if event.Value == "Canceling init SQL work due to hitting the configured timeout or the backup itself having been canceled timeout=30s" {
 				found = true
 				break
 			}
@@ -1402,12 +1403,62 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 					for _, event := range memLogger.Events {
 						if strings.Contains(event.Value, tc.wantLogMsg) {
 							found = true
+							assert.Equal(t, logutilpb.Level_INFO, event.Level)
 							break
 						}
 					}
 					assert.True(t, found, "Expected log message containing %q, got events: %+v", tc.wantLogMsg, memLogger.Events)
 				}
 			}
+		})
+	}
+}
+
+func TestEnsureRestoredGTIDsMatchManifest(t *testing.T) {
+	manifestPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-10")
+	require.NoError(t, err)
+	localPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-10,00000000-0000-0000-0000-000000000002:1")
+	require.NoError(t, err)
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.NotNil(t, emptyPos.GTIDSet)
+	localOnlyPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000002:1")
+	require.NoError(t, err)
+	olderPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-5")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name     string
+		manifest replication.Position
+		executed replication.Position
+		// purged defaults to the manifest position.
+		purged  *replication.Position
+		wantSet bool
+	}{
+		{name: "matching", manifest: manifestPos, executed: manifestPos},
+		{name: "local GTID after restore", manifest: manifestPos, executed: localPos, wantSet: true},
+		{name: "empty manifest GTID set", manifest: emptyPos, executed: localOnlyPos, wantSet: true},
+		// Xtrabackup 2.4 restores gtid_purged as of the backup.
+		{name: "gtid_purged as of the backup", manifest: manifestPos, executed: manifestPos, purged: &olderPos, wantSet: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sqldb := fakesqldb.New(t)
+			t.Cleanup(sqldb.Close)
+			mysqld := NewFakeMysqlDaemon(sqldb)
+			t.Cleanup(mysqld.Close)
+			mysqld.GTIDPurged = tc.manifest
+			if tc.purged != nil {
+				mysqld.GTIDPurged = *tc.purged
+			}
+			mysqld.SetPrimaryPositionLocked(tc.executed)
+			mysqld.SetReplicationPositionPos = tc.manifest
+			if tc.wantSet {
+				mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}
+			}
+
+			params := &RestoreParams{Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
+			require.NoError(t, ensureRestoredGTIDsMatchManifest(t.Context(), &BackupManifest{Position: tc.manifest}, params))
+			require.NoError(t, mysqld.CheckSuperQueryList())
 		})
 	}
 }

@@ -18,7 +18,7 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -50,9 +50,9 @@ func OpenVTOrc() (db *sql.DB, err error) {
 func OpenVTOrcWithCache() (db *sql.DB, fromCache bool, err error) {
 	db, fromCache, err = sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if err == nil && !fromCache {
-		log.Info(fmt.Sprintf("Connected to vtorc backend: sqlite on %v", config.GetSQLiteDataFile()))
+		log.Info("Connected to vtorc backend: sqlite", slog.String("path", config.GetSQLiteDataFile()))
 		if err := initVTOrcDB(db); err != nil {
-			log.Error(fmt.Sprintf("Cannot initiate vtorc: %+v", err))
+			log.Error("Cannot initiate vtorc", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
@@ -73,7 +73,7 @@ func registerVTOrcDeployment(db *sql.DB) error {
 		DATETIME('now')
 	)`
 	if _, err := execInternal(db, query, ""); err != nil {
-		log.Error(fmt.Sprintf("Unable to write to vtorc_db_deployments: %+v", err))
+		log.Error("Unable to write to vtorc_db_deployments", slog.Any("error", err))
 		os.Exit(1)
 	}
 	return nil
@@ -100,7 +100,7 @@ func ClearVTOrcDatabase() {
 	db, _, _ := sqlutils.GetSQLiteDB(config.GetSQLiteDataFile())
 	if db != nil {
 		if err := initVTOrcDB(db); err != nil {
-			log.Error(fmt.Sprintf("Cannot re-initiate vtorc: %+v", err))
+			log.Error("Cannot re-initiate vtorc", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
@@ -158,7 +158,7 @@ func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error
 	}
 
 	if err = sqlutils.QueryRowsMap(db, query, onRow, argsArray...); err != nil {
-		log.Warn(err.Error())
+		log.Warn("Failed to query vtorc backend", slog.Any("error", err))
 	}
 
 	return err

@@ -702,8 +702,12 @@ func areTabletsAvailableToStreamFrom(ctx context.Context, req *vtctldatapb.Workf
 
 	wg.Wait()
 	if allErrors.HasErrors() {
-		ts.Logger().Error(allErrors.Error())
-		return allErrors.Error()
+		err := allErrors.Error()
+		ts.Logger().Error("no tablets available to stream from",
+			slog.String("keyspace", keyspace),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
+		return err
 	}
 	return nil
 }
@@ -1007,7 +1011,7 @@ func getOptionsJSON(workflowOptions *vtctldatapb.WorkflowOptions) (string, error
 // returning them.
 func defaultErrorHandler(logger logutil.Logger, message string, err error) (*[]string, error) {
 	werr := vterrors.Wrap(err, message)
-	logger.Error(werr)
+	logger.Error("workflow request failed", slog.Any("error", werr), slog.String("error_code", vterrors.Code(werr).String()))
 	return nil, werr
 }
 

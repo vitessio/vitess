@@ -19,7 +19,7 @@ limitations under the License.
 package servenv
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,7 +30,7 @@ import (
 func pprofInit() {
 	prof, err := parseProfileFlag(pprofFlag)
 	if err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("pprof: could not parse --pprof flag", slog.Any("error", err))
 		os.Exit(1)
 	}
 	if prof != nil {

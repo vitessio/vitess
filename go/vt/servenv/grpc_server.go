@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"net"
@@ -227,7 +226,7 @@ func createGRPCServer() {
 	if tlsEnabled {
 		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
 		if err != nil {
-			log.Error(fmt.Sprintf("Failed to log gRPC cert/key/ca: %v", err))
+			log.Error("Failed to load gRPC cert/key/ca", slog.Any("error", err))
 			os.Exit(1)
 		}
 
@@ -259,7 +258,7 @@ func createGRPCServer() {
 	// Note: For gRPC 1.0.0 it's sufficient to set the limit on the server only
 	// because it's not enforced on the client side.
 	msgSize := grpccommon.MaxMessageSize()
-	log.Info(fmt.Sprintf("Setting grpc max message size to %d", msgSize))
+	log.Info("Setting grpc max message size", slog.Int("max_message_size", msgSize))
 	opts = append(opts, grpc.MaxRecvMsgSize(msgSize))
 	opts = append(opts, grpc.MaxSendMsgSize(msgSize))
 
@@ -269,12 +268,12 @@ func createGRPCServer() {
 	}
 
 	if gRPCInitialConnWindowSize != 0 {
-		log.Info(fmt.Sprintf("Setting grpc server initial conn window size to %d", int32(gRPCInitialConnWindowSize)))
+		log.Info("Setting grpc server initial conn window size", slog.Int("initial_conn_window_size", int(int32(gRPCInitialConnWindowSize))))
 		opts = append(opts, grpc.InitialConnWindowSize(int32(gRPCInitialConnWindowSize)))
 	}
 
 	if gRPCInitialWindowSize != 0 {
-		log.Info(fmt.Sprintf("Setting grpc server initial window size to %d", int32(gRPCInitialWindowSize)))
+		log.Info("Setting grpc server initial window size", slog.Int("initial_window_size", int(int32(gRPCInitialWindowSize))))
 		opts = append(opts, grpc.InitialWindowSize(int32(gRPCInitialWindowSize)))
 	}
 
@@ -310,11 +309,11 @@ func interceptors() []grpc.ServerOption {
 	interceptors := &serverInterceptorBuilder{}
 
 	if gRPCAuth != "" {
-		log.Info(fmt.Sprintf("enabling auth plugin %v", gRPCAuth))
+		log.Info("enabling auth plugin", slog.String("auth_plugin", gRPCAuth))
 		pluginInitializer := GetAuthenticator(gRPCAuth)
 		authPluginImpl, err := pluginInitializer()
 		if err != nil {
-			log.Error(fmt.Sprintf("Failed to load auth plugin: %v", err))
+			log.Error("Failed to load auth plugin", slog.Any("error", err))
 			os.Exit(1)
 		}
 		authPlugin = authPluginImpl
@@ -363,11 +362,11 @@ func serveGRPC() (stopOrcaUpdater func()) {
 	}
 
 	// listen on the port
-	log.Info(fmt.Sprintf("Listening for gRPC calls on port %v", gRPCPort))
+	log.Info("Listening for gRPC calls on port", slog.Int("grpc_port", gRPCPort))
 
 	listener, err := Listen("tcp", net.JoinHostPort(gRPCBindAddress, strconv.Itoa(gRPCPort)))
 	if err != nil {
-		log.Error(fmt.Sprintf("Cannot listen on port %v for gRPC: %v", gRPCPort, err))
+		log.Error("Cannot listen on port for gRPC", slog.Int("grpc_port", gRPCPort), slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -385,7 +384,7 @@ func serveGRPC() (stopOrcaUpdater func()) {
 		// Serve returns ErrServerStopped when Stop or GracefulStop was called
 		// before it started; that is a clean shutdown, not a startup failure.
 		if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			log.Error(fmt.Sprintf("Failed to start grpc server: %v", err))
+			log.Error("Failed to start grpc server", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}()
@@ -408,7 +407,7 @@ func registerOrca() (stop func()) {
 		MinReportingInterval:  30 * time.Second,
 		ServerMetricsProvider: GRPCServerMetricsRecorder,
 	}); err != nil {
-		log.Error(fmt.Sprintf("Failed to register ORCA service: %v", err))
+		log.Error("Failed to register ORCA service", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -522,7 +521,7 @@ func (collector *serverInterceptorBuilder) AddUnary(u grpc.UnaryServerIntercepto
 
 // Build returns DialOptions to add to the grpc.Dial call
 func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
-	log.Info(fmt.Sprintf("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors)))
+	log.Info("Building interceptors", slog.Int("unary_interceptor_count", len(collector.unaryInterceptors)), slog.Int("stream_interceptor_count", len(collector.streamInterceptors)))
 	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
 	case 0:
 		return []grpc.ServerOption{}

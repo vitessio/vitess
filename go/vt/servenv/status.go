@@ -19,6 +19,7 @@ package servenv
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -251,7 +252,7 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
 		if _, ok := err.(net.Error); !ok {
-			log.Error(fmt.Sprintf("servenv: couldn't execute template: %v", err))
+			log.Error("servenv: couldn't execute template", slog.Any("error", err))
 		}
 	}
 }
@@ -300,7 +301,7 @@ func registerDebugBlockProfileRate() {
 		}
 		blockProfileRate = rate
 		runtime.SetBlockProfileRate(rate)
-		log.Info(fmt.Sprintf("Set block profile rate to: %d", rate))
+		log.Info("Set block profile rate", slog.Int("block_profile_rate", rate))
 		w.Header().Set("Content-Type", "text/plain")
 		io.WriteString(w, message)
 	})
@@ -328,7 +329,7 @@ func registerDebugMutexProfileFraction() {
 			message = fmt.Sprintf("Mutex profiling set to fraction %d", fraction)
 		}
 		runtime.SetMutexProfileFraction(fraction)
-		log.Info(fmt.Sprintf("Set mutex profiling fraction to: %d", fraction))
+		log.Info("Set mutex profiling fraction", slog.Int("mutex_profile_fraction", fraction))
 		w.Header().Set("Content-Type", "text/plain")
 		io.WriteString(w, message)
 	})
@@ -338,7 +339,7 @@ func init() {
 	var err error
 	hostname, err = os.Hostname()
 	if err != nil {
-		log.Error(fmt.Sprintf("os.Hostname: %v", err))
+		log.Error("os.Hostname failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 }

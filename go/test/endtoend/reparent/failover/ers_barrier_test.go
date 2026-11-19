@@ -76,11 +76,35 @@ func hasGTIDs(t *testing.T, tab *cluster.Vttablet, set, gtids string) bool {
 // Whether R1's restarted vttablet reconnects its receiver during the hold depends on the
 // revision under test; this control asserts neither outcome.
 func TestERSHeldByApplierBarriers(t *testing.T) {
+	holdERSAndRestartReplica(t, nil)
+}
+
+// holdERSAndRestartReplica runs TestERSHeldByApplierBarriers, and calls duringHold with R1
+// once R1's restarted vttablet answers tablet manager RPCs, while ERS still holds the shard
+// lock. duringHold must return well within the hold budget.
+func holdERSAndRestartReplica(t *testing.T, duringHold func(t *testing.T, r1 *cluster.Vttablet)) {
+	holdERS(t, nil, func(t *testing.T, ci *cluster.LocalProcessCluster, r1 *cluster.Vttablet, deadline time.Time) {
+		restartVttablet(t, r1, 0)
+		waitForTabletManager(t, ci, r1, deadline)
+		if duringHold != nil {
+			duringHold(t, r1)
+		}
+	})
+}
+
+// holdERS holds a real ERS as TestERSHeldByApplierBarriers describes. It calls prepare, if
+// not nil, once the cluster replicates and before it sets up the hold, and duringHold once
+// ERS has stopped R1's receiver and waits on R3 and R4. duringHold must return before the
+// deadline, when the hold budget ends.
+func holdERS(t *testing.T, prepare func(t *testing.T, ci *cluster.LocalProcessCluster), duringHold func(t *testing.T, ci *cluster.LocalProcessCluster, r1 *cluster.Vttablet, deadline time.Time)) {
 	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	teardownOnCleanup(t, ci)
 	tablets := ci.Keyspaces[0].Shards[0].Vttablets
 	p, r1, r3, r4 := tablets[0], tablets[1], tablets[2], tablets[3]
 	base := utils.ConfirmReplication(t, p, tablets[1:])
+	if prepare != nil {
+		prepare(t, ci)
+	}
 
 	utils.RunSQLs(t.Context(), t, []string{
 		"stop replica",
@@ -134,9 +158,7 @@ func TestERSHeldByApplierBarriers(t *testing.T) {
 		assert.Positive(c, positionWaits(t, r4), "ERS does not wait on R4")
 	}, time.Until(deadline), 100*time.Millisecond)
 	require.Zero(t, positionWaits(t, r1), "ERS waits on R1")
-
-	restartVttablet(t, r1, 0)
-	waitForTabletManager(t, ci, r1, deadline)
+	duringHold(t, ci, r1, deadline)
 
 	select {
 	case <-ersDone:

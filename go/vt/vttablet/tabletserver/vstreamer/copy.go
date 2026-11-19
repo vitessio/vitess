@@ -81,7 +81,11 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 	go func() {
 		uvs.stopPos = replication.Position{} // reset stopPos which was potentially set during fastforward
 		startPos := replication.EncodePosition(uvs.pos)
-		vs := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", uvs.options)
+		vs, err := uvs.newStartupVStreamer(ctx, startPos, "", uvs.send2, "catchup", uvs.options)
+		if err != nil {
+			errch <- err
+			return
+		}
 		uvs.setVs(vs)
 		errch <- vs.Stream()
 		uvs.setVs(nil)
@@ -96,8 +100,8 @@ func (uvs *uvstreamer) catchup(ctx context.Context) error {
 		sbm := uvs.getReplicationLagSeconds()
 		if sbm <= seconds {
 			log.Info("Canceling context because replication lag is within maximum",
-				slog.Int64("lag_seconds", sbm),
-				slog.Int64("max_lag_seconds", seconds),
+				slog.Int64("replication_lag_seconds", sbm),
+				slog.Int64("max_replication_lag_seconds", seconds),
 			)
 			cancel()
 			// Make sure vplayer returns before returning.
@@ -128,7 +132,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		FieldEvent: fieldEvent,
 	}}
 	log.V(2).Info("Sending field event",
-		slog.Any("field_event", lazyString(func() string { return fmt.Sprint(fieldEvent) })),
+		slog.Any("field_event", log.LazyString(func() string { return fmt.Sprint(fieldEvent) })),
 		slog.String("gtid", gtid),
 	)
 	uvs.send(evs)
@@ -336,7 +340,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
-		log.V(2).Info("NewLastPK", slog.Any("last_pk", lazyString(func() string { return fmt.Sprint(qrLastPK) })))
+		log.V(2).Info("NewLastPK", slog.Any("last_pk", log.LazyString(func() string { return fmt.Sprint(qrLastPK) })))
 		return nil
 	}, uvs.options)
 	if err != nil {
@@ -374,7 +378,10 @@ func (uvs *uvstreamer) fastForward(stopPos string) error {
 		slog.String("stop_position", stopPos),
 	)
 	uvs.stopPos, _ = replication.DecodePosition(stopPos)
-	vs := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", uvs.options)
+	vs, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", uvs.options)
+	if err != nil {
+		return err
+	}
 	uvs.setVs(vs)
 	return vs.Stream()
 }

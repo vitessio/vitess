@@ -19,6 +19,7 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
@@ -67,39 +68,43 @@ func requiredPositionForRecovery(tablet *topodatapb.Tablet, logger logutil.Logge
 	// Skip the requirement when the analyzed tablet is not the primary. Its
 	// stored set does not hold the primary's transactions.
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		logger.Warningf("required position: none, the analyzed tablet %s is not the primary and VTOrc has no stored GTID set for the failed primary, ERS runs without the requirement", topoproto.TabletAliasString(tablet.Alias))
+		logger.Warn("required position: none, the analyzed tablet is not the primary and VTOrc has no stored GTID set for the failed primary, ERS runs without the requirement",
+			slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 		return replication.Position{}, nil
 	}
 
 	durability, err := inst.GetDurabilityPolicy(tablet.Keyspace)
 	if err != nil {
-		logger.Errorf("required position: cannot read the durability policy, aborting ERS: %v", err)
+		logger.Error("required position: cannot read the durability policy, aborting ERS", slog.String("keyspace", tablet.Keyspace), slog.Any("error", err))
 		return replication.Position{}, vterrors.Wrapf(err, "cannot read the durability policy of keyspace %s", tablet.Keyspace)
 	}
 
 	if !policy.HasSemiSync(durability) {
-		logger.Infof("required position: none, the durability policy has no semi-sync")
+		logger.Info("required position: none, the durability policy has no semi-sync")
 		return replication.Position{}, nil
 	}
 
 	position, err := storedPrimaryPosition(tablet.Alias)
 	if errors.Is(err, errStoredSetNotMySQLGTID) {
-		logger.Warningf("required position: none, %v, ERS runs without the requirement", err)
+		logger.Warn("required position: none, ERS runs without the requirement", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)), slog.Any("error", err))
 		return replication.Position{}, nil
 	}
 
 	if err != nil {
-		logger.Errorf("required position: aborting ERS: %v", err)
+		logger.Error("required position: aborting ERS",
+			slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return replication.Position{}, err
 	}
 
 	// Run ERS without the requirement when VTOrc has no stored set. A VTOrc that
 	// restarted after the primary failed can never poll it.
 	if position.IsZero() {
-		logger.Warningf("required position: none, VTOrc has no stored GTID set for the primary, ERS runs without the requirement")
+		logger.Warn("required position: none, VTOrc has no stored GTID set for the primary, ERS runs without the requirement", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 		return replication.Position{}, nil
 	}
 
-	logger.Infof("required position: %s", position.String())
+	logger.Info("required position", slog.String("position", replication.EncodePosition(position)))
 	return position, nil
 }

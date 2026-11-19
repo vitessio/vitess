@@ -1516,6 +1516,75 @@ func TestWorkflowDelete(t *testing.T) {
 	}
 }
 
+// TestWorkflowDeleteAfterConcurrentSwitchTraffic confirms that WorkflowDelete
+// refuses to delete a workflow whose writes were switched while it waited for
+// the workflow lock, which SwitchTraffic holds while it switches traffic.
+func TestWorkflowDeleteAfterConcurrentSwitchTraffic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tables := []string{"t1", "t1_2", "t1_3"}
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	t.Cleanup(env.close)
+	env.tmc.schema = make(map[string]*tabletmanagerdatapb.SchemaDefinition, len(tables))
+	for _, table := range tables {
+		env.tmc.schema[table] = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   table,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", table),
+			}},
+		}
+	}
+
+	// Hold the workflow lock the way SwitchTraffic does while it switches traffic.
+	lockName := fmt.Sprintf("%s/%s", targetKeyspace.KeyspaceName, workflowName)
+	_, unlock, err := env.ts.LockName(ctx, lockName, "WorkflowSwitchTraffic")
+	require.NoError(t, err)
+	lockNameCalls := env.topoFactory.GetCallStats().Counts()["LockName"]
+
+	type deleteResult struct {
+		resp *vtctldatapb.WorkflowDeleteResponse
+		err  error
+	}
+	results := make(chan deleteResult, 1)
+	go func() {
+		resp, err := env.ws.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+			Keyspace: targetKeyspace.KeyspaceName,
+			Workflow: workflowName,
+		})
+		results <- deleteResult{resp: resp, err: err}
+	}()
+
+	// Wait until WorkflowDelete waits for the workflow lock.
+	assert.Eventually(t, func() bool {
+		return env.topoFactory.GetCallStats().Counts()["LockName"] > lockNameCalls
+	}, 30*time.Second, 10*time.Millisecond)
+
+	// Switch writes, then release the lock as SwitchTraffic does when it finishes.
+	env.updateTableRoutingRules(t, ctx, allTabletTypes, tables,
+		sourceKeyspace.KeyspaceName, targetKeyspace.KeyspaceName, targetKeyspace.KeyspaceName)
+	unlock(&err)
+	require.NoError(t, err)
+
+	res := <-results
+	require.ErrorIs(t, res.err, ErrWorkflowDeleteWritesSwitched)
+	require.Nil(t, res.resp)
+
+	// The routing rules that send traffic to the target are still in place.
+	rr, err := env.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, rr.Rules)
+}
+
 func TestMoveTablesTrafficSwitching(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()

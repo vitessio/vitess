@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -27,6 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -143,6 +147,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 		}
 		originalType = tablet.Type
+		// No deferral starts while the backup holds the action lock, but the
+		// watcher can end one from a sample taken before the backup: decide the
+		// cleanup now.
+		deferred := tm.tmState.replicationInitPending()
 		// A primary's semi-sync is restored from the policy in effect now, so a
 		// policy that can't be read refuses the backup before the type changes.
 		// VTOrc reconciles a later policy change once the primary serves again.
@@ -161,7 +169,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 					err = vterrors.Wrap(err, "backup completed, but tablet restoration failed")
 					retErr = err
 				}
-				l.Errorf("%s", err)
+				l.Error("Failed to restore tablet after backup", slog.Any("error", err))
 			}
 			// Each restore step gets a fresh context independent of the RPC. This
 			// bounds semi-sync restoration and the primary topology update;
@@ -198,12 +206,17 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
+			// The steps below run while the backup holds the action lock, so a
+			// MySQL or topology call that does not return must not keep it.
+			replCtx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+			defer cancel()
+
 			// Find the correct primary tablet and set the replication source,
 			// since the primary could have changed while we executed the backup which can
 			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
+			tabletInfo, err := tm.TopoServer.GetTablet(replCtx, tablet.Alias)
 			if err != nil {
-				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
+				l.Error("Failed to fetch updated tablet info", slog.Any("error", err))
 				return
 			}
 
@@ -212,29 +225,52 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
+			shardPrimary, err := topotools.GetShardPrimaryForTablet(replCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
 				return
 			}
 
-			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
+			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(replCtx, tablet.Keyspace)
 			if err != nil {
-				l.Errorf("Failed to get durability policy, error: %v", err)
+				l.Error("Failed to get durability policy", slog.String("keyspace", tablet.Keyspace), slog.Any("error", err))
 				return
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityName)
 			if err != nil {
-				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+				l.Error("Failed to get durability with name", slog.String("durability_policy", durabilityName), slog.Any("error", err))
 			}
 
 			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
+			semiSyncAction, err := tm.convertBoolToSemiSyncAction(replCtx, isSemiSync)
 			if err != nil {
-				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+				l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				return
 			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
-				l.Errorf("Failed to set replication source, error: %v", err)
+			// A deferred replication initialization leaves the source to VTOrc,
+			// a reparent or an operator, which choose it under the shard lock.
+			// This does not hold it, so it only restores the semi-sync role that
+			// entering BACKUP turned off, which can restart a running receiver
+			// from its configured source. It leaves semi-sync off on a receiver
+			// that runs from a source other than the shard primary, which may be
+			// the primary a reparent replaces.
+			if deferred {
+				status, err := tm.MysqlDaemon.ReplicationStatus(replCtx)
+				if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+					l.Error("Leaving semi-sync off: cannot read the replication status", slog.Any("error", err))
+					return
+				}
+				// A receiver that is connecting acknowledges its source once it connects.
+				if err == nil && status.IOState != replication.ReplicationStateStopped && (status.SourceHost != shardPrimary.MysqlHostname || status.SourcePort != shardPrimary.MysqlPort) {
+					l.Info("Leaving semi-sync off: replication does not run from the shard primary", slog.String("source", netutil.JoinHostPort(status.SourceHost, status.SourcePort)))
+					return
+				}
+				if err := tm.fixSemiSyncAndReplication(replCtx, tabletInfo.Type, semiSyncAction); err != nil {
+					l.Error("Failed to restore semi-sync", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+				}
+				return
+			}
+			if err := tm.setReplicationSourceLocked(replCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+				l.Error("Failed to set replication source", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}()
 
@@ -337,7 +373,7 @@ func (tm *TabletManager) endBackup(backupMode string) {
 func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 	timeout, ok, err := protoutil.DurationFromProto(tm)
 	if err != nil {
-		l.Errorf("failed to parse mysql shutdown timeout, falling back to default: %v", err)
+		l.Error("failed to parse mysql shutdown timeout, falling back to default", slog.Any("error", err))
 		return mysqlShutdownTimeout
 	}
 	if !ok {

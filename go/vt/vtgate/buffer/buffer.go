@@ -29,6 +29,7 @@ package buffer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -88,10 +89,13 @@ func init() {
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL
 func CausedByFailover(err error) bool {
-	log.V(2).Info(fmt.Sprintf("Checking error (type: %T) if it is caused by a failover. err: %v", err, err))
+	log.V(2).Info("Checking error if it is caused by a failover",
+		slog.String("error_type", fmt.Sprintf("%T", err)),
+		slog.Any("error", err),
+		slog.String("error_code", vterrors.Code(err).String()))
 	reason, isFailover := isFailoverError(err)
 	if isFailover {
-		log.Info("CausedByFailover signalling failover for reason: " + reason)
+		log.Info("CausedByFailover signalling failover", slog.String("reason", reason))
 	}
 	return isFailover
 }
@@ -207,7 +211,7 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 }
 
 func (b *Buffer) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
-	log.Info(fmt.Sprintf("Keyspace Event received for keyspace %v", ksevent.Keyspace))
+	log.Info("Keyspace Event received", slog.String("keyspace", ksevent.Keyspace))
 	for _, shard := range ksevent.Shards {
 		sb := b.getOrCreateBuffer(shard.Target.Keyspace, shard.Target.Shard)
 		if sb != nil {

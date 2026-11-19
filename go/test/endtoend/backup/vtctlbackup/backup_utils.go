@@ -1405,7 +1405,7 @@ func terminateBackup(t *testing.T, alias string) {
 }
 
 func terminateRestore(t *testing.T) {
-	stopRestoreMsg := "Copying file 10"
+	stopRestoreMsg := "file_name=10 attempt="
 	if currentSetupType == XtraBackup {
 		stopRestoreMsg = "Restore: Preparing"
 	}

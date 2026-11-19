@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,7 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 // TestExecuteSuperQueryListMulti checks that an entry of the list may hold
@@ -134,18 +133,15 @@ func TestExecuteSuperQueryListMulti(t *testing.T) {
 // its password redacted, like the exec log on the happy path.
 func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+	t.Cleanup(testMysqld.Close)
 
-	// Capture the structured log output.
-	var logBuf bytes.Buffer
-	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
-	defer log.SwapLogger(oldLogger)
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	query := `START xxx USER = 'vt_repl', PASSWORD = 'secret'`
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
@@ -161,7 +157,7 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
+	t.Cleanup(cancel)
 	err := testMysqld.ExecuteSuperQueryList(ctx, []string{query})
 	// The fake returns the blocked query's result successfully once the kill
 	// releases it, so this lands in the "ExecuteFetch() may have succeeded
@@ -169,10 +165,96 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	// the kill callback fires, so reaching here proves the kill path ran.
 	require.NoError(t, err)
 
-	logs := logBuf.String()
-	assert.Contains(t, logs, "killing connID")
-	assert.Contains(t, logs, `PASSWORD = '****'`)
-	assert.NotContains(t, logs, "secret")
+	redacted := `START xxx USER = 'vt_repl', PASSWORD = '****'`
+	assert.Equal(t, redacted, logs.Record(t, "exec")["query"])
+	killed := logs.Record(t, "Mysqld.executeWithContext(): killing connection due to timeout of query")
+	assert.Equal(t, redacted, killed["query"])
+	assert.Contains(t, killed, "connection_id")
+	assert.NotContains(t, logs.String(), "secret")
+}
+
+// TestExecuteFetchDirectContextTimeoutRedactsQuery verifies that the kill
+// path of executeFetchDirectContext redacts the password in the logged query.
+func TestExecuteFetchDirectContextTimeoutRedactsQuery(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+
+	query := `START xxx USER = 'vt_repl', PASSWORD = 'secret'`
+	db.AddQuery(query, &sqltypes.Result{})
+	unblock := make(chan struct{})
+	db.SetBeforeFunc(query, func() {
+		<-unblock
+	})
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		close(unblock)
+	})
+
+	conn, err := testMysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	t.Cleanup(cancel)
+	_, _ = testMysqld.executeFetchDirectContext(ctx, conn, query)
+
+	killed := logs.Record(t, "Mysqld.executeFetchDirectContext(): killing connection due to timeout of query")
+	assert.Equal(t, `START xxx USER = 'vt_repl', PASSWORD = '****'`, killed["query"])
+	assert.Contains(t, killed, "connection_id")
+	assert.NotContains(t, logs.String(), "secret")
+}
+
+// TestSuperQueryListRedactsPassword verifies that the password in a query is
+// redacted in the query and the error of the query failed line, on a pooled
+// and on a direct connection, and in the query of the direct-connection exec
+// line.
+func TestSuperQueryListRedactsPassword(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+
+	const password = "redaction-sentinel-5e1f"
+	query := `START xxx USER = 'vt_repl', PASSWORD = '` + password + `'`
+	redacted := `START xxx USER = 'vt_repl', PASSWORD = '****'`
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	db.AddRejectedQuery(query, errors.New("rejected"))
+
+	t.Run("pooled connection", func(t *testing.T) {
+		logs := logtest.Capture(t, slog.LevelInfo)
+		require.Error(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{query}))
+
+		failed := logs.Record(t, "query failed")
+		assert.Equal(t, redacted, failed["query"])
+		assert.Contains(t, failed["error"], redacted)
+		assert.NotContains(t, logs.String(), password)
+	})
+
+	t.Run("direct connection", func(t *testing.T) {
+		conn, err := testMysqld.GetDbaConnection(t.Context())
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+
+		logs := logtest.Capture(t, slog.LevelInfo)
+		require.Error(t, testMysqld.executeSuperQueryListDirectContext(t.Context(), conn, []string{query}))
+
+		assert.Equal(t, redacted, logs.Record(t, "exec")["query"])
+		failed := logs.Record(t, "query failed")
+		assert.Equal(t, redacted, failed["query"])
+		assert.Contains(t, failed["error"], redacted)
+		assert.NotContains(t, logs.String(), password)
+	})
 }
 
 // TestExecuteSuperQueryListTaintedDiscardsConnection verifies that operator-supplied SQL

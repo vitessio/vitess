@@ -17,7 +17,7 @@ limitations under the License.
 package schema
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 
@@ -96,7 +96,7 @@ func schemazHandler(tables map[string]*Table, w http.ResponseWriter, r *http.Req
 	for _, Value := range sorter.rows {
 		envelope.Table = Value
 		if err := schemazTmpl.Execute(w, envelope); err != nil {
-			log.Error(fmt.Sprintf("schemaz: couldn't execute template: %v", err))
+			log.Error("schemaz: couldn't execute template", slog.Any("error", err))
 		}
 	}
 }
