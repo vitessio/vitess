@@ -49,6 +49,7 @@ var Cases = []TestCase{
 	{Run: JSONNumberComparison},
 	{Run: JSONStoredNumbers, Schema: JSONStoredNumbers_Schema},
 	{Run: JSONStringComparison},
+	{Run: JSONObjectComparison},
 	{Run: JSONDoubleConversion},
 	{Run: JSONTextDoubles},
 	{Run: BitwiseOperatorsUnary},
@@ -1004,6 +1005,37 @@ func JSONStringComparison(yield Query) {
 		for _, rhs := range strings {
 			yield(fmt.Sprintf("CAST('%s' AS JSON) = CAST('%s' AS JSON)", lhs, rhs), nil, false)
 			yield(fmt.Sprintf("CAST('%s' AS JSON) < CAST('%s' AS JSON)", lhs, rhs), nil, false)
+		}
+	}
+}
+
+// JSONObjectComparison pins how JSON objects compare. MySQL orders object
+// members by key length first and then by bytes, so the member order — and
+// therefore the comparison result — depends on key lengths, not just on the
+// byte order of the keys: json_object('aa', 1, 'b', 2) is not less than
+// json_object('aa', 2, 'b', 1), because the shorter key 'b' is compared
+// first and holds 2 versus 1, even though 'aa' sorts before 'b' byte-wise.
+// MySQL then walks the members in that order, comparing each member's key
+// and then its value before moving to the next member, so a value difference
+// on an early member decides the comparison even when a later key differs.
+func JSONObjectComparison(yield Query) {
+	objects := []string{
+		`JSON_OBJECT('aa', 1, 'b', 2)`,
+		`JSON_OBJECT('aa', 2, 'b', 1)`,
+		`JSON_OBJECT('b', 2, 'aa', 1)`,
+		`CAST('{"aa": 1, "b": 2, "ccc": {"dd": 4, "e": 5}}' AS JSON)`,
+		`CAST('{"aa": 1, "b": 2, "ccc": {"e": 5, "dd": 4}}' AS JSON)`,
+		`JSON_OBJECT('aa', 1, 'b', 2, 'ccc', CAST('{"dd": 4, "e": 5}' AS JSON))`,
+		`CAST('{"a": 2, "c": 1}' AS JSON)`,
+		`CAST('{"a": 1, "d": 1}' AS JSON)`,
+		`CAST('{"b": 2, "c": 0, "zz": 0}' AS JSON)`,
+		`CAST('{"b": 1, "d": 0, "aa": 0}' AS JSON)`,
+	}
+
+	for _, lhs := range objects {
+		for _, rhs := range objects {
+			yield(fmt.Sprintf("%s = %s", lhs, rhs), nil, false)
+			yield(fmt.Sprintf("%s < %s", lhs, rhs), nil, false)
 		}
 	}
 }

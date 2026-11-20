@@ -380,7 +380,7 @@ func TestMarshalJSONToSQL(t *testing.T) {
 		{
 			name:     `complex {"a":"b","c":"d","ab":"abc","bc":["x","y"]}`,
 			data:     []byte{0, 4, 0, 60, 0, 32, 0, 1, 0, 33, 0, 1, 0, 34, 0, 2, 0, 36, 0, 2, 0, 12, 38, 0, 12, 40, 0, 12, 42, 0, 2, 46, 0, 97, 99, 97, 98, 98, 99, 1, 98, 1, 100, 3, 97, 98, 99, 2, 0, 14, 0, 12, 10, 0, 12, 12, 0, 1, 120, 1, 121},
-			expected: "JSON_OBJECT(_utf8mb4'a', _utf8mb4'b', _utf8mb4'ab', _utf8mb4'abc', _utf8mb4'bc', JSON_ARRAY(_utf8mb4'x', _utf8mb4'y'), _utf8mb4'c', _utf8mb4'd')",
+			expected: "JSON_OBJECT(_utf8mb4'a', _utf8mb4'b', _utf8mb4'c', _utf8mb4'd', _utf8mb4'ab', _utf8mb4'abc', _utf8mb4'bc', JSON_ARRAY(_utf8mb4'x', _utf8mb4'y'))",
 		},
 		{
 			name:     `array ["here"]`,
