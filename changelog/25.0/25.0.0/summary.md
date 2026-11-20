@@ -65,6 +65,7 @@
         - [Query timeout for state-changing statements on the streaming path](#vttablet-stream-query-timeout)
         - [Query rules now apply to queries on the streaming path](#vttablet-rules-apply-to-streaming)
         - [New `--demote-primary-lock-wait-timeout` flag](#vttablet-demote-primary-lock-wait-timeout)
+        - [New `--full-status-consolidation-timeout` flag](#vttablet-full-status-consolidation-timeout)
         - [Schema engine table-count limit is now configurable](#vttablet-schema-max-table-count)
         - [Replicas are placed in a crash-safe state before shutdown](#vttablet-replica-crash-safe-shutdown)
         - [Skip MySQL version check when restoring from a mysql-shell backup](#vttablet-mysql-shell-restore-skip-version-check)
@@ -760,6 +761,14 @@ A new VTTablet flag, `--demote-primary-lock-wait-timeout` (default `0`, disabled
 When disabled (the default), demotion behavior is unchanged and the wait is unbounded.
 
 See [#20285](https://github.com/vitessio/vitess/pull/20285) for details.
+
+#### <a id="vttablet-full-status-consolidation-timeout"/>New `--full-status-consolidation-timeout` flag</a>
+
+A new VTTablet flag, `--full-status-consolidation-timeout` (default `0`, off), lets concurrent `FullStatus` RPCs on a tablet share one in-flight MySQL collection, bounded by the flag rather than by any one caller's deadline. Each caller's own deadline still applies, so a caller with a longer deadline than the flag fails when the flag expires. A call can also join a collection that started before it, though never one from before a completed tablet action. With the default, each RPC collects on its own deadline, as before.
+
+In both modes, when a `FullStatus` query is cancelled or times out, the tablet now closes its MySQL connection straight away and kills the query in the background. Before, `SHOW REPLICA STATUS`, `SHOW BINARY LOG STATUS` and the replication configuration read could not be cancelled, so a stalled read held its DBA pool connection until MySQL answered, and the other `FullStatus` queries waited up to 5s for the kill before closing. A cancelled query shows up in MySQL's `Aborted_clients`. If MySQL is stuck in a wait that `KILL` cannot interrupt, such as `SHOW BINARY LOG STATUS` waiting on the binary log lock, each cancelled query's server thread remains until that wait ends, so these threads are no longer limited by `--dba-pool-size`.
+
+See [#21495](https://github.com/vitessio/vitess/pull/21495) for details.
 
 #### <a id="vttablet-schema-max-table-count"/>Schema engine table-count limit is now configurable</a>
 
