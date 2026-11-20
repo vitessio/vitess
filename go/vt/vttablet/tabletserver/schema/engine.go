@@ -350,6 +350,68 @@ func (se *Engine) MakeNonPrimary() {
 	}
 }
 
+// sequenceReleaseTimeout bounds how long ReleaseSequenceCaches can delay a
+// demotion or a shutdown.
+const sequenceReleaseTimeout = 5 * time.Second
+
+// ReleaseSequenceCaches returns the unused part of each cached sequence range to
+// its backing table, and then clears the cache. Without this, a primary that
+// stops serving skips every value left in its cache, and the next primary
+// continues after the end of that range.
+//
+// It must be called after all transactions have completed and before MySQL is
+// made read-only. The write is conditional on next_id still being at the end of
+// the cached range, so it never moves a sequence that another writer advanced.
+// On failure, the unused values are skipped as before.
+func (se *Engine) ReleaseSequenceCaches() {
+	se.mu.Lock()
+	if !se.isOpen {
+		se.mu.Unlock()
+		return
+	}
+	var sequences []*Table
+	for _, t := range se.tables {
+		if t.SequenceInfo != nil {
+			sequences = append(sequences, t)
+		}
+	}
+	se.mu.Unlock()
+	if len(sequences) == 0 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), sequenceReleaseTimeout)
+	defer cancel()
+	for _, t := range sequences {
+		if err := se.releaseSequenceCache(ctx, t); err != nil {
+			log.Warn(fmt.Sprintf("Could not return unused cached values of sequence %s; they will be skipped: %v", t.Name.String(), err))
+		}
+	}
+}
+
+func (se *Engine) releaseSequenceCache(ctx context.Context, t *Table) error {
+	seq := t.SequenceInfo
+	seq.Lock()
+	defer seq.Unlock()
+	nextVal, lastVal := seq.NextVal, seq.LastVal
+	seq.NextVal, seq.LastVal = 0, 0
+	if nextVal == 0 || nextVal >= lastVal {
+		return nil
+	}
+
+	conn, err := se.conns.Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+	query := fmt.Sprintf("update %s set next_id = %d where id = 0 and next_id = %d", sqlparser.String(t.Name), nextVal, lastVal)
+	if _, err := conn.Conn.Exec(ctx, query, 0, false); err != nil {
+		return err
+	}
+	log.Info(fmt.Sprintf("Returned unused cached values [%d, %d) of sequence %s", nextVal, lastVal, t.Name.String()))
+	return nil
+}
+
 // MakePrimary tells the schema engine that the current tablet is now the primary,
 // so it can read and write to the MySQL instance for schema-tracking.
 func (se *Engine) MakePrimary(serving bool) {
