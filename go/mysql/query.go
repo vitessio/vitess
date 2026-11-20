@@ -475,13 +475,16 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		result.Fields[i] = &fields[i]
 
 		if wantfields {
-			if err := c.readColumnDefinition(result.Fields[i], i); err != nil {
-				return nil, false, 0, err
-			}
+			err = c.readColumnDefinition(result.Fields[i], i)
 		} else {
-			if err := c.readColumnDefinitionType(result.Fields[i], i); err != nil {
-				return nil, false, 0, err
-			}
+			err = c.readColumnDefinitionType(result.Fields[i], i)
+		}
+		if err != nil {
+			// The rest of the result set is still unread on the socket, so
+			// the next command on this connection would read it as its own
+			// response. Close the connection rather than leave it out of sync.
+			c.Close()
+			return nil, false, 0, err
 		}
 	}
 
@@ -566,6 +569,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy, nil)
 		if err != nil {
 			c.recycleReadPacket()
+			// The rest of the result set is still unread on the socket, and
+			// after a row we can't decode we don't trust it enough to drain
+			// it. Close the connection so the leftover packets aren't read as
+			// the next query's response.
+			c.Close()
 			return nil, false, 0, err
 		}
 		result.Rows = append(result.Rows, row)

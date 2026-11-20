@@ -994,3 +994,89 @@ func TestIsZeroDateTime(t *testing.T) {
 		})
 	}
 }
+
+// TestReadQueryResultClosesOnMalformedPacket checks that ReadQueryResult closes
+// the connection when it can't decode a column definition or a row. The rest of
+// the result set is left unread on the socket, so a connection that stayed open
+// would hand those packets to the next query as its response.
+func TestReadQueryResultClosesOnMalformedPacket(t *testing.T) {
+	fields := []*querypb.Field{{Name: "c", Type: querypb.Type_VARCHAR}}
+	goodRow := []sqltypes.Value{sqltypes.NewVarChar("abc")}
+
+	writeRaw := func(t *testing.T, c *Conn, payload []byte) {
+		data, pos := c.startEphemeralPacketWithHeader(len(payload))
+		copy(data[pos:], payload)
+		require.NoError(t, c.writeEphemeralPacket())
+	}
+
+	tests := []struct {
+		name  string
+		write func(t *testing.T, sConn *Conn)
+	}{
+		{
+			name: "malformed row",
+			write: func(t *testing.T, sConn *Conn) {
+				require.NoError(t, sConn.writeFields(&sqltypes.Result{Fields: fields}))
+				require.NoError(t, sConn.writeRow(goodRow))
+				// A length prefix of 10 followed by only 3 bytes.
+				writeRaw(t, sConn, []byte{10, 'a', 'b', 'c'})
+				require.NoError(t, sConn.writeRow(goodRow))
+				require.NoError(t, sConn.writeEndResult(false, 0, 0, 0))
+			},
+		},
+		{
+			name: "malformed column definition",
+			write: func(t *testing.T, sConn *Conn) {
+				require.NoError(t, sConn.sendColumnCount(2))
+				// The catalog claims 3 bytes but the packet ends after 1.
+				writeRaw(t, sConn, []byte{3, 'd'})
+				require.NoError(t, sConn.writeColumnDefinition(fields[0]))
+				if sConn.Capabilities&CapabilityClientDeprecateEOF == 0 {
+					require.NoError(t, sConn.writeEOFPacket(sConn.StatusFlags, 0))
+				}
+				require.NoError(t, sConn.writeRow([]sqltypes.Value{goodRow[0], goodRow[0]}))
+				require.NoError(t, sConn.writeEndResult(false, 0, 0, 0))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		for _, deprecateEOF := range []bool{false, true} {
+			for _, wantfields := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/deprecateEOF=%v/wantfields=%v", tt.name, deprecateEOF, wantfields), func(t *testing.T) {
+					listener, sConn, cConn := createSocketPair(t)
+					t.Cleanup(func() {
+						listener.Close()
+						sConn.Close()
+						cConn.Close()
+					})
+
+					var caps uint32
+					if deprecateEOF {
+						caps = CapabilityClientDeprecateEOF
+					}
+					sConn.Capabilities = caps
+					cConn.Capabilities = caps
+
+					// Queue the whole response before the client asks for it.
+					// It's small enough to sit in the socket buffer, and the
+					// client's COM_QUERY is sequence 0, so the reply starts at 1.
+					sConn.sequence = 1
+					tt.write(t, sConn)
+
+					_, err := cConn.ExecuteFetch("select c from t", FETCH_ALL_ROWS, wantfields)
+					require.Error(t, err)
+					sqlErr, ok := err.(*sqlerror.SQLError)
+					require.True(t, ok, "expected a SQLError, got %T: %v", err, err)
+					assert.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
+					assert.True(t, cConn.IsClosed(), "connection must be closed after a malformed packet")
+
+					// The next query fails with a connection error, which is
+					// what makes the pools throw the connection away.
+					_, err = cConn.ExecuteFetch("select 1", FETCH_ALL_ROWS, false)
+					assert.True(t, sqlerror.IsConnErr(err), "expected a connection error, got %v", err)
+				})
+			}
+		}
+	}
+}
