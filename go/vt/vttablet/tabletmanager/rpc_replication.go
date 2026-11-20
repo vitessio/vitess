@@ -665,9 +665,14 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 		slog.Bool("was_read_only", wasReadOnly),
 	)
 
-	wasPrimaryDemoted := tm.tmState.IsPrimaryDemoted()
 	stoppedServing := false
-	if wasPrimary {
+	// If we are a primary tablet and not yet read-only, stop accepting new
+	// queries and wait for in-flight queries to complete. If we are not primary,
+	// or if we are already read-only, there's no need to stop the queryservice
+	// in order to ensure the guarantee we are being asked to provide, which is
+	// that no writes are occurring.
+	if wasPrimary && !wasReadOnly {
+		wasPrimaryDemoted := tm.tmState.IsPrimaryDemoted()
 		tm.tmState.SetPrimaryDemoted(true)
 		defer func() {
 			if finalErr != nil && revertPartialFailure {
@@ -680,14 +685,7 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 				}
 			}
 		}()
-	}
 
-	// If we are a primary tablet and not yet read-only, stop accepting new
-	// queries and wait for in-flight queries to complete. If we are not primary,
-	// or if we are already read-only, there's no need to stop the queryservice
-	// in order to ensure the guarantee we are being asked to provide, which is
-	// that no writes are occurring.
-	if wasPrimary && !wasReadOnly {
 		// Note that this may block until the transaction timeout if clients
 		// don't finish their transactions in time. Even if some transactions
 		// have to be killed at the end of their timeout, this will be

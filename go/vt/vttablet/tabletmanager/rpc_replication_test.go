@@ -1041,13 +1041,93 @@ func TestDemotePrimaryFailedStopDoesNotRevertServing(t *testing.T) {
 	require.True(t, tm.QueryServiceControl.IsServing())
 
 	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "simulated failure stopping query service")
+	require.ErrorContains(t, err, "simulated failure stopping query service")
 
 	// SetServingType(true) should NOT have been invoked during revert because
 	// SetServingType(false) never succeeded.
 	assert.False(t, servingTrueAttempted.Load(), "SetServingType(serving=true) must not be called during revert if SetServingType(serving=false) failed")
 	// isPrimaryDemoted should be restored to its initial state (false).
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
+}
+
+// TestDemotePrimaryReadOnlyServingFailedDemotePreservesServing tests that a serving primary
+// whose MySQL is already read_only does not mark isPrimaryDemoted, allowing concurrent
+// topology refreshes to preserve serving status, and remains serving when a failed demotion reverts.
+func TestDemotePrimaryReadOnlyServingFailedDemotePreservesServing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = true // MySQL is already read_only
+
+	superReadOnlyBlocked := make(chan struct{})
+	unblockSuperReadOnly := make(chan struct{})
+	fakeDaemon := &fakeMysqlDaemonDemoteRace{
+		FakeMysqlDaemon: fakeDb,
+		semiSyncBlocked: false,
+		setSuperReadOnlyHook: func(ctx context.Context, on bool) error {
+			if on {
+				close(superReadOnlyBlocked)
+				select {
+				case <-unblockSuperReadOnly:
+					return errors.New("simulated failure setting super_read_only")
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return nil
+		},
+	}
+	tm.MysqlDaemon = fakeDaemon
+
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	var (
+		demoteFinished atomic.Bool
+		demoteErr      error
+	)
+	go func() {
+		_, demoteErr = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+		demoteFinished.Store(true)
+	}()
+
+	select {
+	case <-superReadOnlyBlocked:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for SetSuperReadOnly to be called")
+	}
+
+	// Because wasReadOnly was true, demotePrimary did not stop query service and did not
+	// mark isPrimaryDemoted.
+	assert.False(t, tm.tmState.IsPrimaryDemoted(), "isPrimaryDemoted must not be set for an already read-only primary")
+	assert.True(t, tm.QueryServiceControl.IsServing())
+
+	// A concurrent topology refresh during demotion must not stop query service.
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks")
+	require.NoError(t, err)
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+	assert.True(t, tm.QueryServiceControl.IsServing(), "query service must remain serving during topology refresh")
+
+	// Unblock SetSuperReadOnly to fail the demotion.
+	close(unblockSuperReadOnly)
+	require.Eventually(t, func() bool {
+		return demoteFinished.Load()
+	}, 30*time.Second, 50*time.Millisecond)
+
+	require.ErrorContains(t, demoteErr, "simulated failure setting super_read_only")
+
+	// After failed demotion reverts, query service must still be serving and isPrimaryDemoted false.
+	assert.True(t, tm.QueryServiceControl.IsServing(), "serving primary whose MySQL was already read_only must remain serving after failed demote")
 	assert.False(t, tm.tmState.IsPrimaryDemoted())
 }
 
