@@ -1,6 +1,7 @@
 create table t1(
                    id1 bigint,
                    id2 bigint,
+                   name varchar(20) character set utf8mb4 collate utf8mb4_bin,
                    primary key(id1)
 ) Engine=InnoDB;
 
@@ -22,4 +23,10 @@ create table t2_id4_idx(
                            id3 bigint,
                            primary key(id),
                            key idx_id4(id4)
+) Engine=InnoDB;
+
+create table ref(
+                   id bigint,
+                   name varchar(20) character set utf8mb4 collate utf8mb4_bin,
+                   primary key(id)
 ) Engine=InnoDB;

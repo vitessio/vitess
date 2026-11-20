@@ -328,6 +328,8 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.I
 
 	case typ == sqltypes.TypeJSON:
 		return json.NewFromSQL(v)
+	case typ == sqltypes.Geometry:
+		return newEvalBinary(v.Raw()), nil
 	case typ == sqltypes.Date:
 		e, err := valueToEval(v, typedCoercionCollation(v.Type(), collation), values)
 		if err != nil {

@@ -17,8 +17,12 @@ limitations under the License.
 package union
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -32,9 +36,13 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
+		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx", "ref"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("delete from ref", keyspaceName, true)
+			require.NoError(t, err)
 		}
 	}
 
@@ -140,6 +148,212 @@ from (
 	})
 }
 
+// Ordered split UNIONs must preserve sort helpers and avoid treating arm-local
+// constants as ORDER BY column positions, in both execution modes.
+func TestUnionAllOrderedLimitPushdown(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, -1), (2, -2), (20, -20), (21, -21), (22, -22), (23, -23), (24, -24), (25, -25)")
+	mcmp.Exec("insert into t2(id3, id4) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100), (101), (102)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100), (101), (102)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, "t1", "name"))
+	mcmp.Exec("update t1 set name = case id1 when 1 then 'abcdefghijklmnopq_z' when 2 then 'abcdefghijklmnopq_a' else 'm' end")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			mcmp.Exec("select name as x from t1 where id1 = 1 union all select name from t1 where id1 = 2 order by x limit 3")
+			mcmp.Exec("select 1 as c from dual union all select count(*) from t1 order by c limit 3")
+			mcmp.Exec("select * from (select count(*) c from t1 union all select count(*) from t2) t order by c limit 10")
+			mcmp.Exec("select * from (select count(*) c from t1 union all select 7 from dual) t order by c limit 10")
+			for _, second := range []string{"id2", "5"} {
+				mcmp.Exec("select id1 as a, " + second + " as id1 from t1 union all select id3, id4 from t2 order by a limit 3")
+			}
+			for _, second := range []string{
+				"select cast(id3 as signed) from t2",
+				"(select cast(id3 as signed) from t2 order by cast(id3 as signed) limit 1)",
+				"select cast(id as signed) from ref",
+			} {
+				// UNION ORDER BY ordinals are parameterized before planning in
+				// normalized execution. Use the expression's output name here;
+				// the planner regression covers the original ORDER BY 1 too.
+				mcmp.ExecWithColumnCompare("select cast(id1 as signed) from t1 union all " + second + " order by `cast(id1 as signed)` limit 3")
+			}
+			// The outer ordering must not change which rows an arm's LIMIT selects.
+			for _, query := range []string{
+				"(select id1 as id from t1 order by id1 desc limit 2) union all (select id3 from t2) order by id limit 3",
+				"(select id1 as id from t1 order by id1 desc limit 1, 2) union all (select id3 from t2) order by id limit 1, 3",
+				"(select id1 as id from t1 order by id1 limit 2) union all (select id3 from t2) order by id desc limit 3",
+				"(select id from ref order by id desc limit 1) union all (select id1 from t1) order by id desc limit 3",
+				"(select id from ref order by id desc limit 1, 1) union all (select id1 from t1) order by id desc limit 3",
+			} {
+				mcmp.Exec(query)
+			}
+			mcmp.AssertMatchesNoOrder("(select id from ref order by id desc limit 1) union all (select id1 from t1) limit 100", "[[INT64(102)] [INT64(1)] [INT64(2)] [INT64(20)] [INT64(21)] [INT64(22)] [INT64(23)] [INT64(24)] [INT64(25)]]")
+
+			// Split literal arms can report INT32 where MySQL's native UNION
+			// reports INT64. Compare ordered numeric values for these rank keys.
+			for _, query := range []string{
+				"select 0 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 where id3 = 3 order by ord limit 3",
+				"select 0 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 order by ord, id limit 3",
+				"select 100 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 order by ord, id limit 3",
+			} {
+				actual := utils.Exec(t, mcmp.VtConn, query)
+				expected := utils.Exec(t, mcmp.MySQLConn, query)
+				require.Len(mcmp.AsT(), actual.Rows, len(expected.Rows))
+				for i, row := range actual.Rows {
+					require.Len(mcmp.AsT(), row, len(expected.Rows[i]))
+					for j, value := range row {
+						require.Equal(mcmp.AsT(), expected.Rows[i][j].ToString(), value.ToString())
+					}
+				}
+			}
+		})
+	}
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+
+	mcmp.AssertMatches(
+		"select id1 as id from t1 union all select id3 from t2 order by id limit 3",
+		"[[INT64(1)] [INT64(2)] [INT64(3)]]",
+	)
+	mcmp.AssertMatches(
+		"select id1 as id from t1 union all select id3 from t2 order by id desc limit 3",
+		"[[INT64(25)] [INT64(24)] [INT64(23)]]",
+	)
+	mcmp.AssertMatches(
+		"select 'All' as name from dual union all select cast(id1 as char) as name from t1 order by name",
+		`[[VARCHAR("1")] [VARCHAR("2")] [VARCHAR("20")] [VARCHAR("21")] [VARCHAR("22")] [VARCHAR("23")] [VARCHAR("24")] [VARCHAR("25")] [VARCHAR("All")]]`,
+	)
+	mcmp.AssertMatches(
+		"select cast(id1 as signed) as id from t1 union all select cast(id3 as signed) from t2 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id1 as signed) as id from t1 union all select cast(0 as signed) from dual order by id limit 5",
+		"[[INT64(0)] [INT64(1)] [INT64(2)] [INT64(20)] [INT64(21)]]",
+	)
+	mcmp.AssertMatches(
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+
+	// Mixed UNION ALL and UNION must remain executable with or without ORDER BY.
+	for _, query := range []string{
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 limit 5",
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 order by id limit 5",
+	} {
+		result := utils.Exec(t, mcmp.VtConn, query)
+		assert.Len(t, result.Rows, 5)
+	}
+
+	// UNION's result collation is resolved from all arms before the final sort.
+	mcmp.Exec("select convert(_utf8mb4'z' using utf8mb4) union all select convert(_latin1'a' using latin1) order by 1 limit 1")
+}
+
+func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Seed the same reference row on both shards, as expected for a reference table.
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1, id2, name) values (1, 1, 'a'), (2, 2, 'A')")
+
+	mcmp.AssertMatchesNoOrder(
+		"select id from ref union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select id from ref union all select id1 from t1 where id1 = 1 union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select id1 from t1 where id1 = 1 union all select id from ref union all select id1 from t1",
+		"[[INT64(1)] [INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select 200 from dual union all select id1 from t1 where id1 = 1 union all select id1 from t1",
+		"[[INT64(200)] [INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select 1 from dual where exists (select 1 from t1 where id1 = 1) union all select id1 from t1",
+		"[[INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select r.id from ref r left join t1 u on u.id1 = r.id",
+		"[[INT64(100)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select r.id from ref r left join t1 u on u.id1 = r.id union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+
+	// UNION ALL keeps the reference and sharded inputs on separate routes, so
+	// VTGate sorts their rows. Keep real table inputs so MySQL's own sort does
+	// not hide an incorrect field-collation fallback in VTGate.
+	utils.Exec(t, mcmp.MySQLConn, "update ref set name = 'B' where id = 100")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("update ref set name = 'B' where id = 100", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.AssertMatches(
+		"select name from ref union all select name from t1 order by name",
+		"[[VARBINARY(\"A\")] [VARBINARY(\"B\")] [VARBINARY(\"a\")]]",
+	)
+	mcmp.AssertMatches(
+		"select name from ref union select name from t1 order by name",
+		"[[VARBINARY(\"A\")] [VARBINARY(\"B\")] [VARBINARY(\"a\")]]",
+	)
+
+	// The reference arm has more rows than the LIMIT, and its local first rows
+	// are not the first rows of the complete UNION result.
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (101), (102), (103), (104), (105), (106)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (101), (102), (103), (104), (105), (106)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1, id2) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id desc limit 5",
+		"[[INT64(106)] [INT64(105)] [INT64(104)] [INT64(103)] [INT64(102)]]",
+	)
+	// More than five distinct values expose an unordered limit below the sort.
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+	// Each shard has enough copies of 1 to exhaust a pushed LIMIT before
+	// VTGate can deduplicate. Later rows must remain available to the sort.
+	mcmp.Exec("insert into t2(id3, id4) values (1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,1),(11,1),(12,1),(13,1),(14,1),(15,1),(16,1),(17,1),(18,1),(19,1),(20,1),(21,2),(22,3),(23,4),(24,5),(25,6)")
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.AssertMatches(
+			"select distinct id from (select id4 as id from t2 union all select id from ref) t order by id limit 5",
+			"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+		)
+	}
+	result := utils.Exec(t, mcmp.VtConn, "select id1 from t1 union all select id3 from t2 union select id1 from t1 limit 5")
+	assert.Len(t, result.Rows, 5)
+}
+
 func TestUnion(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -153,4 +367,237 @@ func TestUnion(t *testing.T) {
 	mcmp.AssertMatches(`(SELECT 1,'a') ORDER BY 1`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
+}
+
+// Reference and dual seeds must be returned once when a correlated recursive
+// term is empty, even though resetting that term's routing produces Scatter.
+func TestRecursiveUnionAllSeedReturnedOnceWithEmptyTerm(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, seed := range []string{"select id from ref", "select 100 as id from dual"} {
+				query := "with recursive c as (" + seed + " union all select u.id1 from t1 u join c on u.id1 = c.id) select id from c"
+				mcmp.AssertMatches(query, "[[INT64(100)]]")
+				mcmp.AssertMatches(query+" union all select id1 from t1", "[[INT64(100)]]")
+			}
+		})
+	}
+}
+
+// Each arm fits the configured 2000-row budget; buffering both in a serialized
+// OLAP session must fail before retaining their combined 2002 rows.
+func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	const count = 1001
+	refValues, userValues := make([]string, count), make([]string, count)
+	for i := range count {
+		refValues[i] = fmt.Sprintf("(%d)", i+1)
+		userValues[i] = fmt.Sprintf("(%d, %d)", i+1, i+1)
+	}
+	mcmp.Exec("insert into t1(id1, id2) values " + strings.Join(userValues, ","))
+	insert := "insert into ref(id) values " + strings.Join(refValues, ",")
+	utils.Exec(t, mcmp.MySQLConn, insert)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet(insert, keyspaceName, true)
+		require.NoError(t, err)
+	}
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	t.Cleanup(func() { mcmp.Exec("rollback") })
+	query := "select id from ref union all select id1 from t1"
+	for _, tc := range []struct{ name, query string }{
+		{"small chunks", query},
+		// Each shard sends many 32 KiB chunks. Delaying the written row at
+		// the end of each scan keeps its MySQL fetch active at overflow.
+		{"active tablet stream", "select id, repeat('x', 1024) from ref union all select t.id1, concat(repeat('x', 1024), if(t.id1 = 2001, sleep(0.1), 0)) from t1 t join ref r on r.id <= 10"},
+	} {
+		mcmp.Run(tc.name, func(mcmp *utils.MySQLCompare) {
+			t := mcmp.AsT()
+			mcmp.Exec("begin")
+			mcmp.Exec("insert into t1(id1, id2) values (2001, 2001)")
+			_, err := mcmp.VtConn.ExecuteFetch(tc.query, 20000, true)
+			require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 2000")
+			var mysqlErr *sqlerror.SQLError
+			require.ErrorAs(t, err, &mysqlErr)
+			require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			// The failed SELECT must preserve both the transaction and earlier writes.
+			mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+			mcmp.Exec("commit")
+			mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+			mcmp.Exec("delete from t1 where id1 = 2001")
+		})
+	}
+	mcmp.Exec("rollback")
+	mcmp.Exec("begin")
+	override := strings.Replace(query, "select id", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id", 1)
+	result, err := mcmp.VtConn.ExecuteFetch(override, count*2, true)
+	require.NoError(t, err)
+	require.Len(t, result.Rows, count*2)
+}
+
+// A reference seed routed through VTGate recursion must return all of its rows
+// even when its cardinality exceeds the recursion depth limit.
+func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	const count = 1001
+	values := make([]string, count)
+	for i := range count {
+		values[i] = "(" + strconv.Itoa(i+1) + ")"
+	}
+	insert := "insert into ref(id) values " + strings.Join(values, ",")
+	utils.Exec(t, mcmp.MySQLConn, insert)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet(insert, keyspaceName, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			// The shared Exec helper caps fetched rows at 1000.
+			query := "with recursive c as (select id from ref union all select u.id1 from t1 u join c on u.id1 = c.id) select id from c order by id"
+			result, err := mcmp.VtConn.ExecuteFetch(query, count, true)
+			require.NoError(mcmp.AsT(), err)
+			expected, err := mcmp.MySQLConn.ExecuteFetch(query, count, true)
+			require.NoError(mcmp.AsT(), err)
+			utils.CompareVitessAndMySQLResults(mcmp.AsT(), query, mcmp.VtConn, result, expected, utils.CompareOptions{})
+			require.Len(mcmp.AsT(), result.Rows, count)
+		})
+	}
+}
+
+// Branching reference-seeded recursion must honor the row and work bounds.
+// Buffered rows reach the memory limit first; streaming reaches the work cap.
+// The row override must not lift that independent work cap.
+func TestRecursiveReferenceBranchingHonorsResourceLimits(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (1)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (1)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	values := make([]string, 0, 22)
+	for parent := 1; parent < 12; parent++ {
+		values = append(values, "("+strconv.Itoa(2*parent-1)+","+strconv.Itoa(parent)+")", "("+strconv.Itoa(2*parent)+","+strconv.Itoa(parent)+")")
+	}
+	mcmp.Exec("insert into t2(id3, id4) values " + strings.Join(values, ","))
+	// Two term rows per input produce 4095 rows over twelve levels, safely
+	// bounded even when testing a binary without the row-budget guard.
+	query := "with recursive c as (select id from ref union all select u.id4+1 from t2 u join c on u.id4 = c.id) select id from c"
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
+			if workload == "oltp" {
+				require.ErrorContains(mcmp.AsT(), err, "in-memory row count exceeded allowed limit of 2000")
+				var mysqlErr *sqlerror.SQLError
+				require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
+				require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			} else {
+				require.ErrorContains(mcmp.AsT(), err, "VT09030")
+			}
+			override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
+			_, err = mcmp.VtConn.ExecuteFetch(override, 10000, true)
+			require.ErrorContains(mcmp.AsT(), err, "VT09030")
+		})
+	}
+}
+
+// A finite recursive query with four rows per level stays below the live
+// frontier budget, but must honor the work bound scaled to its three seed rows.
+// The row-memory override cannot bypass that independent 3000-term bound.
+func TestRecursiveStreamingWorkBudget(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (1), (2), (3)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (1), (2), (3)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	// Keep the fixture below the row budget so normal DML cleanup fits.
+	values := make([]string, 1001)
+	for i := range 1000 {
+		values[i] = fmt.Sprintf("(%d,%d)", i+1, i+1)
+	}
+	// One extra edge branches the first seed, then the frontier stays at four.
+	values[1000] = "(1001,1)"
+	mcmp.Exec("insert into t2(id3,id4) values " + strings.Join(values, ","))
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	query := "with recursive c as (select id from ref union all select u.id4+1 from t2 u join c on u.id4 = c.id) select id from c"
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
+		_, err := mcmp.VtConn.ExecuteFetch(override, 10000, true)
+		require.ErrorContains(t, err, "VT09030")
+		allowed := strings.Replace(override, "u.id4 = c.id", "u.id4 = c.id where u.id4 <= 750", 1)
+		result, err := mcmp.VtConn.ExecuteFetch(allowed, 10000, true)
+		require.NoError(t, err)
+		expected, err := mcmp.MySQLConn.ExecuteFetch(allowed, 10000, true)
+		require.NoError(t, err)
+		utils.CompareVitessAndMySQLResults(t, allowed, mcmp.VtConn, result, expected, utils.CompareOptions{})
+		require.Len(t, result.Rows, 3000)
+	}
+}
+
+// An UPDATE target does not exempt independent scalar subqueries from
+// preserving the left side of a dual/reference outer join.
+func TestDMLScalarSubqueryPreservesOuterJoinRows(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("insert into t1(id1,id2) values (1,1)")
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	// Arithmetic on the indexed column forces Scatter rather than a lookup
+	// miss, whose no-route fallback can otherwise hide duplicated left rows.
+	for _, query := range []string{
+		"update t1 set id2 = (select count(*) from (select 1 as x from dual) d left join t2 m on m.id4 + 1 = 5) where id1 = 1",
+		"update t1 set id2 = (select count(*) from ref r left join t2 m on m.id4 + 1 = r.id) where id1 = 1",
+	} {
+		mcmp.Exec(query)
+		mcmp.AssertMatches("select id2 from t1 where id1 = 1", "[[INT64(1)]]")
+	}
+}
+
+// Recursive DISTINCT must either execute on one shard with MySQL's
+// deduplication or fail at planning, never silently run as UNION ALL in VTGate.
+func TestRecursiveDistinctReferenceSeeds(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1,id2) values (1,1)")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, seed := range []string{"select id from ref", "select 100 as id from dual"} {
+				query := "with recursive c as (" + seed + " union select u.id1 from t1 u join c on u.id1 = c.id) select id from c"
+				_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+				require.ErrorContains(mcmp.AsT(), err, "VT12001")
+				require.ErrorContains(mcmp.AsT(), err, "recursive UNION DISTINCT")
+				safe := strings.Replace(query, "u.id1 = c.id", "u.id1 = 1", 1)
+				mcmp.AssertMatchesNoOrder(safe, "[[INT64(100)] [INT64(1)]]")
+				mcmp.AssertMatchesNoOrder(safe+" union all select id1 from t1", "[[INT64(100)] [INT64(1)] [INT64(1)]]")
+			}
+		})
+	}
 }

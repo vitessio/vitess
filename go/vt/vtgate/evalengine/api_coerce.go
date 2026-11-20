@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/binary"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -24,6 +26,15 @@ import (
 )
 
 func CoerceTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, error) {
+	if value.Type() == sqltypes.Bit {
+		var buf [8]byte
+		raw := value.Raw()
+		if len(raw) > len(buf) {
+			return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIT value exceeds 64 bits: %d bytes", len(raw))
+		}
+		copy(buf[len(buf)-len(raw):], raw)
+		value = sqltypes.NewUint64(binary.BigEndian.Uint64(buf[:]))
+	}
 	cast, err := valueToEvalCast(value, value.Type(), typ.collation, typ.values, sqlmode)
 	if err != nil {
 		return sqltypes.Value{}, err

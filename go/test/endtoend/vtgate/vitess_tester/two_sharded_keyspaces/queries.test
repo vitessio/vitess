@@ -37,3 +37,38 @@ where cu.customer_id = 1;
 select 1
 from customer.customer
 where customer_id in (select customer_id from corder.corder where price > 50);
+
+# Each shard has at least two distinct even prices before a later odd price.
+# Limiting route-local DISTINCT rows before the VTGate projection would lose 1.
+update corder.corder set price = order_id * 2;
+insert into corder.corder(order_id, customer_id, price)
+values (6, 1, 12), (7, 4, 14), (8, 1, 16), (9, 4, 18), (10, 1, 3), (11, 4, 3);
+
+select distinct col % 2 as parity
+from (select price as col from corder.corder
+      union
+      select customer_id as col from customer.customer where customer_id in (2, 4)) dt
+limit 2;
+
+select distinct col % 2 as parity
+from (select price as col from corder.corder
+      union
+      select customer_id as col from customer.customer where customer_id in (2, 4)) dt
+order by parity
+limit 2;
+
+# The scatter arm adds a route-only merge-sort helper outside its generated
+# DISTINCT derived table. The single-shard arm must return the same width.
+select cast(price as signed) as x, price
+from corder.corder
+union
+select cast(customer_id as signed) as x, customer_id
+from customer.customer where customer_id = 1
+order by x limit 3;
+
+select cast(customer_id as signed) as x, customer_id
+from customer.customer where customer_id = 1
+union
+select cast(price as signed) as x, price
+from corder.corder
+order by x desc limit 1, 3;

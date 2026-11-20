@@ -59,7 +59,8 @@ var (
 
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
-	inTx bool
+	inTx       bool
+	inReserved bool
 }
 
 func (t *noopVCursor) GetExecutionMetrics() *Metrics {
@@ -327,7 +328,7 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
 }
 
 func (t *noopVCursor) InReservedConn() bool {
-	panic("implement me")
+	return t.inReserved
 }
 
 func (t *noopVCursor) ShardSession() []*srvtopo.ResolvedShard {

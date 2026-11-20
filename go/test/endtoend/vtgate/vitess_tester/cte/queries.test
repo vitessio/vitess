@@ -134,7 +134,18 @@ WITH RECURSIVE foo AS (SELECT id
 SELECT id
 FROM foo;
 
-# Recursive CTE with UNION DISTINCT
+# Recursive DISTINCT walks a management chain across shards
+WITH RECURSIVE management_chain AS (SELECT id, manager_id
+                                    FROM employees
+                                    WHERE id = 7
+                                    UNION DISTINCT
+                                    SELECT e.id, e.manager_id
+                                    FROM employees e
+                                             JOIN management_chain c ON e.id = c.manager_id)
+SELECT *
+FROM management_chain;
+
+# Recursive CTE with UNION DISTINCT over ordinary sharded tables remains supported
 WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id
                              FROM employees
                              UNION ALL

@@ -58,6 +58,11 @@ type RecurseCTE struct {
 
 	// Distinct is used to determine if the result set should be distinct
 	Distinct bool
+
+	// SeedMergeRejected records a merge refused because it would repeat a
+	// replicated seed across shards. DISTINCT cannot then fall back to VTGate,
+	// whose recursive primitive does not deduplicate.
+	SeedMergeRejected bool
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -170,6 +175,18 @@ func (r *RecurseCTE) expressions() []*plancontext.RecurseExpression {
 }
 
 func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	if r.Distinct && r.SeedMergeRejected {
+		panic(vterrors.VT12001("recursive UNION DISTINCT that cannot be executed on a single shard"))
+	}
+	// Merging is finished. Check the routes actually selected, without treating
+	// an unused alternate as permission for a cross-keyspace read.
+	for _, seedKeyspace := range operatorKeyspaces(r.Seed()) {
+		for _, termKeyspace := range operatorKeyspaces(r.Term()) {
+			if seedKeyspace != termKeyspace {
+				checkCrossKeyspacePolicy(ctx, seedKeyspace, termKeyspace, "recursive CTE")
+			}
+		}
+	}
 	r.Vars = make(map[string]int)
 	columns := r.Seed().GetColumns(ctx)
 	for _, expr := range r.expressions() {

@@ -1531,7 +1531,7 @@
     }
   },
   {
-    "comment": "reference table can merge with other opcodes left to right and vindex value is in the plan.\n# This tests that route.Merge also copies the condition to the LHS.",
+    "comment": "reference table merges into a single-shard derived route",
     "query": "select ref.col from ref join (select aa from user where user.id=1) user",
     "plan": {
       "Type": "Passthrough",
