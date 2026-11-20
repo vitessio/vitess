@@ -37,6 +37,8 @@ type typeAggregation struct {
 	binary    uint16
 	charother uint16
 	json      uint16
+	enum      uint16
+	set       uint16
 
 	date      uint16
 	time      uint16
@@ -154,6 +156,12 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag, size, scale int32) 
 	case sqltypes.Char, sqltypes.VarChar, sqltypes.Set, sqltypes.Enum:
 		if f&flagExplicitCollation != 0 {
 			ta.charother++
+		}
+		switch tt {
+		case sqltypes.Enum:
+			ta.enum++
+		case sqltypes.Set:
+			ta.set++
 		}
 		ta.char++
 	case sqltypes.Binary, sqltypes.VarBinary:

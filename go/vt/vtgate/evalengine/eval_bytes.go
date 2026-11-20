@@ -68,7 +68,7 @@ func newEvalVector(raw []byte) *evalBytes {
 }
 
 func evalToBinary(e eval) *evalBytes {
-	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
+	if e, ok := e.(*evalBytes); ok && e.isBinary() && e.flag&flagSelected == 0 {
 		return e
 	}
 	return newEvalBinary(e.ToRawBytes())
@@ -79,7 +79,7 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 	var typedcol collations.TypedCollation
 
 	if b, ok := e.(*evalBytes); ok && convert {
-		if b.isVarChar() && b.col.Collation == col {
+		if b.isVarChar() && b.col.Collation == col && b.flag&(flagNumberFromBytes|flagJSONBinary|flagJSONText) == 0 {
 			return b, nil
 		}
 
@@ -134,6 +134,70 @@ func (e *evalBytes) isBitLiteral() bool {
 
 func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral() || e.isBitLiteral()
+}
+
+// makePlain marks e as a regular string.
+//
+// A hex or bit literal such as 0x41 is a string that counts as a number in
+// arithmetic: 0x41 + 0 is 65. The result of a function never does, even if
+// it has the same bytes: REVERSE(0x41) + 0 is 0. Functions call makePlain
+// on their result to remove that special treatment.
+//
+// It also removes flagJSONBinary and flagJSONText: a function result has
+// the character set of its own type.
+//
+// makePlain changes e itself, so do not call it on a shared value such as
+// the value of a Literal. Use evalPlain there, which returns a copy.
+func (e *evalBytes) makePlain() {
+	e.flag &^= flagSelected
+}
+
+// withCharsetOf returns e, a string that a function made of a part of the
+// string src, with the flagJSONBinary or flagJSONText of src.
+//
+// LEFT, RIGHT, SUBSTRING, TRIM, LOWER, UPPER, REVERSE, REPEAT, LPAD and
+// RPAD keep the character set of the string that COALESCE selected: with a
+// text column sn = '12' and a binary column vb, CAST(LEFT(COALESCE(sn, vb),
+// 5) AS JSON) is 12. Other functions do not: CAST(CONCAT(COALESCE(sn, vb))
+// AS JSON) is a binary value.
+func (e *evalBytes) withCharsetOf(src *evalBytes) *evalBytes {
+	e.flag |= src.flag & (flagJSONBinary | flagJSONText)
+	return e
+}
+
+// makePlainKeepCharset is makePlain for the functions of withCharsetOf,
+// which keep flagJSONBinary and flagJSONText.
+func (e *evalBytes) makePlainKeepCharset() {
+	e.flag &^= flagNumericContext
+}
+
+// jsonBinary reports whether a conversion to JSON reads e as a binary
+// string, which becomes an opaque JSON value, and not as text.
+//
+// A string is binary when its collation is binary, whatever its type:
+// CAST(IF(c, 0x41, 'x') AS JSON) is an opaque value, and the LONGTEXT
+// IF(c, i, js) is parsed. COALESCE can mark its result otherwise, see
+// flagJSONBinary.
+func (e *evalBytes) jsonBinary() bool {
+	switch {
+	case e.flag&flagJSONBinary != 0:
+		return true
+	case e.flag&flagJSONText != 0:
+		return false
+	case e.col.Collation == collations.Unknown:
+		return sqltypes.IsBinary(e.SQLType())
+	}
+	return isBinaryString(e.SQLType(), e.col.Collation) || isBinaryText(e.SQLType(), e.col)
+}
+
+// decimalFromBytes reports whether a conversion of e to a decimal reads the
+// bytes of e as a number, instead of parsing its text.
+//
+// It does for a hex or bit literal, and for a string that IF, CASE or
+// NULLIF selected from one: CAST(0x3132 AS DECIMAL) is 12594. It does not
+// for a string that ELT selected: CAST(ELT(1, 0x3132) AS DECIMAL) is 12.
+func (e *evalBytes) decimalFromBytes() bool {
+	return e.flag&(flagHex|flagBit|flagDecimalFromBytes) != 0
 }
 
 func (e *evalBytes) isVarChar() bool {

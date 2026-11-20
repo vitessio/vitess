@@ -95,7 +95,13 @@ func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 	case m == 0:
 		return newEvalDecimalWithPrec(dec, d)
 	default:
-		return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
+		dec = dec.Clamp(m-d, d)
+		if -dec.Exponent() < d {
+			// the value has the d digits: CAST(5 AS DECIMAL(10,2)) is 5.00
+			// also in JSON, see jsonDecimalDigits
+			dec = dec.Round(d)
+		}
+		return newEvalDecimalWithPrec(dec, d)
 	}
 }
 
@@ -119,6 +125,12 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
+		if e.flag&flagNumberFromBytes != 0 {
+			// IF(1, 0x41, 'x') + 0 is the double 65: the string counts as
+			// a number, and a string in arithmetic is a double.
+			f, _ := evalToFloat(e)
+			return f
+		}
 		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
@@ -177,7 +189,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagNumberFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -235,7 +247,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagDecimalFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -298,6 +310,36 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	}
 }
 
+// evalCastToInt64 converts e to an integer for CAST(e AS SIGNED) and
+// CAST(e AS UNSIGNED).
+//
+// It differs from evalToInt64 for a string that IF, CASE, NULLIF or ELT
+// selected from a hex or bit literal. CAST parses the text of that string:
+// CAST(IF(1, 0x3132, 'x') AS SIGNED) is 12, although
+// IF(1, 0x3132, 'x') + 0 is 12594. A literal is still read as a number:
+// CAST(0x3132 AS SIGNED) is 12594.
+func evalCastToInt64(e eval) *evalInt64 {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagNumberFromBytes != 0 {
+		i, _ := fastparse.ParseInt64(b.string(), 10)
+		return newEvalInt64(i)
+	}
+	return evalToInt64(e)
+}
+
+// evalDecimalOperand prepares e for a function that reads its argument as a
+// decimal in MySQL, such as FROM_UNIXTIME.
+//
+// MySQL parses the text of a string that ELT selected from a hex literal
+// there: FROM_UNIXTIME(ELT(1, 0x3132)) is second 12, not second 12594. So
+// evalDecimalOperand returns such a string as a regular string. It returns
+// every other value as it is.
+func evalDecimalOperand(e eval) eval {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagNumberFromBytes != 0 && b.flag&flagDecimalFromBytes == 0 {
+		return evalPlain(b)
+	}
+	return e
+}
+
 func evalToInt64(e eval) *evalInt64 {
 	switch e := e.(type) {
 	case *evalInt64:
@@ -305,7 +347,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagNumberFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow

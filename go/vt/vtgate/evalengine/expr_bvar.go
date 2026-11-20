@@ -121,6 +121,11 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		typ.Col = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[bvar.dynamicTypeOffset]
+	} else if c.typeEnv != nil {
+		var err error
+		if typ, err = bvar.typeof(c.typeEnv); err != nil {
+			return ctype{}, err
+		}
 	} else {
 		return ctype{}, c.unsupported(bvar)
 	}
@@ -138,18 +143,25 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)
 	case sqltypes.IsText(tt):
+		// A hex or bit literal is a binary string. Its type counts as a
+		// text type, so typ.Col is the connection collation above, which
+		// the value does not have: with the literals as bind variables,
+		// CONCAT(0x4142, 'x') was declared a VARCHAR and is a VARBINARY.
 		switch tt {
 		case sqltypes.HexNum:
 			c.asm.PushBVar_hexnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagHex
 		case sqltypes.HexVal:
 			c.asm.PushBVar_hexval(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagHex
 		case sqltypes.BitNum:
 			c.asm.PushBVar_bitnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagBit
 		default:
 			typ.Type = sqltypes.VarChar
@@ -174,6 +186,9 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		c.asm.PushBVar_vector(bvar.Key)
 	case tt == sqltypes.Tuple:
 		c.asm.PushBVar_tuple(bvar.Key)
+		// A NULL in the tuple can make IN return NULL: 1 IN (2, NULL) is
+		// NULL.
+		typ.Flag |= flagNullable
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}

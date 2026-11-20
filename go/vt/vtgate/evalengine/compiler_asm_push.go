@@ -72,6 +72,16 @@ func push_bin(env *ExpressionEnv, raw []byte) int {
 	return 1
 }
 
+// push_bin_column pushes the value of a binary string column. Unlike a
+// binary literal, it has the coercibility of a column.
+func push_bin_column(env *ExpressionEnv, raw []byte) int {
+	b := newEvalBinary(raw)
+	b.col = collationBinaryImplicit
+	env.vm.stack[env.vm.sp] = b
+	env.vm.sp++
+	return 1
+}
+
 func (asm *assembler) PushColumn_bin(offset int) {
 	asm.adjustStack(1)
 
@@ -80,7 +90,7 @@ func (asm *assembler) PushColumn_bin(offset int) {
 		if col.IsNull() {
 			return push_null(env)
 		}
-		return push_bin(env, col.Raw())
+		return push_bin_column(env, col.Raw())
 	}, "PUSH VARBINARY(:%d)", offset)
 }
 
@@ -585,7 +595,11 @@ func (asm *assembler) PushLiteral(lit eval) error {
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
 	case *evalTemporal:
 		asm.emit(func(env *ExpressionEnv) int {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
+			t := env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
+			// a folded CASE or COALESCE can have made the literal from a
+			// DATE or a TIME: see evalTemporalFrom
+			t.from = lit.from
+			env.vm.stack[env.vm.sp] = t
 			env.vm.sp++
 			return 1
 		}, "PUSH TIME|DATETIME|DATE(%q)", lit.ToRawBytes())

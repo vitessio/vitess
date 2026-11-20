@@ -105,9 +105,17 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 	case *evalUint64:
 		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeUnsigned)
 	case *evalDecimal:
-		return json.NewNumber(hack.String(e.ToRawBytes()), json.NumberTypeDecimal)
+		return json.NewNumber(hack.String(e.dec.FormatMySQL(jsonDecimalDigits(e))), json.NumberTypeDecimal)
 	}
 	panic("unreachable")
+}
+
+// jsonDecimalDigits returns the digits after the point of the decimal e in
+// JSON. JSON has the digits of the value, which can be fewer than the ones
+// it is shown with: with an INT column i that holds 5, COALESCE(i, 1.5) is
+// shown as 5.0, but CAST(COALESCE(i, 1.5) AS JSON) is 5.
+func jsonDecimalDigits(e *evalDecimal) int32 {
+	return max(0, min(e.length, -e.dec.Exponent()))
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
@@ -138,7 +146,7 @@ func evalToJSON(e eval) (*evalJSON, error) {
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.SQLType()) {
+		if e.jsonBinary() {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvert_cj(e)
@@ -160,7 +168,7 @@ func argToJSON(e eval) (*evalJSON, error) {
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.SQLType()) {
+		if e.jsonBinary() {
 			return evalConvert_bj(e), nil
 		}
 		return evalConvertArg_cj(e)

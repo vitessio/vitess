@@ -378,11 +378,14 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 			panic("parser allowed introducer before tuple")
 		}
 
+		// A literal with an introducer is as weak as any other literal:
+		// with a text column s, _latin1'A' = s is compared with the
+		// collation of s. A bind variable stands for such a literal.
 		return &IntroducerExpr{
 			UnaryExpr: UnaryExpr{expr},
 			TypedCollation: collations.TypedCollation{
 				Collation:    collation,
-				Coercibility: collations.CoerceExplicit,
+				Coercibility: collations.CoerceCoercible,
 				Repertoire:   collations.RepertoireUnicode,
 			},
 			CollationEnv: ast.cfg.Environment.CollationEnv(),
@@ -425,7 +428,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (IR, erro
 
 func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) {
 	var err error
-	var result CaseExpr
+	result := CaseExpr{collate: ast.cfg.Collation}
 
 	if node.Else != nil {
 		result.Else, err = ast.translateExpr(node.Else)

@@ -189,7 +189,7 @@ func (call *builtinSHA2) compile(c *compiler) (ctype, error) {
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_SHA2(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag)}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(str.Flag) | flagNullable}, nil
 }
 
 type builtinRandomBytes struct {

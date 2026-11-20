@@ -165,5 +165,5 @@ func (call *builtinFromBase64) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_FROM_BASE64(t)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: collationBinary}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag) | flagNullable, Col: collationBinary}, nil
 }

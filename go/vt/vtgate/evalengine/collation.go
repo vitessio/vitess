@@ -39,6 +39,89 @@ func typedCoercionCollation(typ sqltypes.Type, id collations.ID) collations.Type
 	}
 }
 
+// typedColumnCollation returns the collation of a column of type typ.
+//
+// It differs from typedCoercionCollation in the coercibility of a string
+// column, which is implicit where the one of a literal is coercible. When
+// the two meet, the collation of the column wins: with a text column s,
+// s = 0x41 compares with the collation of s, not byte by byte.
+func typedColumnCollation(typ sqltypes.Type, id collations.ID) collations.TypedCollation {
+	tc := typedCoercionCollation(typ, id)
+	switch typ {
+	case sqltypes.HexNum, sqltypes.HexVal, sqltypes.BitNum:
+		// these types only describe literals
+	default:
+		if tc.Coercibility == collations.CoerceCoercible {
+			tc.Coercibility = collations.CoerceImplicit
+		}
+	}
+	return tc
+}
+
+// operandCollations returns the collations with which the compiled program
+// merges the operands args, of types types. These are the collations of the
+// types, except for a hex or bit literal that is a bind variable next to a
+// string whose collation is not known: that bind variable counts with the
+// connection collation, as it did on main.
+//
+// With a column s that holds 'abc' and has no declared type, s = 0x414243
+// is 1 in MySQL and was 1 on main. With the binary collation of the bind
+// variable it is compared byte by byte and is 0.
+//
+// This keeps a behaviour of main that is right only for a column in the
+// connection collation: the real collation of the column is not known.
+func operandCollations(args []IR, types []ctype) []collations.TypedCollation {
+	cols := make([]collations.TypedCollation, len(types))
+	unknown := false
+	for i, t := range types {
+		cols[i] = t.Col
+		if (t.Type == sqltypes.Enum || t.Type == sqltypes.Set || sqltypes.IsTextOrBinary(t.Type)) && unknownCollation(t.Col) {
+			unknown = true
+		}
+	}
+	if unknown {
+		hexBindVarCollations(args, cols)
+	}
+	return cols
+}
+
+// caseBranchCollations is operandCollations for the branches of an IF, an
+// IFNULL or a CASE. A branch that is a column without a declared type that
+// holds NULL counts here as a string whose collation is not known.
+//
+// With such a column ns, IFNULL(ns, 0x3132) is a VARCHAR in MySQL when ns
+// is a text column, and was a VARCHAR on main. COALESCE(ni, 0x41) was a
+// VARBINARY on main, so COALESCE does not do the same.
+//
+// This keeps a behaviour of main that is right only for a text column in
+// the connection collation: the type of the column is not known, and for a
+// column of another type MySQL returns a VARBINARY.
+func caseBranchCollations(branches []IR, types []ctype) []collations.TypedCollation {
+	cols := operandCollations(branches, types)
+	for _, t := range types {
+		if t.Type == sqltypes.Null && unknownCollation(t.Col) {
+			hexBindVarCollations(branches, cols)
+			break
+		}
+	}
+	return cols
+}
+
+// hexBindVarCollations sets in cols the collation that a hex or bit literal
+// in args that is a bind variable had on main: the connection collation.
+func hexBindVarCollations(args []IR, cols []collations.TypedCollation) {
+	for i, arg := range args {
+		bvar, ok := arg.(*BindVariable)
+		if !ok || !bvar.typed() {
+			continue
+		}
+		switch bvar.Type {
+		case sqltypes.HexNum, sqltypes.HexVal, sqltypes.BitNum:
+			cols[i] = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
+		}
+	}
+}
+
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:
@@ -63,9 +146,15 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type, env
 	rt := sqltypes.IsTextOrBinary(t2)
 	if !lt || !rt {
 		if lt {
+			if enumCollationWins(t2, c2, c1) {
+				return c2, nil, nil, nil
+			}
 			return c1, nil, nil, nil
 		}
 		if rt {
+			if enumCollationWins(t1, c1, c2) {
+				return c1, nil, nil, nil
+			}
 			return c2, nil, nil, nil
 		}
 		return collationBinary, nil, nil, nil
@@ -75,6 +164,23 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type, env
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
+}
+
+// enumCollationWins reports whether the collation enum of an ENUM or SET
+// column of type tt wins over the collation str of the string that it is
+// compared with. It does over a binary literal, as the collation of a text
+// column does: with an ENUM column en that holds 'abc' in a case-insensitive
+// collation, en = 0x414243 is 1 in MySQL.
+//
+// Any other string keeps deciding the collation, as before. An ENUM value
+// without a declared collation has the binary one and never wins.
+func enumCollationWins(tt sqltypes.Type, enum, str collations.TypedCollation) bool {
+	if tt != sqltypes.Enum && tt != sqltypes.Set {
+		return false
+	}
+	return enum.Collation != collations.CollationBinaryID &&
+		str.Collation == collations.CollationBinaryID &&
+		enum.Coercibility < str.Coercibility
 }
 
 func mergeAndCoerceCollations(left, right eval, env *collations.Environment) (eval, eval, collations.TypedCollation, error) {
@@ -109,6 +215,47 @@ func mergeAndCoerceCollations(left, right eval, env *collations.Environment) (ev
 
 type collationAggregation struct {
 	cur collations.TypedCollation
+	// unknown is set by addTyped when one of the strings has a collation
+	// that is not known. See unknownCollation.
+	unknown bool
+	// binary is set by addTyped when one of the strings is a binary string
+	// that is not a literal, such as a binary column.
+	binary bool
+}
+
+// unknownCollation reports whether col is the collation of a string whose
+// collation is not known, such as the string of a column that has no
+// declared type. It is the binary collation with the coercibility of a
+// number, where a binary string has the one of a column or of a literal.
+func unknownCollation(col collations.TypedCollation) bool {
+	return col.Collation == collations.CollationBinaryID && col.Coercibility == collations.CoerceNumeric
+}
+
+// addTyped is add for the collation tc of a value of type tt. It notes
+// when the value is a string whose collation is not known, and when it is
+// a binary string that is not a literal. See unknownResult.
+func (ca *collationAggregation) addTyped(tt sqltypes.Type, tc collations.TypedCollation, env *collations.Environment) error {
+	if tt == sqltypes.Enum || tt == sqltypes.Set || sqltypes.IsTextOrBinary(tt) {
+		switch {
+		case unknownCollation(tc):
+			ca.unknown = true
+		case tc.Collation == collations.CollationBinaryID && tc.Coercibility <= collations.CoerceImplicit:
+			ca.binary = true
+		}
+	}
+	return ca.add(tc, env)
+}
+
+// unknownResult reports whether the collation of the result is not known:
+// one of the strings has a collation that is not known, and no collation
+// won over it.
+//
+// Such a string comes from a column, so it wins over a binary literal as
+// the collation of a column does, and loses to a binary column: with a
+// column s that has no declared type, IFNULL(s, 0x41) has the unknown
+// collation of s.
+func (ca *collationAggregation) unknownResult() bool {
+	return ca.unknown && !ca.binary && ca.cur.Collation == collations.CollationBinaryID
 }
 
 func (ca *collationAggregation) add(tc collations.TypedCollation, env *collations.Environment) error {
@@ -126,4 +273,35 @@ func (ca *collationAggregation) add(tc collations.TypedCollation, env *collation
 
 func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
+}
+
+// resultFor is result for a function that makes a string of its arguments,
+// where conn is the connection collation.
+//
+// A string whose collation is not known comes from a column, and the
+// collation of a column wins over the one of a literal. When such a string
+// is combined with a literal that has the connection collation, the result
+// keeps that collation and is as strong as a column: with a column s that
+// has no declared type, CONCAT(s, 'a') wins over a hex literal as s does.
+func (ca *collationAggregation) resultFor(conn collations.ID) collations.TypedCollation {
+	cur := ca.cur
+	if ca.unknown && conn != collations.Unknown && cur.Collation == conn && cur.Coercibility > collations.CoerceImplicit {
+		cur.Coercibility = collations.CoerceImplicit
+	}
+	return cur
+}
+
+// concatResult is resultFor for CONCAT, CONCAT_WS and ELT, whose result
+// has the type tt. Numbers have no collation: when there are only numbers,
+// or strings whose collation is not known, the result has the connection
+// collation.
+func (ca *collationAggregation) concatResult(tt sqltypes.Type, conn collations.ID) collations.TypedCollation {
+	tc := ca.resultFor(conn)
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, conn)
+		if ca.unknown && tc.Collation != collations.CollationBinaryID {
+			tc.Coercibility = collations.CoerceImplicit
+		}
+	}
+	return tc
 }

@@ -36,9 +36,12 @@ type frame func(env *ExpressionEnv) int
 type compiler struct {
 	collation    collations.ID
 	dynamicTypes []ctype
-	asm          assembler
-	sqlmode      SQLMode
-	env          *vtenv.Environment
+	// typeEnv, when set, gives the types of the columns and bind variables
+	// that have no static type, as UntypedExpr.Compile does.
+	typeEnv *ExpressionEnv
+	asm     assembler
+	sqlmode SQLMode
+	env     *vtenv.Environment
 }
 
 type CompilerLog interface {
@@ -241,7 +244,12 @@ func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type
 	if sqltypes.IsDateOrTime(ct.Type) {
 		if preciseDatetime {
 			if ct.Size == 0 {
-				c.asm.Convert_Ti(offset)
+				if fallback == sqltypes.Decimal {
+					// DIV reads a temporal value as a decimal
+					c.asm.Convert_Tn(offset)
+				} else {
+					c.asm.Convert_Ti(offset)
+				}
 				return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 			}
 			c.asm.Convert_Td(offset)
@@ -583,14 +591,14 @@ func isEncodingJSONSafe(col collations.ID) bool {
 func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, error) {
 	switch doct.Type {
 	case sqltypes.TypeJSON:
-	case sqltypes.VarChar, sqltypes.VarBinary:
+	case sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Text, sqltypes.Blob:
 		c.asm.Parse_j(offset)
 	case sqltypes.Null:
 		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
 	default:
 		return ctype{}, errJSONType(fn)
 	}
-	return ctype{Type: sqltypes.TypeJSON, Flag: doct.Flag, Col: collationJSON}, nil
+	return ctype{Type: sqltypes.TypeJSON, Flag: nullableFlags(doct.Flag), Col: collationJSON}, nil
 }
 
 func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
@@ -605,10 +613,13 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_uj(offset)
 	case sqltypes.Decimal:
 		c.asm.Convert_dj(offset)
-	case sqltypes.VarChar:
-		c.asm.Convert_cj(offset)
-	case sqltypes.VarBinary:
-		c.asm.Convert_bj(offset)
+	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary, sqltypes.Blob:
+		// a string is binary when its collation is: see jsonBinary
+		if jsonBinaryType(doct) {
+			c.asm.Convert_bj(offset)
+		} else {
+			c.asm.Convert_cj(offset)
+		}
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
@@ -617,6 +628,15 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+// jsonBinaryType reports whether a conversion to JSON reads a string of
+// type ct as a binary string. See (*evalBytes).jsonBinary.
+func jsonBinaryType(ct ctype) bool {
+	if ct.Col.Collation == collations.Unknown {
+		return sqltypes.IsBinary(ct.Type)
+	}
+	return isBinaryString(ct.Type, ct.Col.Collation) || isBinaryText(ct.Type, ct.Col)
 }
 
 func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
@@ -631,10 +651,18 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_uj(offset)
 	case sqltypes.Decimal:
 		c.asm.Convert_dj(offset)
-	case sqltypes.VarChar:
-		c.asm.ConvertArg_cj(offset)
-	case sqltypes.VarBinary:
-		c.asm.Convert_bj(offset)
+	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary, sqltypes.Blob:
+		if (doct.Type == sqltypes.Text || doct.Type == sqltypes.Blob) && doct.nullable() {
+			// A TEXT or BLOB argument that can be NULL is not supported:
+			// the conversion below does not accept a NULL value.
+			return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+		}
+		// a string is binary when its collation is: see jsonBinary
+		if jsonBinaryType(doct) {
+			c.asm.ConvertArg_bj(offset)
+		} else {
+			c.asm.ConvertArg_cj(offset)
+		}
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:

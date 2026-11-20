@@ -21,9 +21,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -48,6 +50,7 @@ var Cases = []TestCase{
 	{Run: DecimalClamping},
 	{Run: JSONNumberComparison},
 	{Run: JSONStoredNumbers, Schema: JSONStoredNumbers_Schema},
+	{Run: CoalesceColumns, Schema: CoalesceColumns_Schema},
 	{Run: JSONStringComparison},
 	{Run: JSONDoubleConversion},
 	{Run: JSONTextDoubles},
@@ -183,6 +186,8 @@ var Cases = []TestCase{
 	{Run: RegexpInstr},
 	{Run: RegexpSubstr},
 	{Run: RegexpReplace},
+	{Run: FunctionResultLiterals},
+	{Run: SelectedLiterals},
 }
 
 func FnJSONKeys(yield Query) {
@@ -225,6 +230,7 @@ func FnJSONExtract(yield Query) {
 	yield(`JSON_EXTRACT('{"a": 1}', '$.b')`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', '$.b', '$.c')`, nil, false)
 	yield(`JSON_EXTRACT('[1,2,3]', '$[10]')`, nil, false)
+	yieldNested(yield, `JSON_EXTRACT('{"a": 1}', '$.b')`, `JSON_EXTRACT('[1,2,3]', '$[10]')`, `JSON_UNQUOTE(JSON_EXTRACT('{"a": 1}', '$.b'))`)
 
 	yield(`JSON_EXTRACT('{invalid}', '$.a')`, nil, false)
 	yield(`JSON_EXTRACT('not json', '$.a')`, nil, false)
@@ -340,6 +346,8 @@ func CaseExprWithPredicate(yield Query) {
 			), nil, false)
 		})
 	})
+
+	yieldNested(yield, "case when 1=2 then 1 end", "case when null then 'a' end")
 }
 
 func FnCeil(yield Query) {
@@ -569,6 +577,8 @@ func FnLog(yield Query) {
 			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "LOG(0, 1)", "LOG(2, 0)")
 }
 
 func FnLog10(yield Query) {
@@ -633,6 +643,8 @@ func FnPow(yield Query) {
 			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "POW(0, -1)", "POWER(10, 400)")
 }
 
 func FnSign(yield Query) {
@@ -681,6 +693,11 @@ func FnRound(yield Query) {
 			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "ROUND(1.5, NULL)", "ROUND(2.5e0, NULL)", "ROUND(3, NULL)")
+	yieldIn(yield, "LENGTH(%s)", "ROUND('1.5')", "ROUND(_binary'2.5', 1)")
+	yieldIn(yield, "(%s) + 1", "ROUND(TIME'10:11:12.5')")
+	yieldIn(yield, "CAST(%s AS JSON)", "ROUND(0x31)")
 }
 
 func FnTruncate(yield Query) {
@@ -701,6 +718,11 @@ func FnTruncate(yield Query) {
 			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "TRUNCATE(1.5, NULL)", "TRUNCATE(2.5e0, NULL)", "TRUNCATE(3, NULL)")
+	yieldIn(yield, "LENGTH(%s)", "TRUNCATE('1.5', 0)", "TRUNCATE(_binary'2.5', 1)")
+	yieldIn(yield, "(%s) + 1", "TRUNCATE(TIMESTAMP'2020-01-02 10:11:12.5', 0)")
+	yieldIn(yield, "-%s", "TRUNCATE(0x31, 0)")
 }
 
 func FnCrc32(yield Query) {
@@ -715,6 +737,10 @@ func FnCrc32(yield Query) {
 	for _, num := range inputConversions {
 		yield(fmt.Sprintf("CRC32(%s)", num), nil, false)
 	}
+
+	yieldNested(yield, "CRC32('a')")
+	yieldIn(yield, "(%s) + 1", "CRC32(1.5)", "CRC32(1=1)")
+	yieldIn(yield, "CAST(%s AS JSON)", "CRC32(1=1)")
 }
 
 func FnConv(yield Query) {
@@ -816,6 +842,8 @@ func FnSHA2(yield Query) {
 			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil, false)
 		}
 	}
+
+	yieldNested(yield, "SHA2('a', 1)", "SHA2('a', NULL)")
 }
 
 func FnRandomBytes(yield Query) {
@@ -879,6 +907,8 @@ func Base64(yield Query) {
 		yield(fmt.Sprintf("FROM_BASE64(%s)", lhs), nil, false)
 		yield(fmt.Sprintf("TO_BASE64(%s)", lhs), nil, false)
 	}
+
+	yieldNested(yield, "FROM_BASE64('!')", "FROM_BASE64(1)")
 }
 
 func Conversion(yield Query) {
@@ -989,6 +1019,85 @@ var JSONStoredNumbers_Schema = []*querypb.Field{
 	},
 }
 
+// CoalesceColumns_Schema has a column of each kind that COALESCE combines.
+// It has no character string column: this test gives the columns no
+// declared type, and then the collation of a string column is not known.
+var CoalesceColumns_Schema = func() []*querypb.Field {
+	kinds := []struct {
+		typ        sqltypes.Type
+		columnType string
+		charset    collations.ID
+	}{
+		{sqltypes.Int64, "BIGINT", collations.CollationBinaryID},
+		{sqltypes.Uint64, "BIGINT UNSIGNED", collations.CollationBinaryID},
+		{sqltypes.Decimal, "DECIMAL(10,0)", collations.CollationBinaryID},
+		{sqltypes.VarBinary, "VARBINARY(10)", collations.CollationBinaryID},
+		{sqltypes.Date, "DATE", collations.CollationBinaryID},
+		{sqltypes.Datetime, "DATETIME", collations.CollationBinaryID},
+	}
+	var fields []*querypb.Field
+	for _, k := range kinds {
+		fields = append(fields, &querypb.Field{
+			Name:       fmt.Sprintf("column%d", len(fields)),
+			Type:       k.typ,
+			ColumnType: k.columnType,
+			Charset:    uint32(k.charset),
+		})
+	}
+	return fields
+}()
+
+// CoalesceColumns checks that COALESCE returns the type that it declares,
+// whichever argument it selects: a number or a date combined with a string
+// is a string, and an integer combined with a decimal is a decimal.
+func CoalesceColumns(yield Query) {
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(5), sqltypes.NewUint64(7), sqltypes.NewDecimal("2"),
+		sqltypes.NewVarBinary("xyz"), sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05"),
+	}
+	var columns []string
+	for i := range row {
+		columns = append(columns, fmt.Sprintf("column%d", i))
+	}
+	args := append(slices.Clone(columns), "1", "1.5", "'x'", "NULL")
+	consumers := []string{
+		"%s", "(%s) + 0", "-(%s)", "LENGTH(%s)", "CONCAT(%s, 'x')", "BIT_COUNT(%s)", "CAST(%s AS JSON)", "(%s) = '5'",
+	}
+	// MySQL reports the connection collation for a date, where the
+	// evalengine reports the binary collation.
+	temporal := func(arg string) bool {
+		return arg == "column4" || arg == "column5" || arg == "NULL"
+	}
+	for _, a := range columns {
+		for _, b := range args {
+			if a == b {
+				continue
+			}
+			for _, consumer := range consumers {
+				skipCollationCheck := consumer == "%s" && temporal(a) && temporal(b)
+				// the first argument is selected, then the second one
+				yield(fmt.Sprintf(consumer, fmt.Sprintf("COALESCE(%s, %s)", a, b)), row, skipCollationCheck)
+				yield(fmt.Sprintf(consumer, fmt.Sprintf("COALESCE(NULL, %s, %s)", b, a)), row, skipCollationCheck)
+			}
+		}
+	}
+
+	// A NULLIF of a date is a string for COALESCE and IFNULL: the DATE is
+	// not converted to a DATETIME.
+	nullifs := []string{
+		"COALESCE(NULLIF(column4, 5), column5)",
+		"COALESCE(NULLIF(column5, column5), column4)",
+		"COALESCE(column5, NULLIF(column4, 5))",
+		"IFNULL(NULLIF(column4, 5), column5)",
+		"COALESCE(IF(column0 = 5, NULLIF(column4, 5), NULL), column5)",
+	}
+	for _, expr := range nullifs {
+		for _, consumer := range consumers {
+			yield(fmt.Sprintf(consumer, expr), row, false)
+		}
+	}
+}
+
 // JSONStringComparison pins how JSON strings compare. MySQL compares their
 // UTF-8 bytes, so a control character sorts before a space whatever its
 // escape looks like, a quote sorts by its own byte rather than the backslash
@@ -1053,6 +1162,14 @@ func BitwiseOperatorsUnary(yield Query) {
 			yield(fmt.Sprintf("%s(%s)", op, rhs), nil, false)
 		}
 	}
+
+	// BIT_COUNT counts the bits of a binary string byte by byte, also when the
+	// binary string is the result of a string function.
+	yieldIn(yield, "BIT_COUNT(%s)",
+		"TRIM(0x31)", "LTRIM(0x31)", "RTRIM(0x31)", "TRIM(LEADING 'z' FROM 0x31)",
+		"LEFT(0x31, 1)", "RIGHT(0x31, 1)", "LPAD(0x31, 1, '0')", "RPAD(0x31, 1, '0')", "REVERSE(0x31)",
+		"REPEAT(_binary'1', 1)", "REPLACE(_binary'1', 'z', 'y')", "_binary'1' COLLATE 'binary'",
+	)
 }
 
 func BitwiseOperators(yield Query) {
@@ -1069,6 +1186,8 @@ func BitwiseOperators(yield Query) {
 			}
 		}
 	}
+
+	yieldNested(yield, "_binary 'ab' << NULL", "_binary 'ab' >> NULL", "_binary 'ab' & UNHEX('zz')")
 }
 
 func WeightString(yield Query) {
@@ -1297,6 +1416,11 @@ func CollationOperations(yield Query) {
 		"COLLATION(_utf8mb4 'foobar' COLLATE utf8mb4_general_ci)",
 		"COLLATION('foobar' COLLATE utf8mb4_general_ci)",
 		"COLLATION(_latin1 'foobar' COLLATE utf8mb4_general_ci)",
+		"COLLATION(NULLIF('A', 'A'))",
+		"COLLATION(NULLIF(_latin1 'x', _latin1 'X'))",
+		"COLLATION(CONCAT(_latin1 'x', NULL))",
+		"COLLATION(CONCAT(LEFT(NULL, 1), _latin1 'x'))",
+		"COLLATION(UPPER(NULL + 1))",
 	}
 
 	for _, expr := range cases {
@@ -1699,6 +1823,8 @@ func FnCharLength(yield Query) {
 		yield(fmt.Sprintf("CHAR_LENGTH(%s)", str), nil, false)
 		yield(fmt.Sprintf("CHARACTER_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "CHAR_LENGTH(NULL)")
 }
 
 func FnLength(yield Query) {
@@ -1706,12 +1832,16 @@ func FnLength(yield Query) {
 		yield(fmt.Sprintf("LENGTH(%s)", str), nil, false)
 		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "LENGTH(NULL)")
 }
 
 func FnBitLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("BIT_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "BIT_LENGTH(NULL)")
 }
 
 func FnAscii(yield Query) {
@@ -2054,6 +2184,8 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, false)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, false)
 	})
+
+	yieldNested(yield, "1 IN (2, NULL)", "1 NOT IN (2, NULL)", "(1, 2) IN ((1, NULL))")
 }
 
 func FnNow(yield Query) {
@@ -2089,6 +2221,8 @@ func FnInfo(yield Query) {
 	for _, fn := range fns {
 		yield(fn, nil, false)
 	}
+
+	yieldNested(yield, "DATABASE()", "SCHEMA()")
 }
 
 func FnDateFormat(yield Query) {
@@ -2797,6 +2931,8 @@ func RegexpInstr(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+
+	yieldNested(yield, `REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c')`, `REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c')`)
 }
 
 func RegexpSubstr(yield Query) {
@@ -2864,6 +3000,8 @@ func RegexpSubstr(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+
+	yieldNested(yield, `REGEXP_SUBSTR('abc', 'x')`, `REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c')`)
 }
 
 func RegexpReplace(yield Query) {
@@ -2943,5 +3081,114 @@ func RegexpReplace(yield Query) {
 
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
+	}
+}
+
+// FunctionResultLiterals checks that the result of a function is an ordinary
+// value: it is not a number the way a hex or bit literal argument is, in a
+// numeric context, under unary minus or in CONV, and it is not a boolean the
+// way the result of a comparison is, when converted to JSON.
+func FunctionResultLiterals(yield Query) {
+	yieldIn(yield, "(%s) + 0",
+		"LOWER(0x31)", "UPPER(0b110001)", "REVERSE(0x31)", "REPEAT(0x31, 1)", "REPLACE(0x31, 'a', 'b')",
+		"LEFT(0x31, 1)", "RIGHT(0x31, 1)", "LPAD(0x31, 1, '0')", "RPAD(0x31, 1, '0')",
+		"LTRIM(0x31)", "RTRIM(0x31)", "TRIM(0x31)", "TRIM(LEADING 'a' FROM 0x31)", "TRIM(TRAILING 'a' FROM 0x31)", "TRIM(BOTH 'a' FROM 0x31)",
+		"SUBSTRING(0x31, 1)", "SUBSTRING(0x31, 1, 1)", "CONCAT(0x31)", "CONCAT_WS(0x31, 0x31)",
+		"TO_BASE64(0x31)", "FROM_BASE64(TO_BASE64(0x31))", "MD5(0x36)", "SHA1(0x31)", "SHA2(0x31, 256)",
+		"BIN_TO_UUID(0x31313131313131313131313131313131)", "BIN_TO_UUID(0x31313131313131313131313131313131, 0)",
+		"UUID_TO_BIN(0x33313331333133312d333133312d333133312d333133312d333133313331333133313331)",
+		"UUID_TO_BIN(0x33313331333133312d333133312d333133312d333133312d333133313331333133313331, 0)",
+		"0x31 COLLATE 'binary'", "CAST(0x31 AS BINARY)", "COALESCE(0x31)", "COALESCE(NULL, 0b110001)",
+	)
+	yieldIn(yield, "-(%s)",
+		"CAST(0b110001 AS SIGNED)", "CAST(0x31 AS UNSIGNED)", "PERIOD_ADD(0b1, 0b1)", "UNIX_TIMESTAMP(0b1)",
+		"REGEXP_LIKE('a', 'a', b'01100011')", "REGEXP_LIKE('a', CONCAT('a'), b'01100011')",
+	)
+	yieldIn(yield, "CONV(%s, 10, 10)",
+		"CEIL(0x31)", "FLOOR(0x31)", "SQRT(0x31)", "EXP(0b0)", "~0x31", "CAST(0x31 AS CHAR)",
+		"REGEXP_SUBSTR('1', '1', 0b1)", "REGEXP_SUBSTR('1', CONCAT('1'), 0b1)",
+		"REGEXP_REPLACE('1', 'a', 'b', 0b1)", "REGEXP_REPLACE('1', CONCAT('a'), 'b', 0b1)",
+		"FROM_UNIXTIME(0x31)", "FROM_UNIXTIME(0x31, '%s')", "MAKEDATE(0b11111100100, 0b1)", "MAKETIME(0b1, 0b1, 0b1)",
+		"FROM_DAYS(0b1111111111111)", "SEC_TO_TIME(0b1)", "TIME_TO_SEC(0x31303a31313a3132)",
+	)
+	// 0x323032302d30312d30312031303a31313a3132 is '2020-01-01 10:11:12'.
+	for _, fn := range []string{
+		"DATE", "DAYOFMONTH", "DAYOFWEEK", "DAYOFYEAR", "HOUR", "LAST_DAY", "MICROSECOND", "MINUTE", "MONTH", "MONTHNAME",
+		"QUARTER", "SECOND", "TIME", "TO_DAYS", "TO_SECONDS", "UNIX_TIMESTAMP", "WEEK", "WEEKDAY", "WEEKOFYEAR", "YEAR", "YEARWEEK",
+	} {
+		yield(fmt.Sprintf("CONV(%s(0x323032302d30312d30312031303a31313a3132), 10, 10)", fn), nil, false)
+	}
+	yieldIn(yield, "CONV(%s, 10, 10)",
+		"DATE_FORMAT(0x323032302d30312d30312031303a31313a3132, '%d')",
+		"CONVERT_TZ(0x323032302d30312d30312031303a31313a3132, '+00:00', '+00:00')",
+		"DATE_ADD(0x323032302d30312d30312031303a31313a3132, INTERVAL 1 DAY)",
+	)
+	yieldIn(yield, "CAST(%s AS JSON)",
+		"HOUR(1=1)", "MINUTE(1=1)", "SECOND(1=1)", "MICROSECOND(1=1)", "TIME_TO_SEC(1=1)", "PERIOD_DIFF(1=1, 1=1)", "UNIX_TIMESTAMP(1=1)",
+		"CEIL(1=1)", "FLOOR(1=0)", "ROUND(1=1)", "ROUND(1=1, 0)", "TRUNCATE(1=1, 0)", "ABS(1=1)",
+		"CAST(1=1 AS SIGNED)", "CONVERT(1=0, SIGNED)", "COALESCE(1=1)", "GREATEST(1=1, 0)", "LEAST(1=1, 2)",
+		"IF(true, 1=1, 0)", "IFNULL(1=1, 0)", "NULLIF(1=1, 0)", "CASE WHEN true THEN 1=1 END", "REGEXP_INSTR('a', 'a')",
+	)
+}
+
+// SelectedLiterals checks that IF, CASE, NULLIF and ELT hand a hex or bit
+// literal that they select on to a numeric context: a number, a comparison
+// with a number, a truth value or an integer argument reads the number of the
+// literal (0x3132 is 12594, 0x30 is 48), while CAST AS SIGNED, CONV, a
+// comparison with a string and the string functions read its text ('12',
+// '0'). It also checks that a branch that is not selected, and IFNULL,
+// COALESCE and functions around or inside these, do not hand a literal on.
+func SelectedLiterals(yield Query) {
+	selected := []string{
+		"IF(true, 0x3132, 'a')", "IF(false, 5, 0b11000100110010)",
+		"CASE WHEN true THEN 0x3132 ELSE 1.5 END", "CASE WHEN false THEN 'a' ELSE b'11000100110010' END",
+		"CASE 1 WHEN 1 THEN x'3132' END", "CASE 2 WHEN 1 THEN 'a' WHEN 2 THEN 0b11000100110010 END",
+		"NULLIF(0x3132, 0x33)", "NULLIF(0b11000100110010, 5)",
+		"ELT(2, 'a', 0x3132)", "ELT(1, 0b11000100110010, NULL)",
+		"IF(true, CASE WHEN true THEN 0x3132 END, 0x34)", "NULLIF(ELT(1, IF(true, 0b11000100110010, 0x33)), 0x34)",
+	}
+	// Not selected or not handed on: these are the strings '12' or '34'.
+	plain := []string{
+		"IF(false, 0x3132, '34')", "CASE WHEN false THEN 0b11000100110010 ELSE '34' END", "ELT(1, '34', 0x3132)",
+		"IFNULL(0x3132, 0x33)", "IFNULL(NULL, 0b11000100110010)", "COALESCE(IF(true, 0x3132, 0x33))",
+		"CONCAT(CASE WHEN true THEN 0x3132 END)", "IF(true, TRIM(0x3132), 0x33)", "IF(true, IFNULL(0b11000100110010, 1), 0x33)",
+		"CAST(NULLIF(0x3132, 0x33) AS BINARY)",
+	}
+	for _, consumer := range []string{
+		"(%s) + 0", "-(%s)", "(%s) = 12594", "(%s) = '12'", "MAKEDATE(2020, %s)", "CHAR(%s)",
+		"CAST(%s AS SIGNED)", "CONV(%s, 10, 10)", "CONCAT(%s, 'x')",
+	} {
+		yieldIn(yield, consumer, selected...)
+		yieldIn(yield, consumer, plain...)
+	}
+	// ELT gives a decimal conversion, and so DIV, FROM_UNIXTIME and
+	// SEC_TO_TIME, its text; IF, CASE and NULLIF give it the number of the
+	// literal.
+	elt := []string{
+		"ELT(2, 'a', 0x3132)", "ELT(1, 0b11000100110010, NULL)",
+		"CASE WHEN true THEN ELT(1, 0x3132) END", "ELT(1, IF(true, 0x3132, 0x33))",
+	}
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", selected...)
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", plain...)
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", elt[2:]...)
+	yieldIn(yield, "(%s) DIV 5", elt...)
+	yieldIn(yield, "FROM_UNIXTIME(%s)", elt...)
+	yieldIn(yield, "SEC_TO_TIME(%s)", elt...)
+
+	// A hex or bit literal that does not fit 64 bits is the number 0.
+	yieldIn(yield, "FROM_UNIXTIME(%s)", "0xffffffffffffffffff", "IF(true, 0xffffffffffffffffff, 'x')")
+	yieldIn(yield, "CONV(%s, 16, 10)", "0xffffffffffffffffff")
+
+	// A shift or a bitwise NOT of a binary string returns an ordinary binary
+	// string, also when the string was selected from a hex or bit literal:
+	// ELT(1, 0x62, 'a') >> 1 is '1', which is the number 1.
+	yieldIn(yield, "(%s) + 0", "ELT(1, 0x62, 'a') >> 1", "ELT(1, 0x62, 'a') << 1", "~ELT(1, 0x62, 'a')", "~(CASE WHEN true THEN 0b01100010 END)")
+
+	// 0x30 and 0b110000 are '0' as a string, but 48 as a number.
+	for _, consumer := range []string{"IF(%s, 'T', 'F')", "NOT (%s)", "(%s) IS TRUE", "CASE WHEN %s THEN 'T' ELSE 'F' END"} {
+		yieldIn(yield, consumer,
+			"IF(true, 0x30, 0x31)", "CASE WHEN true THEN 0b110000 END", "NULLIF(0x30, 0x31)", "ELT(1, 0b110000)",
+			"IFNULL(0x30, 0x31)", "IF(true, CONCAT(0x30), 0x31)",
+		)
 	}
 }

@@ -70,7 +70,7 @@ func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
 
 func (*builtinDatabase) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_Database()
-	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3, Flag: flagNullable}, nil
 }
 
 func (call *builtinDatabase) constant() bool {

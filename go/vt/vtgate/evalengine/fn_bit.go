@@ -19,6 +19,7 @@ package evalengine
 import (
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -37,17 +38,53 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	var count int
-	if b, ok := arg.(*evalBytes); ok && b.isBinary() && !b.isHexOrBitLiteral() {
-		binary := b.bytes
-		for _, b := range binary {
-			count += bits.OnesCount8(b)
-		}
-	} else {
-		u := evalToInt64(arg)
-		count = bits.OnesCount64(uint64(u.i))
+	return newEvalInt64(int64(bitCount(arg))), nil
+}
+
+// bitCount returns the number of bits that are set in e.
+//
+// For a binary string it counts the bits of every byte:
+// BIT_COUNT(_binary 'a') is 3. It converts any other value to a 64-bit
+// integer first: BIT_COUNT('a') is 0, because 'a' is the number 0.
+func bitCount(e eval) int {
+	if b, ok := e.(*evalBytes); ok && (isBinaryString(b.SQLType(), b.col.Collation) || isBinaryText(b.SQLType(), b.col)) && !b.isHexOrBitLiteral() {
+		return bitCountBytes(b.bytes)
 	}
-	return newEvalInt64(int64(count)), nil
+	return bits.OnesCount64(uint64(evalToInt64(e).i))
+}
+
+func bitCountBytes(raw []byte) int {
+	var count int
+	for _, c := range raw {
+		count += bits.OnesCount8(c)
+	}
+	return count
+}
+
+// isBinaryString reports whether tt and col describe a binary string. A
+// BLOB with the collation of a character string is a TEXT: BIT_COUNT of
+// the TEXT IF(c, i, js) reads it as a number.
+func isBinaryString(tt sqltypes.Type, col collations.ID) bool {
+	switch tt {
+	case sqltypes.VarBinary, sqltypes.Binary:
+		return true
+	case sqltypes.Blob:
+		return col == collations.CollationBinaryID
+	}
+	return false
+}
+
+// isBinaryText reports whether tt and col describe a character string with
+// the binary collation.
+//
+// Several string functions declare that type for a binary string argument,
+// such as REVERSE(_binary 'a'). BIT_COUNT treats it like a binary string.
+//
+// The string of a column that has no declared type is not one: its
+// collation is not known, see unknownCollation. BIT_COUNT reads such a
+// string as a number.
+func isBinaryText(tt sqltypes.Type, col collations.TypedCollation) bool {
+	return sqltypes.IsText(tt) && col.Collation == collations.CollationBinaryID && !unknownCollation(col)
 }
 
 func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
@@ -58,7 +95,7 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(ct)
 
-	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+	if (isBinaryString(ct.Type, ct.Col.Collation) || isBinaryText(ct.Type, ct.Col)) && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
