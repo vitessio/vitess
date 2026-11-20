@@ -41,6 +41,10 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
+		// NoRoutesSpecialHandling is set when an empty destination can still
+		// produce rows from a reference or dual UNION input.
+		NoRoutesSpecialHandling bool
+
 		Routing Routing
 
 		Ordering []RouteOrdering
@@ -115,6 +119,15 @@ type (
 		resetRoutingLogic(ctx *plancontext.PlanningContext) Routing
 	}
 )
+
+func inheritNoRoutesSpecialHandling(route *Route, sources ...*Route) {
+	for _, source := range sources {
+		if source != nil && source.NoRoutesSpecialHandling {
+			route.NoRoutesSpecialHandling = true
+			return
+		}
+	}
+}
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {

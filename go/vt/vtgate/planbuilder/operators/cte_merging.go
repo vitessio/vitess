@@ -96,10 +96,12 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		OuterID:        in.OuterID,
 		Distinct:       in.Distinct,
 	}
-	return &Route{
+	route := &Route{
 		Routing:       r,
 		unaryOperator: newUnaryOp(cte),
 		MergedWith:    []*Route{term},
 		Conditions:    conditions,
 	}
+	inheritNoRoutesSpecialHandling(route, seed, term)
+	return route
 }

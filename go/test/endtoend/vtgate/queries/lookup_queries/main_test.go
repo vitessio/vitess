@@ -107,9 +107,15 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"user", "lookup"}
+		tables := []string{"user", "lookup", "lookup_non_planable_map"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		_, err := mcmp.MySQLConn.ExecuteFetch("delete from ref", 1000, true)
+		require.NoError(t, err)
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("delete from ref", shardedKs, true)
+			require.NoError(t, err)
 		}
 	}
 
@@ -146,4 +152,28 @@ func TestLookupQueries(t *testing.T) {
 			mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
 		})
 	}
+}
+
+func TestReferenceUnionAllLookupMiss(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", shardedKs, true)
+		require.NoError(t, err)
+	}
+
+	mcmp.AssertMatches(
+		"select id from ref union all select id from user where lookup_unique = 'not there'",
+		"[[INT64(100)]]",
+	)
+	mcmp.AssertMatches(
+		"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') as d cross join ref r",
+		"[[INT64(100)]]",
+	)
+	mcmp.AssertMatches(
+		"select id from ref union all select id from user where lookup_non_planable in ('not there')",
+		"[[INT64(100)]]",
+	)
 }
