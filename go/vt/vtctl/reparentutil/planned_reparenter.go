@@ -176,6 +176,15 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is the same as the tablet to avoid", topoproto.TabletAliasString(opts.NewPrimaryAlias))
 	}
 
+	// Election only considers REPLICA tablets, but an explicitly requested primary-elect can be of any type. A
+	// tablet in RESTORE has its MySQL data directory replaced and holds the action lock for the whole restore, so
+	// it cannot be promoted. Refuse it before any tablet is demoted.
+	if opts.NewPrimaryAlias != nil {
+		if info, ok := tabletMap[topoproto.TabletAliasString(opts.NewPrimaryAlias)]; ok && info.Type == topodatapb.TabletType_RESTORE {
+			return true, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is restoring from a backup and cannot be promoted", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+		}
+	}
+
 	if opts.NewPrimaryAlias == nil {
 		// We don't want to fail when both ShardInfo.PrimaryAlias and AvoidPrimaryAlias are nil.
 		// This happens when we are using PRS to initialize the cluster without specifying the NewPrimaryAlias
@@ -621,6 +630,30 @@ func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context
 	return reparentJournalPosition, nil
 }
 
+// checkShardPrimaryNotRestoring returns an error if the tablet that the shard record names as its primary
+// is in RESTORE.
+//
+// A primary that restarts on an empty data directory becomes a RESTORE tablet while the shard record still names
+// it. There is then no PRIMARY tablet, so PRS takes the no-clear-primary path, which skips RESTORE tablets
+// because they cannot be reached. That drops the old primary from the position check, which is the only thing
+// that shows that the primary-elect has the history of the primary. The old primary is the one tablet whose
+// transactions the replicas may hold in their relay logs without having applied them, so PRS cannot show that
+// promoting a replica keeps them. EmergencyReparentShard waits for the relay logs to be applied before it
+// promotes, and PRS refused this shard before RESTORE tablets were skipped.
+func checkShardPrimaryNotRestoring(shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo) error {
+	if shardInfo.PrimaryAlias == nil {
+		return nil
+	}
+
+	primaryAliasStr := topoproto.TabletAliasString(shardInfo.PrimaryAlias)
+	if info, ok := tabletMap[primaryAliasStr]; ok && info.Type == topodatapb.TabletType_RESTORE {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"shard primary %v is restoring from a backup, so there is no way to check that the primary-elect has all of its transactions; use EmergencyReparentShard instead", primaryAliasStr)
+	}
+
+	return nil
+}
+
 func (pr *PlannedReparenter) performPotentialPromotion(
 	ctx context.Context,
 	keyspace string,
@@ -854,7 +887,10 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil && ev.ShardInfo.PrimaryTermStartTime != nil:
 		// Case (2): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit)
+		err = checkShardPrimaryNotRestoring(&ev.ShardInfo, tabletMap)
+		if err == nil {
+			err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewPrimary, tabletMap, primaryElectExplicit)
+		}
 		// We need to call `PromoteReplica` when we reparent the tablets.
 		promoteReplicaRequired = true
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
