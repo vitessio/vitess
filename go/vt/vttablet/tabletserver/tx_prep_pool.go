@@ -28,6 +28,7 @@ import (
 var (
 	errPrepCommitting = vterrors.VT09025("locked for committing")
 	errPrepFailed     = vterrors.VT09025("failed to commit")
+	errPrepInDoubt    = vterrors.VT09025("not restored by redo recovery")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
@@ -84,6 +85,53 @@ func (pp *TxPreparedPool) IsOpen() bool {
 func (pp *TxPreparedPool) Put(c *StatefulConnection, dtid string) error {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
+
+	return pp.putLocked(c, dtid)
+}
+
+// PutRecovered adds a connection that redo recovery restored. It replaces the
+// in-doubt reservation of dtid. If the pool rejects the connection, the
+// reservation stays.
+func (pp *TxPreparedPool) PutRecovered(c *StatefulConnection, dtid string) error {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	if err, ok := pp.reserved[dtid]; !ok || err != errPrepInDoubt {
+		return pp.putLocked(c, dtid)
+	}
+
+	delete(pp.reserved, dtid)
+	if err := pp.putLocked(c, dtid); err != nil {
+		pp.reserved[dtid] = errPrepInDoubt
+		return err
+	}
+
+	return nil
+}
+
+// ReserveInDoubt reserves each dtid that has no connection and no reservation.
+// CommitPrepared returns an error for a reserved dtid. Redo recovery reserves
+// every durable dtid before it opens the pool, so that a dtid it fails to
+// restore is not reported as committed.
+func (pp *TxPreparedPool) ReserveInDoubt(dtids []string) {
+	pp.mu.Lock()
+	defer pp.mu.Unlock()
+
+	for _, dtid := range dtids {
+		if _, ok := pp.conns[dtid]; ok {
+			continue
+		}
+
+		if _, ok := pp.reserved[dtid]; ok {
+			continue
+		}
+
+		pp.reserved[dtid] = errPrepInDoubt
+	}
+}
+
+// putLocked adds the connection to the pool. The caller must hold pp.mu.
+func (pp *TxPreparedPool) putLocked(c *StatefulConnection, dtid string) error {
 	// If the pool is shutdown, we don't accept new prepared transactions.
 	if !pp.open {
 		return vterrors.VT09025("pool is shutdown")
