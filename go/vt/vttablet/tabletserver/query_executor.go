@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -621,7 +622,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 
 	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
 		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelect && qre.shouldConsolidate() {
-			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, sqlWithoutComments, countingCallback,
+			return consolidator.Consolidate(qre.tsv.stats.WaitTimings, qre.logStats, qre.consolidationKey(sqlWithoutComments), countingCallback,
 				func(callback StreamCallback) error {
 					dbConn, err := qre.getStreamConn()
 					if err != nil {
@@ -1335,6 +1336,48 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	}, nil
 }
 
+// consolidationSettingsPrefix starts the consolidation key of a query that runs with
+// connection settings.
+const consolidationSettingsPrefix = "/* settings "
+
+// consolidationKey returns the key under which identical queries are consolidated.
+// The connection settings are part of the key because they are applied only to the
+// pool connection that runs the query: a query that joined a leader with different
+// settings would get a result computed under the leader's settings. The apply query, not
+// the *Setting pointer, is used so that equal settings match even when they are separate
+// instances.
+//
+// The settings come first, in a comment that also holds the length of the apply query,
+// so that the debug page shows a readable key and can split it whatever the settings and
+// the query contain. A query without settings keeps its text as its key, which is
+// generated from its plan and so never starts with a comment.
+func (qre *QueryExecutor) consolidationKey(sqlWithoutComments string) string {
+	if qre.setting == nil {
+		return sqlWithoutComments
+	}
+	applyQuery := qre.setting.ApplyQuery()
+	return consolidationSettingsPrefix + strconv.Itoa(len(applyQuery)) + ": " + applyQuery + " */ " + sqlWithoutComments
+}
+
+// splitConsolidationKey returns the query of key, a consolidation key, and whether key
+// has connection settings.
+func splitConsolidationKey(key string) (string, bool) {
+	rest, ok := strings.CutPrefix(key, consolidationSettingsPrefix)
+	if !ok {
+		return key, false
+	}
+	length, rest, ok := strings.Cut(rest, ": ")
+	n, err := strconv.Atoi(length)
+	if !ok || err != nil || n < 0 || n > len(rest) {
+		return key, false
+	}
+	query, ok := strings.CutPrefix(rest[n:], " */ ")
+	if !ok {
+		return key, false
+	}
+	return query, true
+}
+
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missing field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
@@ -1344,7 +1387,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 	}
 	// Check tablet type.
 	if qre.shouldConsolidate() {
-		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
+		q, original := qre.tsv.qe.consolidator.Create(qre.consolidationKey(sqlWithoutComments))
 		waiterCapExceeded := false
 		if original {
 			defer q.Broadcast()
