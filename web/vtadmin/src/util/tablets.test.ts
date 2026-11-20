@@ -16,35 +16,53 @@
 
 import * as tablets from './tablets';
 
-describe('formatPaddedAlias', () => {
+describe('formatAlias', () => {
     it('pads with leading zeroes', () => {
         expect(
-            tablets.formatPaddedAlias({
+            tablets.formatAlias({
                 cell: 'zone1',
                 uid: 100,
             })
         ).toEqual('zone1-0000000100');
     });
 
+    it('does not pad a 10-digit uid', () => {
+        expect(
+            tablets.formatAlias({
+                cell: 'zone1',
+                uid: 4294967295,
+            })
+        ).toEqual('zone1-4294967295');
+    });
+
+    it('formats a uid of 0', () => {
+        expect(
+            tablets.formatAlias({
+                cell: 'zone1',
+                uid: 0,
+            })
+        ).toEqual('zone1-0000000000');
+    });
+
     it('handles null input', () => {
-        expect(tablets.formatPaddedAlias(null)).toEqual(null);
+        expect(tablets.formatAlias(null)).toEqual(null);
     });
 
     it('handles invalid cell', () => {
         expect(
-            tablets.formatPaddedAlias({
+            tablets.formatAlias({
                 cell: null,
                 uid: 100,
             })
         ).toEqual(null);
     });
 
-    it('handles invalid uid', () => {
+    it('treats a missing uid as 0', () => {
+        // vtadmin-api omits uid from the JSON when it is 0.
         expect(
-            tablets.formatPaddedAlias({
+            tablets.formatAlias({
                 cell: 'zone1',
-                uid: null,
             })
-        ).toEqual(null);
+        ).toEqual('zone1-0000000000');
     });
 });

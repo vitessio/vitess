@@ -235,7 +235,7 @@ describe('Advanced', () => {
 
                 expect(button).toHaveAttribute('disabled');
 
-                fireEvent.change(input, { target: { value: 'zone1-101' } });
+                fireEvent.change(input, { target: { value: 'zone1-0000000101' } });
                 expect(button).not.toHaveAttribute('disabled');
 
                 fireEvent.click(button);
@@ -244,7 +244,7 @@ describe('Advanced', () => {
                     expect(global.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
+                expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-0000000101?cluster=some-cluster-id', {
                     credentials: undefined,
                     method: 'delete',
                 });
@@ -266,7 +266,7 @@ describe('Advanced', () => {
 
                 expect(button).toHaveAttribute('disabled');
 
-                fireEvent.change(input, { target: { value: 'zone1-101' } });
+                fireEvent.change(input, { target: { value: 'zone1-0000000101' } });
                 expect(button).not.toHaveAttribute('disabled');
 
                 fireEvent.click(button);
@@ -276,7 +276,7 @@ describe('Advanced', () => {
                 });
 
                 expect(global.fetch).toHaveBeenCalledWith(
-                    '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
+                    '/api/tablet/zone1-0000000101?cluster=some-cluster-id&allow_primary=true',
                     {
                         credentials: undefined,
                         method: 'delete',
