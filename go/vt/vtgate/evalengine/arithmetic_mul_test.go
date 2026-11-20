@@ -38,7 +38,11 @@ func TestMathMulOverflow(t *testing.T) {
 			{1 << 32, 1 << 31, 0, true},
 			{-1, math.MaxInt64, -math.MaxInt64, false},
 			{math.MinInt64, 1, math.MinInt64, false},
-			{-(1 << 32), 1 << 31, math.MinInt64, false},
+			{-(1 << 32), 1 << 31, 0, true},
+			{1 << 32, -(1 << 31), 0, true},
+			{2, -(1 << 62), 0, true},
+			{-(1 << 62), 2, 0, true},
+			{1, math.MinInt64, math.MinInt64, false},
 			{0, math.MinInt64, 0, false},
 			{math.MinInt64, 0, 0, false},
 		}

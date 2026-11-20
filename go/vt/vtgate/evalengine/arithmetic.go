@@ -442,9 +442,11 @@ func mathMul_ii(v1, v2 int64) (*evalInt64, error) {
 
 func mathMul_ii0(v1, v2 int64) (int64, error) {
 	result := v1 * v2
-	// MinInt64 / -1 wraps back to MinInt64, so the division check alone
-	// misses -1 * MinInt64
-	if v1 != 0 && (result/v1 != v2 || (v1 == -1 && v2 == math.MinInt64)) {
+	// MySQL multiplies the absolute values, so a product of exactly
+	// MinInt64 is out of range unless one side is 1. This also covers
+	// -1 * MinInt64, where MinInt64 / -1 wraps back to MinInt64 and the
+	// division check alone misses it.
+	if v1 != 0 && (result/v1 != v2 || (result == math.MinInt64 && v1 != 1 && v2 != 1)) {
 		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "*")
 	}
 	return result, nil
