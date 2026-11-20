@@ -1062,9 +1062,13 @@ func transformRecurseCTE(ctx *plancontext.PlanningContext, op *operators.Recurse
 		return nil, err
 	}
 	return &engine.RecurseCTE{
-		Seed: seed,
-		Term: term,
-		Vars: op.Vars,
+		Seed:          seed,
+		Term:          term,
+		Vars:          op.Vars,
+		CheckCols:     op.CheckCols,
+		TermCheckCols: op.TermCheckCols,
+		Truncate:      op.Truncate,
+		TermFromCTE:   op.TermFromCTE,
 	}, nil
 }
 

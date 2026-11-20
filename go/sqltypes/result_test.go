@@ -107,6 +107,9 @@ func TestTruncate(t *testing.T) {
 		},
 	}
 	assertEqualResults(t, out, want)
+
+	out.Rows[0] = append(out.Rows[0], TestValue(Int64, "9"))
+	assert.Equal(t, MakeTrusted(Null, nil), in.Rows[0][1])
 }
 
 func TestStripMetaData(t *testing.T) {

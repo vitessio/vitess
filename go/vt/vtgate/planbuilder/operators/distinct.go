@@ -19,8 +19,10 @@ package operators
 import (
 	"slices"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -57,12 +59,12 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	columns := d.GetColumns(ctx)
 	for idx, col := range columns {
 		e := col.Expr
+		typ := checkColType(ctx, e)
 		var wsCol *int
-		if ctx.NeedsWeightString(e) {
+		if typ.Type() == sqltypes.Unknown || ctx.NeedsWeightString(e) {
 			offset := d.Source.AddWSColumn(ctx, idx, false)
 			wsCol = &offset
 		}
-		typ, _ := ctx.TypeForExpr(e)
 		d.Columns = append(d.Columns, engine.CheckCol{
 			Col:          idx,
 			WsCol:        wsCol,
@@ -71,6 +73,17 @@ func (d *Distinct) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		})
 	}
 	return nil
+}
+
+// checkColType returns the type that DISTINCT compares an expression's values in. The collation
+// of an unknown type, as for max(col), is the connection's, not the column's, so that type has no
+// collation, and its values are compared by their weight string.
+func checkColType(ctx *plancontext.PlanningContext, expr sqlparser.Expr) evalengine.Type {
+	typ, _ := ctx.TypeForExpr(expr)
+	if typ.Type() == sqltypes.Unknown {
+		return evalengine.NewUnknownType()
+	}
+	return typ
 }
 
 func (d *Distinct) Clone(inputs []Operator) Operator {
