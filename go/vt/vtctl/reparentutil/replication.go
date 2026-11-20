@@ -514,6 +514,7 @@ func stopReplicationAndBuildStatusMaps(
 				m.Lock()
 				res.primaryStatusMap[alias] = primaryStatus
 				res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+				warnIfDeprecatedServingShardReplication(logger, primaryStatus.ServerVersion, alias, primaryStatus.Position)
 				if primaryStatus.ServerVersion != "" {
 					if flavor, v, parseErr := mysqlctl.ParseVersionString(primaryStatus.ServerVersion); parseErr == nil {
 						res.mysqlVersions[alias] = v
@@ -544,6 +545,9 @@ func stopReplicationAndBuildStatusMaps(
 			res.tabletsBackupState[alias] = isTakingBackup
 			res.statusMap[alias] = stopReplicationStatus
 			res.reachableTablets = append(res.reachableTablets, tabletInfo.Tablet)
+			if stopReplicationStatus.Before != nil {
+				warnIfDeprecatedServingShardReplication(logger, stopReplicationStatus.Before.ServerVersion, alias, stopReplicationStatus.Before.Position, stopReplicationStatus.Before.RelayLogPosition)
+			}
 			if stopReplicationStatus.Before != nil && stopReplicationStatus.Before.ServerVersion != "" {
 				if flavor, v, parseErr := mysqlctl.ParseVersionString(stopReplicationStatus.Before.ServerVersion); parseErr == nil {
 					res.mysqlVersions[alias] = v
