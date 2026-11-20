@@ -258,6 +258,57 @@ func TestConvertQueryThrottlerConfigToThrottlerConfig_EnabledAndAppRule(t *testi
 	}
 }
 
+// The shard percentiles come from the query throttler config as they are, and never from ThrottlerConfig.
+func TestQueryConfigLoaderMetricShardPercentiles(t *testing.T) {
+	configWithPercentiles := func(percentiles map[string]float64) *querythrottlerpb.Config {
+		return &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				MetricShardPercentiles: percentiles,
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{"SELECT": {MetricRules: map[string]*querythrottlerpb.MetricRule{
+						"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5, Throttle: 100}}},
+					}}}},
+				},
+			},
+		}
+	}
+	tcs := []struct {
+		name   string
+		srvks  *topodatapb.SrvKeyspace
+		expect map[string]float64
+	}{
+		{
+			name:  "unset",
+			srvks: &topodatapb.SrvKeyspace{QueryThrottlerConfig: configWithPercentiles(nil)},
+		},
+		{
+			name:   "every metric is passed on, including one that no rule uses",
+			srvks:  &topodatapb.SrvKeyspace{QueryThrottlerConfig: configWithPercentiles(map[string]float64{"lag": 75, "loadavg": 90})},
+			expect: map[string]float64{"lag": 75, "loadavg": 90},
+		},
+		{
+			name: "ThrottlerConfig value is not used",
+			srvks: &topodatapb.SrvKeyspace{
+				ThrottlerConfig:      &topodatapb.ThrottlerConfig{MetricShardPercentiles: map[string]float64{"lag": 50}},
+				QueryThrottlerConfig: configWithPercentiles(nil),
+			},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expect, (&queryConfigLoader{}).loadConfig(tc.srvks).GetMetricShardPercentiles())
+		})
+	}
+
+	t.Run("the shared SrvKeyspace is not modified through the result", func(t *testing.T) {
+		srvks := &topodatapb.SrvKeyspace{QueryThrottlerConfig: configWithPercentiles(map[string]float64{"lag": 75})}
+		(&queryConfigLoader{}).loadConfig(srvks).MetricShardPercentiles["lag"] = 10
+		require.Equal(t, map[string]float64{"lag": 75}, srvks.GetQueryThrottlerConfig().GetTabletStrategyConfig().GetMetricShardPercentiles())
+	})
+}
+
 // Only a TABLET_THROTTLER config drives the dedicated throttler; anything else, or no
 // config, leaves it unconfigured.
 func TestConvertQueryThrottlerConfigToThrottlerConfig_NotTabletThrottler(t *testing.T) {

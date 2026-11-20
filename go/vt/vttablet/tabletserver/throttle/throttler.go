@@ -46,6 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -213,8 +214,9 @@ type Throttler struct {
 
 	inventory *base.Inventory
 
-	customMetricsQuery atomic.Value
-	MetricsThreshold   atomic.Uint64
+	customMetricsQuery     atomic.Value
+	MetricsThreshold       atomic.Uint64
+	metricShardPercentiles atomic.Pointer[map[string]float64]
 
 	metricThresholds  *cache.Cache
 	aggregatedMetrics *cache.Cache
@@ -251,9 +253,11 @@ type ThrottlerStatus struct {
 	AggregatedMetrics map[string]base.MetricResult
 	MetricsThresholds map[string]float64
 	MetricsHealth     base.MetricHealthMap
-	ThrottledApps     []base.AppThrottle
-	AppCheckedMetrics map[string]string
-	RecentApps        map[string](*base.RecentApp)
+
+	MetricShardPercentiles map[string]float64
+	ThrottledApps          []base.AppThrottle
+	AppCheckedMetrics      map[string]string
+	RecentApps             map[string](*base.RecentApp)
 }
 
 // NewThrottler creates a Throttler
@@ -515,6 +519,8 @@ func (throttler *Throttler) convergeMetricThresholds() {
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	log.Info("Throttler: applying topo config", slog.String("throttler_config", fmt.Sprintf("%+v", throttlerConfig)))
 	throttler.customMetricsQuery.Store(throttlerConfig.CustomQuery)
+	metricShardPercentiles := maps.Clone(throttlerConfig.MetricShardPercentiles)
+	throttler.metricShardPercentiles.Store(&metricShardPercentiles)
 	if throttlerConfig.Threshold > 0 || throttlerConfig.CustomQuery != "" {
 		// We do not allow Threshold=0, unless there is a custom query.
 		// Without a custom query, the theshold applies to replication lag,
@@ -1356,18 +1362,29 @@ func (throttler *Throttler) metricNameUsedAsDefault() base.MetricName {
 // synchronous aggregation of collected data
 func (throttler *Throttler) aggregateMetrics() error {
 	metricNameUsedAsDefault := throttler.metricNameUsedAsDefault()
-	aggregateTabletsMetrics := func(scope base.Scope, metricName base.MetricName, tabletResultsMap base.TabletResultMap) {
-		ignoreHostsCount := throttler.inventory.IgnoreHostsCount
-		ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
-		ignoreTabletRPCErrors := (throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors || throttler.configSettings.MySQLStore.IgnoreDialTCPErrors)
+	var metricShardPercentiles map[string]float64
+	if p := throttler.metricShardPercentiles.Load(); p != nil {
+		metricShardPercentiles = *p
+	}
 
-		aggregatedMetric := base.AggregateTabletMetricResults(metricName, tabletResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold)
+	ignoreHostsCount := throttler.inventory.IgnoreHostsCount
+	ignoreHostsThreshold := throttler.inventory.IgnoreHostsThreshold
+	ignoreTabletRPCErrors := (throttler.configSettings.MySQLStore.IgnoreTabletRPCErrors || throttler.configSettings.MySQLStore.IgnoreDialTCPErrors)
+	storeAggregatedMetric := func(scope base.Scope, metricName base.MetricName, aggregatedMetric base.MetricResult) {
 		aggregatedMetricName := metricName.AggregatedName(scope)
 		throttler.aggregatedMetrics.Set(aggregatedMetricName, aggregatedMetric, cache.DefaultExpiration)
 		if metricName == metricNameUsedAsDefault {
 			throttler.aggregatedMetrics.Set(base.DefaultMetricName.AggregatedName(scope), aggregatedMetric, cache.DefaultExpiration)
 		}
 	}
+
+	selfResultsMap, shardResultsMap := throttler.inventory.TabletMetrics.Split(throttler.tabletAliasString())
+	isLeader := throttler.isLeader.Load()
+	var othersResultsMap base.TabletResultMap
+	if isLeader && len(metricShardPercentiles) > 0 {
+		othersResultsMap = shardResultsMap.Without(throttler.tabletAliasString())
+	}
+
 	for _, metricName := range base.KnownMetricNames {
 		if metricName == base.DefaultMetricName {
 			// "default metric" is for backwards compatibility with v20, which does not support multi-metrics.
@@ -1375,9 +1392,14 @@ func (throttler *Throttler) aggregateMetrics() error {
 			// is to be stored as "default"
 			continue
 		}
-		selfResultsMap, shardResultsMap := throttler.inventory.TabletMetrics.Split(throttler.tabletAliasString())
-		aggregateTabletsMetrics(base.SelfScope, metricName, selfResultsMap)
-		aggregateTabletsMetrics(base.ShardScope, metricName, shardResultsMap)
+		selfMetric := base.AggregateTabletMetricResults(metricName, selfResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold, base.WorstValuePercentile)
+		storeAggregatedMetric(base.SelfScope, metricName, selfMetric)
+		if percentile := metricShardPercentiles[metricName.String()]; isLeader && base.IsPercentileBelowWorst(percentile) {
+			// The PRIMARY's own value is a floor, so that the percentile does not hide a busy PRIMARY.
+			storeAggregatedMetric(base.ShardScope, metricName, base.FloorMetricResult(selfMetric, base.AggregateTabletMetricResults(metricName, othersResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold, percentile)))
+		} else {
+			storeAggregatedMetric(base.ShardScope, metricName, base.AggregateTabletMetricResults(metricName, shardResultsMap, ignoreHostsCount, ignoreTabletRPCErrors, ignoreHostsThreshold, base.WorstValuePercentile))
+		}
 	}
 	return nil
 }
@@ -1765,11 +1787,23 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 		Threshold:               throttler.GetMetricsThreshold(),
 		MetricNameUsedAsDefault: throttler.metricNameUsedAsDefault().String(),
 
-		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
-		MetricsThresholds: throttler.metricThresholdsSnapshot(),
-		MetricsHealth:     throttler.metricsHealthSnapshot(),
-		ThrottledApps:     throttler.ThrottledApps(),
-		AppCheckedMetrics: throttler.appCheckedMetricsSnapshot(),
-		RecentApps:        throttler.recentAppsSnapshot(),
+		AggregatedMetrics:      throttler.aggregatedMetricsSnapshot(),
+		MetricsThresholds:      throttler.metricThresholdsSnapshot(),
+		MetricsHealth:          throttler.metricsHealthSnapshot(),
+		ThrottledApps:          throttler.ThrottledApps(),
+		AppCheckedMetrics:      throttler.appCheckedMetricsSnapshot(),
+		RecentApps:             throttler.recentAppsSnapshot(),
+		MetricShardPercentiles: throttler.metricShardPercentilesSnapshot(),
 	}
+}
+
+// metricShardPercentilesSnapshot returns a snapshot of the metric shard percentiles, or nil when the throttler is not the leader, which does not apply them.
+func (throttler *Throttler) metricShardPercentilesSnapshot() map[string]float64 {
+	if !throttler.isLeader.Load() {
+		return nil
+	}
+	if p := throttler.metricShardPercentiles.Load(); p != nil {
+		return maps.Clone(*p)
+	}
+	return nil
 }

@@ -1117,6 +1117,9 @@ message UpdateThrottlerConfigRequest {
   // AppCheckedMetrics are the metrics to be checked got the given AppName. These can be scoped. For example:
   // ["lag", "self/loadvg", "shard/threads_running"]
   repeated string app_checked_metrics = 12;
+  // MetricShardPercentiles sets the shard percentile of each given metric in ThrottlerConfig.metric_shard_percentiles.
+  // A value of 0 removes the metric's percentile. Metrics not in the map keep their current percentile.
+  map<string, double> metric_shard_percentiles = 13;
 }
 
 message UpdateThrottlerConfigResponse {

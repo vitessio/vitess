@@ -58921,6 +58921,7 @@ export const topodata = $root.topodata = (() => {
          * @property {Object.<string,topodata.ThrottledAppRule.$Properties>|null} [throttled_apps] ThrottlerConfig throttled_apps
          * @property {Object.<string,topodata.ThrottlerConfig.MetricNames.$Properties>|null} [app_checked_metrics] ThrottlerConfig app_checked_metrics
          * @property {Object.<string,number>|null} [metric_thresholds] ThrottlerConfig metric_thresholds
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] ThrottlerConfig metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -58949,6 +58950,7 @@ export const topodata = $root.topodata = (() => {
             this.throttled_apps = {};
             this.app_checked_metrics = {};
             this.metric_thresholds = {};
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -59012,6 +59014,14 @@ export const topodata = $root.topodata = (() => {
         ThrottlerConfig.prototype.metric_thresholds = $util.emptyObject;
 
         /**
+         * ThrottlerConfig metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof topodata.ThrottlerConfig
+         * @instance
+         */
+        ThrottlerConfig.prototype.metric_shard_percentiles = $util.emptyObject;
+
+        /**
          * Creates a new ThrottlerConfig instance using the specified properties.
          * @function create
          * @memberof topodata.ThrottlerConfig
@@ -59064,6 +59074,9 @@ export const topodata = $root.topodata = (() => {
             if (message.metric_thresholds != null && $Object.hasOwnProperty.call(message, "metric_thresholds"))
                 for (let keys = $Object.keys(message.metric_thresholds), i = 0; i < keys.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_thresholds[keys[i]]).ldelim();
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 8, wireType 2 =*/66).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -59265,6 +59278,42 @@ export const topodata = $root.topodata = (() => {
                         message.metric_thresholds[key] = value;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -59353,6 +59402,14 @@ export const topodata = $root.topodata = (() => {
                     if (typeof message.metric_thresholds[key[i]] !== "number")
                         return "metric_thresholds: number{k:string} expected";
             }
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -59420,6 +59477,16 @@ export const topodata = $root.topodata = (() => {
                     message.metric_thresholds[keys[i]] = $Number(object.metric_thresholds[keys[i]]);
                 }
             }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".topodata.ThrottlerConfig.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -59444,6 +59511,7 @@ export const topodata = $root.topodata = (() => {
                 object.throttled_apps = {};
                 object.app_checked_metrics = {};
                 object.metric_thresholds = {};
+                object.metric_shard_percentiles = {};
             }
             if (options.defaults) {
                 object.enabled = false;
@@ -59482,6 +59550,14 @@ export const topodata = $root.topodata = (() => {
                     if (keys2[j] === "__proto__")
                         $util.makeProp(object.metric_thresholds, keys2[j]);
                     object.metric_thresholds[keys2[j]] = options.json && !$isFinite(message.metric_thresholds[keys2[j]]) ? $String(message.metric_thresholds[keys2[j]]) : message.metric_thresholds[keys2[j]];
+                }
+            }
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
                 }
             }
             return object;
@@ -63678,6 +63754,7 @@ export const querythrottler = $root.querythrottler = (() => {
          * Properties of a TabletStrategyConfig.
          * @typedef {Object} querythrottler.TabletStrategyConfig.$Properties
          * @property {Object.<string,querythrottler.StatementRuleSet.$Properties>|null} [tablet_rules] TabletStrategyConfig tablet_rules
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] TabletStrategyConfig metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -63704,6 +63781,7 @@ export const querythrottler = $root.querythrottler = (() => {
          */
         const TabletStrategyConfig = function (properties) {
             this.tablet_rules = {};
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -63717,6 +63795,14 @@ export const querythrottler = $root.querythrottler = (() => {
          * @instance
          */
         TabletStrategyConfig.prototype.tablet_rules = $util.emptyObject;
+
+        /**
+         * TabletStrategyConfig metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof querythrottler.TabletStrategyConfig
+         * @instance
+         */
+        TabletStrategyConfig.prototype.metric_shard_percentiles = $util.emptyObject;
 
         /**
          * Creates a new TabletStrategyConfig instance using the specified properties.
@@ -63755,6 +63841,9 @@ export const querythrottler = $root.querythrottler = (() => {
                     writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.querythrottler.StatementRuleSet.encode(message.tablet_rules[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim().ldelim();
                 }
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -63848,6 +63937,42 @@ export const querythrottler = $root.querythrottler = (() => {
                         message.tablet_rules[key] = value || new $root.querythrottler.StatementRuleSet();
                         continue;
                     }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -63906,6 +64031,14 @@ export const querythrottler = $root.querythrottler = (() => {
                         return "tablet_rules." + error;
                 }
             }
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -63939,6 +64072,16 @@ export const querythrottler = $root.querythrottler = (() => {
                     message.tablet_rules[keys[i]] = $root.querythrottler.StatementRuleSet.fromObject(object.tablet_rules[keys[i]], _depth + 1);
                 }
             }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".querythrottler.TabletStrategyConfig.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -63959,8 +64102,10 @@ export const querythrottler = $root.querythrottler = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.objects || options.defaults)
+            if (options.objects || options.defaults) {
                 object.tablet_rules = {};
+                object.metric_shard_percentiles = {};
+            }
             let keys2;
             if (message.tablet_rules && (keys2 = $Object.keys(message.tablet_rules)).length) {
                 object.tablet_rules = {};
@@ -63968,6 +64113,14 @@ export const querythrottler = $root.querythrottler = (() => {
                     if (keys2[j] === "__proto__")
                         $util.makeProp(object.tablet_rules, keys2[j]);
                     object.tablet_rules[keys2[j]] = $root.querythrottler.StatementRuleSet.toObject(message.tablet_rules[keys2[j]], options, _depth + 1);
+                }
+            }
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
                 }
             }
             return object;
@@ -112603,6 +112756,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {boolean|null} [recently_checked] GetThrottlerStatusResponse recently_checked
          * @property {Object.<string,tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.$Properties>|null} [recent_apps] GetThrottlerStatusResponse recent_apps
          * @property {tabletmanagerdata.ThrottlerType|null} [throttler_type] GetThrottlerStatusResponse throttler_type
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] GetThrottlerStatusResponse metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -112634,6 +112788,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             this.throttled_apps = {};
             this.app_checked_metrics = {};
             this.recent_apps = {};
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -112793,6 +112948,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetThrottlerStatusResponse.prototype.throttler_type = 0;
 
         /**
+         * GetThrottlerStatusResponse metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof tabletmanagerdata.GetThrottlerStatusResponse
+         * @instance
+         */
+        GetThrottlerStatusResponse.prototype.metric_shard_percentiles = $util.emptyObject;
+
+        /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @function create
          * @memberof tabletmanagerdata.GetThrottlerStatusResponse
@@ -112876,6 +113039,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 }
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type") && message.throttler_type !== 0)
                 writer.uint32(/* id 19, wireType 0 =*/152).int32(message.throttler_type);
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 20, wireType 2 =*/162).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -113266,6 +113432,42 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.throttler_type;
                         continue;
                     }
+                case 20: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -113409,6 +113611,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
                 if (typeof message.throttler_type !== "number" || (message.throttler_type | 0) !== message.throttler_type)
                     return "throttler_type: enum value expected";
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -113548,6 +113758,16 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (typeof object.throttler_type === "number" && (object.throttler_type | 0) === object.throttler_type)
                         message.throttler_type = object.throttler_type;
                 }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".tabletmanagerdata.GetThrottlerStatusResponse.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -113575,6 +113795,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.throttled_apps = {};
                 object.app_checked_metrics = {};
                 object.recent_apps = {};
+                object.metric_shard_percentiles = {};
             }
             if (options.defaults) {
                 object.tablet_alias = "";
@@ -113666,6 +113887,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             }
             if (message.throttler_type != null && $Object.hasOwnProperty.call(message, "throttler_type"))
                 object.throttler_type = options.enums === $String ? $root.tabletmanagerdata.ThrottlerType[message.throttler_type] === $undefined ? message.throttler_type : $root.tabletmanagerdata.ThrottlerType[message.throttler_type] : message.throttler_type;
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
+                }
+            }
             return object;
         };
 
@@ -208419,6 +208648,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [metric_name] UpdateThrottlerConfigRequest metric_name
          * @property {string|null} [app_name] UpdateThrottlerConfigRequest app_name
          * @property {Array.<string>|null} [app_checked_metrics] UpdateThrottlerConfigRequest app_checked_metrics
+         * @property {Object.<string,number>|null} [metric_shard_percentiles] UpdateThrottlerConfigRequest metric_shard_percentiles
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -208445,6 +208675,7 @@ export const vtctldata = $root.vtctldata = (() => {
          */
         const UpdateThrottlerConfigRequest = function (properties) {
             this.app_checked_metrics = [];
+            this.metric_shard_percentiles = {};
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -208548,6 +208779,14 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateThrottlerConfigRequest.prototype.app_checked_metrics = $util.emptyArray;
 
         /**
+         * UpdateThrottlerConfigRequest metric_shard_percentiles.
+         * @member {Object.<string,number>} metric_shard_percentiles
+         * @memberof vtctldata.UpdateThrottlerConfigRequest
+         * @instance
+         */
+        UpdateThrottlerConfigRequest.prototype.metric_shard_percentiles = $util.emptyObject;
+
+        /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.UpdateThrottlerConfigRequest
@@ -208604,6 +208843,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.app_checked_metrics != null && message.app_checked_metrics.length)
                 for (let i = 0; i < message.app_checked_metrics.length; ++i)
                     writer.uint32(/* id 12, wireType 2 =*/98).string(message.app_checked_metrics[i]);
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles"))
+                for (let keys = $Object.keys(message.metric_shard_percentiles), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 13, wireType 2 =*/106).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 1 =*/17).double(message.metric_shard_percentiles[keys[i]]).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -208641,7 +208883,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end, message, value;
+            let end, message, key, value;
             if (length === $undefined)
                 end = reader.len;
             else {
@@ -208765,6 +209007,42 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.app_checked_metrics.push(reader.stringVerify());
                         continue;
                     }
+                case 13: {
+                        if (wireType !== 2)
+                            break;
+                        if (message.metric_shard_percentiles === $util.emptyObject)
+                            message.metric_shard_percentiles = {};
+                        let end2 = reader.size() + reader.pos;
+                        if (end2 > reader.len)
+                            throw $RangeError("index out of range");
+                        reader.len = end2;
+                        key = "";
+                        value = 0;
+                        while (reader.pos < end2) {
+                            let tag2 = reader.tag();
+                            wireType = tag2 & 7;
+                            switch (tag2 >>>= 3) {
+                            case 1:
+                                if (wireType !== 2)
+                                    break;
+                                key = reader.stringVerify();
+                                continue;
+                            case 2:
+                                if (wireType !== 1)
+                                    break;
+                                value = reader.double();
+                                continue;
+                            }
+                            reader.skipType(wireType, _depth, tag2);
+                        }
+                        if (reader.pos !== end2)
+                            throw $RangeError("index out of range");
+                        reader.len = end;
+                        if (key === "__proto__")
+                            $util.makeProp(message.metric_shard_percentiles, key);
+                        message.metric_shard_percentiles[key] = value;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -208855,6 +209133,14 @@ export const vtctldata = $root.vtctldata = (() => {
                     if (!$util.isString(message.app_checked_metrics[i]))
                         return "app_checked_metrics: string[] expected";
             }
+            if (message.metric_shard_percentiles != null && $Object.hasOwnProperty.call(message, "metric_shard_percentiles")) {
+                if (!$util.isObject(message.metric_shard_percentiles))
+                    return "metric_shard_percentiles: object expected";
+                let key = $Object.keys(message.metric_shard_percentiles);
+                for (let i = 0; i < key.length; ++i)
+                    if (typeof message.metric_shard_percentiles[key[i]] !== "number")
+                        return "metric_shard_percentiles: number{k:string} expected";
+            }
             return null;
         };
 
@@ -208918,6 +209204,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 for (let i = 0; i < object.app_checked_metrics.length; ++i)
                     message.app_checked_metrics[i] = $String(object.app_checked_metrics[i]);
             }
+            if (object.metric_shard_percentiles) {
+                if (!$util.isObject(object.metric_shard_percentiles))
+                    throw $TypeError(".vtctldata.UpdateThrottlerConfigRequest.metric_shard_percentiles: object expected");
+                message.metric_shard_percentiles = {};
+                for (let keys = $Object.keys(object.metric_shard_percentiles), i = 0; i < keys.length; ++i) {
+                    if (keys[i] === "__proto__")
+                        $util.makeProp(message.metric_shard_percentiles, keys[i]);
+                    message.metric_shard_percentiles[keys[i]] = $Number(object.metric_shard_percentiles[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -208940,6 +209236,8 @@ export const vtctldata = $root.vtctldata = (() => {
             let object = {};
             if (options.arrays || options.defaults)
                 object.app_checked_metrics = [];
+            if (options.objects || options.defaults)
+                object.metric_shard_percentiles = {};
             if (options.defaults) {
                 object.keyspace = "";
                 object.enable = false;
@@ -208979,6 +209277,15 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.app_checked_metrics = $Array(message.app_checked_metrics.length);
                 for (let j = 0; j < message.app_checked_metrics.length; ++j)
                     object.app_checked_metrics[j] = message.app_checked_metrics[j];
+            }
+            let keys2;
+            if (message.metric_shard_percentiles && (keys2 = $Object.keys(message.metric_shard_percentiles)).length) {
+                object.metric_shard_percentiles = {};
+                for (let j = 0; j < keys2.length; ++j) {
+                    if (keys2[j] === "__proto__")
+                        $util.makeProp(object.metric_shard_percentiles, keys2[j]);
+                    object.metric_shard_percentiles[keys2[j]] = options.json && !$isFinite(message.metric_shard_percentiles[keys2[j]]) ? $String(message.metric_shard_percentiles[keys2[j]]) : message.metric_shard_percentiles[keys2[j]];
+                }
             }
             return object;
         };

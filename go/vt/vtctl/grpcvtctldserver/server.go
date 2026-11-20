@@ -2150,6 +2150,12 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("unknown metric name: %s", req.MetricName)
 	}
 
+	for metricName, percentile := range req.MetricShardPercentiles {
+		if err := base.ValidateShardPercentile(metricName, percentile); err != nil {
+			return nil, err
+		}
+	}
+
 	if len(req.AppCheckedMetrics) > 0 {
 		specifiedMetrics := map[base.MetricName]bool{}
 		for _, metricName := range req.AppCheckedMetrics {
@@ -2176,6 +2182,16 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		}
 		if throttlerConfig.MetricThresholds == nil {
 			throttlerConfig.MetricThresholds = make(map[string]float64)
+		}
+		for metricName, percentile := range req.MetricShardPercentiles {
+			if percentile == 0 {
+				delete(throttlerConfig.MetricShardPercentiles, metricName)
+				continue
+			}
+			if throttlerConfig.MetricShardPercentiles == nil {
+				throttlerConfig.MetricShardPercentiles = make(map[string]float64)
+			}
+			throttlerConfig.MetricShardPercentiles[metricName] = percentile
 		}
 		if req.MetricName == "" {
 			// v20 behavior
@@ -6112,6 +6128,12 @@ func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
 
 	if len(tsc.GetTabletRules()) == 0 {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	for metricName, percentile := range tsc.GetMetricShardPercentiles() {
+		if err := base.ValidateShardPercentile(metricName, percentile); err != nil {
+			return err
+		}
 	}
 
 	// seenBareMetrics maps a bare metric name ("lag") to the first rule key that produced

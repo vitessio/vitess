@@ -118,6 +118,7 @@ func (tm *TabletManager) GetThrottlerStatus(ctx context.Context, req *tabletmana
 		AppCheckedMetrics:       status.AppCheckedMetrics,
 		RecentApps:              make(map[string]*tabletmanagerdatapb.GetThrottlerStatusResponse_RecentApp),
 		ThrottlerType:           throttle.ThrottlerTypeFromProto(req.ThrottlerType).ToProto(),
+		MetricShardPercentiles:  status.MetricShardPercentiles,
 	}
 	for k, m := range status.AggregatedMetrics {
 		val, err := m.Get()

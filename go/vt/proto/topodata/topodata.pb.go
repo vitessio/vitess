@@ -1109,8 +1109,12 @@ type ThrottlerConfig struct {
 	AppCheckedMetrics map[string]*ThrottlerConfig_MetricNames `protobuf:"bytes,6,rep,name=app_checked_metrics,json=appCheckedMetrics,proto3" json:"app_checked_metrics,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// MetricThresholds maps metric names to the threshold values that should be used for that metric
 	MetricThresholds map[string]float64 `protobuf:"bytes,7,rep,name=metric_thresholds,json=metricThresholds,proto3" json:"metric_thresholds,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// MetricShardPercentiles maps metric names to the nearest-rank percentile of the tablets' values that
+	// the PRIMARY uses for that metric's shard scope. A missing metric, or a value outside (0, 100), means the
+	// worst tablet, which is also the behavior without this field.
+	MetricShardPercentiles map[string]float64 `protobuf:"bytes,8,rep,name=metric_shard_percentiles,json=metricShardPercentiles,proto3" json:"metric_shard_percentiles,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ThrottlerConfig) Reset() {
@@ -1188,6 +1192,13 @@ func (x *ThrottlerConfig) GetAppCheckedMetrics() map[string]*ThrottlerConfig_Met
 func (x *ThrottlerConfig) GetMetricThresholds() map[string]float64 {
 	if x != nil {
 		return x.MetricThresholds
+	}
+	return nil
+}
+
+func (x *ThrottlerConfig) GetMetricShardPercentiles() map[string]float64 {
+	if x != nil {
+		return x.MetricShardPercentiles
 	}
 	return nil
 }
@@ -1783,7 +1794,7 @@ type SrvKeyspace_KeyspacePartition struct {
 
 func (x *SrvKeyspace_KeyspacePartition) Reset() {
 	*x = SrvKeyspace_KeyspacePartition{}
-	mi := &file_topodata_proto_msgTypes[26]
+	mi := &file_topodata_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1795,7 +1806,7 @@ func (x *SrvKeyspace_KeyspacePartition) String() string {
 func (*SrvKeyspace_KeyspacePartition) ProtoMessage() {}
 
 func (x *SrvKeyspace_KeyspacePartition) ProtoReflect() protoreflect.Message {
-	mi := &file_topodata_proto_msgTypes[26]
+	mi := &file_topodata_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1924,7 +1935,7 @@ const file_topodata_proto_rawDesc = "" +
 	"\x05ratio\x18\x02 \x01(\x01R\x05ratio\x12+\n" +
 	"\n" +
 	"expires_at\x18\x03 \x01(\v2\f.vttime.TimeR\texpiresAt\x12\x16\n" +
-	"\x06exempt\x18\x04 \x01(\bR\x06exempt\"\xe5\x05\n" +
+	"\x06exempt\x18\x04 \x01(\bR\x06exempt\"\xa1\a\n" +
 	"\x0fThrottlerConfig\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1c\n" +
 	"\tthreshold\x18\x02 \x01(\x01R\tthreshold\x12!\n" +
@@ -1932,7 +1943,8 @@ const file_topodata_proto_rawDesc = "" +
 	"\x13check_as_check_self\x18\x04 \x01(\bR\x10checkAsCheckSelf\x12S\n" +
 	"\x0ethrottled_apps\x18\x05 \x03(\v2,.topodata.ThrottlerConfig.ThrottledAppsEntryR\rthrottledApps\x12`\n" +
 	"\x13app_checked_metrics\x18\x06 \x03(\v20.topodata.ThrottlerConfig.AppCheckedMetricsEntryR\x11appCheckedMetrics\x12\\\n" +
-	"\x11metric_thresholds\x18\a \x03(\v2/.topodata.ThrottlerConfig.MetricThresholdsEntryR\x10metricThresholds\x1a\\\n" +
+	"\x11metric_thresholds\x18\a \x03(\v2/.topodata.ThrottlerConfig.MetricThresholdsEntryR\x10metricThresholds\x12o\n" +
+	"\x18metric_shard_percentiles\x18\b \x03(\v25.topodata.ThrottlerConfig.MetricShardPercentilesEntryR\x16metricShardPercentiles\x1a\\\n" +
 	"\x12ThrottledAppsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
 	"\x05value\x18\x02 \x01(\v2\x1a.topodata.ThrottledAppRuleR\x05value:\x028\x01\x1a#\n" +
@@ -1942,6 +1954,9 @@ const file_topodata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12;\n" +
 	"\x05value\x18\x02 \x01(\v2%.topodata.ThrottlerConfig.MetricNamesR\x05value:\x028\x01\x1aC\n" +
 	"\x15MetricThresholdsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1aI\n" +
+	"\x1bMetricShardPercentilesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\"\xe6\x03\n" +
 	"\vSrvKeyspace\x12G\n" +
@@ -2006,7 +2021,7 @@ func file_topodata_proto_rawDescGZIP() []byte {
 }
 
 var file_topodata_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_topodata_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_topodata_proto_goTypes = []any{
 	(KeyspaceType)(0),                     // 0: topodata.KeyspaceType
 	(TabletType)(0),                       // 1: topodata.TabletType
@@ -2037,11 +2052,12 @@ var file_topodata_proto_goTypes = []any{
 	(*ThrottlerConfig_MetricNames)(nil),   // 26: topodata.ThrottlerConfig.MetricNames
 	nil,                                   // 27: topodata.ThrottlerConfig.AppCheckedMetricsEntry
 	nil,                                   // 28: topodata.ThrottlerConfig.MetricThresholdsEntry
-	(*SrvKeyspace_KeyspacePartition)(nil), // 29: topodata.SrvKeyspace.KeyspacePartition
-	(*vttime.Time)(nil),                   // 30: vttime.Time
-	(*vtorcdata.Shard)(nil),               // 31: vtorcdata.Shard
-	(*vtorcdata.Keyspace)(nil),            // 32: vtorcdata.Keyspace
-	(*querythrottler.Config)(nil),         // 33: querythrottler.Config
+	nil,                                   // 29: topodata.ThrottlerConfig.MetricShardPercentilesEntry
+	(*SrvKeyspace_KeyspacePartition)(nil), // 30: topodata.SrvKeyspace.KeyspacePartition
+	(*vttime.Time)(nil),                   // 31: vttime.Time
+	(*vtorcdata.Shard)(nil),               // 32: vtorcdata.Shard
+	(*vtorcdata.Keyspace)(nil),            // 33: vtorcdata.Keyspace
+	(*querythrottler.Config)(nil),         // 34: querythrottler.Config
 }
 var file_topodata_proto_depIdxs = []int32{
 	4,  // 0: topodata.Tablet.alias:type_name -> topodata.TabletAlias
@@ -2049,47 +2065,48 @@ var file_topodata_proto_depIdxs = []int32{
 	3,  // 2: topodata.Tablet.key_range:type_name -> topodata.KeyRange
 	1,  // 3: topodata.Tablet.type:type_name -> topodata.TabletType
 	21, // 4: topodata.Tablet.tags:type_name -> topodata.Tablet.TagsEntry
-	30, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
-	30, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
-	30, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
+	31, // 5: topodata.Tablet.primary_term_start_time:type_name -> vttime.Time
+	31, // 6: topodata.Tablet.tablet_start_time:type_name -> vttime.Time
+	31, // 7: topodata.Tablet.tablet_shutdown_time:type_name -> vttime.Time
 	4,  // 8: topodata.Shard.primary_alias:type_name -> topodata.TabletAlias
-	30, // 9: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
+	31, // 9: topodata.Shard.primary_term_start_time:type_name -> vttime.Time
 	3,  // 10: topodata.Shard.key_range:type_name -> topodata.KeyRange
 	22, // 11: topodata.Shard.source_shards:type_name -> topodata.Shard.SourceShard
 	23, // 12: topodata.Shard.tablet_controls:type_name -> topodata.Shard.TabletControl
-	31, // 13: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
+	32, // 13: topodata.Shard.vtorc_state:type_name -> vtorcdata.Shard
 	0,  // 14: topodata.Keyspace.keyspace_type:type_name -> topodata.KeyspaceType
-	30, // 15: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
+	31, // 15: topodata.Keyspace.snapshot_time:type_name -> vttime.Time
 	13, // 16: topodata.Keyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	32, // 17: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
-	33, // 18: topodata.Keyspace.query_throttler_config:type_name -> querythrottler.Config
+	33, // 17: topodata.Keyspace.vtorc_state:type_name -> vtorcdata.Keyspace
+	34, // 18: topodata.Keyspace.query_throttler_config:type_name -> querythrottler.Config
 	24, // 19: topodata.ShardReplication.nodes:type_name -> topodata.ShardReplication.Node
 	2,  // 20: topodata.ShardReplicationError.type:type_name -> topodata.ShardReplicationError.Type
 	4,  // 21: topodata.ShardReplicationError.tablet_alias:type_name -> topodata.TabletAlias
 	3,  // 22: topodata.ShardReference.key_range:type_name -> topodata.KeyRange
 	3,  // 23: topodata.ShardTabletControl.key_range:type_name -> topodata.KeyRange
-	30, // 24: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
+	31, // 24: topodata.ThrottledAppRule.expires_at:type_name -> vttime.Time
 	25, // 25: topodata.ThrottlerConfig.throttled_apps:type_name -> topodata.ThrottlerConfig.ThrottledAppsEntry
 	27, // 26: topodata.ThrottlerConfig.app_checked_metrics:type_name -> topodata.ThrottlerConfig.AppCheckedMetricsEntry
 	28, // 27: topodata.ThrottlerConfig.metric_thresholds:type_name -> topodata.ThrottlerConfig.MetricThresholdsEntry
-	29, // 28: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
-	13, // 29: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
-	33, // 30: topodata.SrvKeyspace.query_throttler_config:type_name -> querythrottler.Config
-	17, // 31: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
-	18, // 32: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
-	3,  // 33: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
-	1,  // 34: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
-	4,  // 35: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
-	12, // 36: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	26, // 37: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
-	1,  // 38: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
-	10, // 39: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
-	11, // 40: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
-	41, // [41:41] is the sub-list for method output_type
-	41, // [41:41] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	29, // 28: topodata.ThrottlerConfig.metric_shard_percentiles:type_name -> topodata.ThrottlerConfig.MetricShardPercentilesEntry
+	30, // 29: topodata.SrvKeyspace.partitions:type_name -> topodata.SrvKeyspace.KeyspacePartition
+	13, // 30: topodata.SrvKeyspace.throttler_config:type_name -> topodata.ThrottlerConfig
+	34, // 31: topodata.SrvKeyspace.query_throttler_config:type_name -> querythrottler.Config
+	17, // 32: topodata.ExternalVitessCluster.topo_config:type_name -> topodata.TopoConfig
+	18, // 33: topodata.ExternalClusters.vitess_cluster:type_name -> topodata.ExternalVitessCluster
+	3,  // 34: topodata.Shard.SourceShard.key_range:type_name -> topodata.KeyRange
+	1,  // 35: topodata.Shard.TabletControl.tablet_type:type_name -> topodata.TabletType
+	4,  // 36: topodata.ShardReplication.Node.tablet_alias:type_name -> topodata.TabletAlias
+	12, // 37: topodata.ThrottlerConfig.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	26, // 38: topodata.ThrottlerConfig.AppCheckedMetricsEntry.value:type_name -> topodata.ThrottlerConfig.MetricNames
+	1,  // 39: topodata.SrvKeyspace.KeyspacePartition.served_type:type_name -> topodata.TabletType
+	10, // 40: topodata.SrvKeyspace.KeyspacePartition.shard_references:type_name -> topodata.ShardReference
+	11, // 41: topodata.SrvKeyspace.KeyspacePartition.shard_tablet_controls:type_name -> topodata.ShardTabletControl
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_topodata_proto_init() }
@@ -2103,7 +2120,7 @@ func file_topodata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_topodata_proto_rawDesc), len(file_topodata_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

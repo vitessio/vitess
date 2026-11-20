@@ -392,3 +392,63 @@ func TestThrottlerTypeAnsweredByAnotherThrottler(t *testing.T) {
 		})
 	}
 }
+
+// fakeUpdateThrottlerConfigServer captures UpdateThrottlerConfig calls.
+type fakeUpdateThrottlerConfigServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+	gotRequest *vtctldatapb.UpdateThrottlerConfigRequest
+}
+
+// UpdateThrottlerConfig captures the request and returns an empty response.
+func (s *fakeUpdateThrottlerConfigServer) UpdateThrottlerConfig(_ context.Context, req *vtctldatapb.UpdateThrottlerConfigRequest) (*vtctldatapb.UpdateThrottlerConfigResponse, error) {
+	s.gotRequest = req
+	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
+}
+
+func TestUpdateThrottlerConfigCommandShardPercentile(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantRequest *vtctldatapb.UpdateThrottlerConfigRequest
+	}{
+		{
+			name: "percentile alone keeps the metric's threshold",
+			args: []string{"--metric-name", "lag", "--shard-percentile", "75"},
+			wantRequest: &vtctldatapb.UpdateThrottlerConfigRequest{
+				Keyspace:               "my_keyspace",
+				MetricShardPercentiles: map[string]float64{"lag": 75},
+			},
+		},
+		{
+			name: "percentile with a threshold sets both",
+			args: []string{"--metric-name", "lag", "--threshold", "5", "--shard-percentile", "75"},
+			wantRequest: &vtctldatapb.UpdateThrottlerConfigRequest{
+				Keyspace:               "my_keyspace",
+				MetricName:             "lag",
+				Threshold:              5,
+				MetricShardPercentiles: map[string]float64{"lag": 75},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			savedArgs := append([]string{}, os.Args...)
+			savedProtocol := VtctldClientProtocol
+			t.Cleanup(func() {
+				os.Args = savedArgs
+				VtctldClientProtocol = savedProtocol
+				proto.Reset(&updateThrottlerConfigOptions)
+				shardPercentile = 0
+				UpdateThrottlerConfig.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+			})
+			fakeServer := &fakeUpdateThrottlerConfigServer{}
+			localvtctldclient.SetServer(fakeServer)
+			VtctldClientProtocol = "local"
+			os.Args = append(append([]string{"vtctldclient", "UpdateThrottlerConfig"}, tt.args...), "my_keyspace")
+
+			require.NoError(t, Root.Execute())
+			require.NotNil(t, fakeServer.gotRequest, "server was not called")
+			assert.True(t, proto.Equal(tt.wantRequest, fakeServer.gotRequest), "got %v, want %v", fakeServer.gotRequest, tt.wantRequest)
+		})
+	}
+}

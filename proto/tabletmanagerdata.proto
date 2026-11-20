@@ -1001,6 +1001,9 @@ message GetThrottlerStatusResponse {
   // ThrottlerType is the throttler that this status describes. Tablets that predate the field
   // always describe the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
   ThrottlerType throttler_type = 19;
+
+  // MetricShardPercentiles is a map of metric names to the shard percentile that the primary applies. It is empty on other tablets.
+  map<string, double> metric_shard_percentiles = 20;
 }
 
 message ChangeTagsRequest {
