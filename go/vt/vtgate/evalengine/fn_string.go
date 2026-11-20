@@ -587,36 +587,66 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
+// changeCaseType is the type of the result of LOWER and UPPER: a value in the
+// binary collation stays binary, anything else is text.
+func changeCaseType(col collations.ID) sqltypes.Type {
+	if col == collations.CollationBinaryID {
+		return sqltypes.VarBinary
+	}
+	return sqltypes.VarChar
+}
+
+// changeCaseBytes changes the case of src using the case mapping of its
+// collation. With asciiFallback, a collation without a case mapping falls back
+// to ASCII, which is enough for text that came from a number or a date.
+func changeCaseBytes(col collations.ID, src []byte, upcase, asciiFallback bool) ([]byte, error) {
+	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
+	switch {
+	case ok && upcase:
+		return csa.ToUpper(nil, src), nil
+	case ok:
+		return csa.ToLower(nil, src), nil
+	case !asciiFallback:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+	case upcase:
+		return bytes.ToUpper(src), nil
+	default:
+		return bytes.ToLower(src), nil
+	}
+}
+
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
 		return nil, err
 	}
 
+	var b *evalBytes
+	var converted bool
 	switch e := arg.(type) {
 	case nil:
 		return nil, nil
 
-	case evalNumeric:
-		return evalToVarchar(e, call.collate, false)
-
 	case *evalBytes:
-		coll := colldata.Lookup(e.col.Collation)
-		csa, ok := coll.(colldata.CaseAwareCollation)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
-		}
-		var newcase []byte
-		if call.upcase {
-			newcase = csa.ToUpper(nil, e.bytes)
-		} else {
-			newcase = csa.ToLower(nil, e.bytes)
-		}
-		return newEvalText(newcase, e.col), nil
+		b = e
+
+	case *evalJSON:
+		b = newEvalText(e.ToRawBytes(), collationJSON)
 
 	default:
-		return e, nil
+		b, err = evalToVarchar(e, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+		b.col = typedCoercionCollation(sqltypes.VarChar, call.collate)
+		converted = true
 	}
+
+	newcase, err := changeCaseBytes(b.col.Collation, b.bytes, call.upcase, converted)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalRaw(changeCaseType(b.col.Collation), newcase, b.col), nil
 }
 
 func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
@@ -627,16 +657,27 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
+	var col *collations.TypedCollation
+	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag)}
 	switch {
 	case str.isTextual():
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
+		res.Size = 0
+		res.Col = collationJSON
+		col = &res.Col
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		res.Size = 0
+		res.Col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+		col = &res.Col
 	}
+	res.Type = changeCaseType(res.Col.Collation)
 
-	c.asm.Fn_LUCASE(call.upcase)
+	c.asm.Fn_LUCASE(call.upcase, col, str.Type != sqltypes.TypeJSON && !str.isTextual())
 	c.asm.jumpDestination(skip)
 
-	return str, nil
+	return res, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
