@@ -7731,6 +7731,63 @@
     }
   },
   {
+    "comment": "order by a row comparison with a value subquery",
+    "query": "select id from user order by (col, name) = (select user_id, col from music where user_id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user order by (col, name) = (select user_id, col from music where user_id = 5)",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|2) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1_0",
+              "__sq1_1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, col from music where 1 != 1",
+                "Query": "select user_id, col from music where user_id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1), weight_string((col, `name`) = (:__sq1_0, :__sq1_1)) from `user` where 1 != 1",
+                "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1), weight_string((col, `name`) = (:__sq1_0, :__sq1_1)) from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "row comparison with a value subquery in the select list binds each column of the row",
     "query": "select id, (col, name) = (select col, name from user where id = 5) from user where id = 1",
     "plan": {
