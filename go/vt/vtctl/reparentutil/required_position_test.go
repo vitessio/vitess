@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -138,7 +139,7 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 
 	tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
 
-	return &requiredPositionFixture{
+	f := &requiredPositionFixture{
 		t:        t,
 		erp:      NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger()),
 		tmc:      tmc,
@@ -149,6 +150,22 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 		advanced: replicaPositions{executed: opts.applied, relay: opts.received},
 		lagging:  opts.lagging,
 	}
+	// The fused promotion goes through the test's PromoteReplica and
+	// PopulateReparentJournal expectations.
+	f.tmc.EXPECT().PromoteReplicaAndJournal(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+			position, err := f.tmc.PromoteReplica(ctx, tablet, request.SemiSync)
+			if err != nil {
+				return nil, err
+			}
+			response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{Position: position}
+			if err := f.tmc.PopulateReparentJournal(ctx, tablet, request.TimeCreated.Seconds*int64(time.Second)+int64(request.TimeCreated.Nanoseconds), request.ActionName, tablet.Alias, position); err != nil {
+				response.PopulateReparentJournalError = vterrors.ToVTRPC(err)
+			}
+			return response, nil
+		}).
+		AnyTimes()
+	return f
 }
 
 // replicaPositions holds the executed and relay log positions of one replica.

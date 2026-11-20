@@ -594,6 +594,21 @@ func (mr *MockTabletManagerClientMockRecorder) PromoteReplica(ctx, tablet, semiS
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PromoteReplica", reflect.TypeOf((*MockTabletManagerClient)(nil).PromoteReplica), ctx, tablet, semiSync)
 }
 
+// PromoteReplicaAndJournal mocks base method.
+func (m *MockTabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodata.Tablet, request *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PromoteReplicaAndJournal", ctx, tablet, request)
+	ret0, _ := ret[0].(*tabletmanagerdata.PromoteReplicaAndJournalResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PromoteReplicaAndJournal indicates an expected call of PromoteReplicaAndJournal.
+func (mr *MockTabletManagerClientMockRecorder) PromoteReplicaAndJournal(ctx, tablet, request any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PromoteReplicaAndJournal", reflect.TypeOf((*MockTabletManagerClient)(nil).PromoteReplicaAndJournal), ctx, tablet, request)
+}
+
 // ReadReparentJournalInfo mocks base method.
 func (m *MockTabletManagerClient) ReadReparentJournalInfo(ctx context.Context, tablet *topodata.Tablet) (int32, error) {
 	m.ctrl.T.Helper()

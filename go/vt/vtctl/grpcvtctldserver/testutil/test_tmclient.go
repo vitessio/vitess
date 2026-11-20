@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -40,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -326,6 +328,11 @@ type TabletManagerClient struct {
 	PromoteReplicaResults map[string]struct {
 		Result string
 		Error  error
+	}
+	// keyed by tablet alias.
+	PromoteReplicaAndJournalResults map[string]struct {
+		Response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		Error    error
 	}
 	// keyed by tablet alias.
 	RefreshStateResults map[string]error
@@ -1069,6 +1076,31 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+// PromoteReplicaAndJournal is part of the tmclient.TabletManagerClient interface.
+// Without PromoteReplicaAndJournalResults it falls back to the PromoteReplica
+// and PopulateReparentJournal fakes, so legacy-RPC tests still apply.
+func (fake *TabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if fake.PromoteReplicaAndJournalResults == nil {
+		position, err := fake.PromoteReplica(ctx, tablet, request.SemiSync)
+		if err != nil {
+			return nil, err
+		}
+		response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{Position: position}
+		timeCreated := protoutil.TimeFromProto(request.TimeCreated)
+		if err := fake.PopulateReparentJournal(ctx, tablet, timeCreated.UnixNano(), request.ActionName, tablet.Alias, position); err != nil {
+			response.PopulateReparentJournalError = vterrors.ToVTRPC(err)
+		}
+		return response, nil
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.PromoteReplicaAndJournalResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface.

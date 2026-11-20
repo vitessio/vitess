@@ -45,6 +45,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // fakeRPCTM implements tabletmanager.RPCTM and fills in all
@@ -1457,6 +1458,45 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "PromoteReplica", true /*verbose*/, err)
 }
 
+var (
+	testPromoteReplicaAndJournalRequest = &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+		SemiSync:                       true,
+		TimeCreated:                    protoutil.TimeToProto(time.Unix(1700000000, 123)),
+		ActionName:                     testActionName,
+		PopulateReparentJournalTimeout: protoutil.DurationToProto(10 * time.Second),
+	}
+	testPromoteReplicaAndJournalResponse = &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{
+		Position: testReplicationPosition,
+		PromoteReplicaError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_ABORTED,
+			Message: "promotion failed",
+		},
+		PopulateReparentJournalError: &vtrpcpb.RPCError{
+			Code:    vtrpcpb.Code_INTERNAL,
+			Message: "journal write failed",
+		},
+	}
+)
+
+func (fra *fakeRPCTM) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if fra.panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	compare(fra.t, "PromoteReplicaAndJournal request", request, testPromoteReplicaAndJournalRequest)
+	return testPromoteReplicaAndJournalResponse, nil
+}
+
+func tmRPCTestPromoteReplicaAndJournal(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	response, err := client.PromoteReplicaAndJournal(ctx, tablet, testPromoteReplicaAndJournalRequest)
+	require.NoError(t, err)
+	assert.True(t, proto.Equal(testPromoteReplicaAndJournalResponse, response))
+}
+
+func tmRPCTestPromoteReplicaAndJournalPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	_, err := client.PromoteReplicaAndJournal(ctx, tablet, testPromoteReplicaAndJournalRequest)
+	expectHandleRPCPanic(t, "PromoteReplicaAndJournal", true /*verbose*/, err)
+}
+
 //
 // Backup / restore related methods
 //
@@ -1640,6 +1680,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestSetReplicationSource(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatus(ctx, t, client, tablet)
 	tmRPCTestPromoteReplica(ctx, t, client, tablet)
+	tmRPCTestPromoteReplicaAndJournal(ctx, t, client, tablet)
 
 	tmRPCTestInitReplica(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromoted(ctx, t, client, tablet)
@@ -1703,6 +1744,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestSetReplicationSourcePanic(ctx, t, client, tablet)
 	tmRPCTestStopReplicationAndGetStatusPanic(ctx, t, client, tablet)
 	tmRPCTestPromoteReplicaPanic(ctx, t, client, tablet)
+	tmRPCTestPromoteReplicaAndJournalPanic(ctx, t, client, tablet)
 
 	tmRPCTestInitReplicaPanic(ctx, t, client, tablet)
 	tmRPCTestReplicaWasPromotedPanic(ctx, t, client, tablet)

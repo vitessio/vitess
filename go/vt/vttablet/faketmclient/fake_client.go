@@ -402,6 +402,10 @@ func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, table
 	return "", nil
 }
 
+func (client *FakeTabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	return &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}, nil
+}
+
 //
 // Backup related methods
 //

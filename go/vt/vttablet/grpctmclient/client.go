@@ -1550,6 +1550,19 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 	return response.Position, nil
 }
 
+func (client *Client) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.PromoteReplicaAndJournal(ctx, request)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return response, nil
+}
+
 // Backup related methods
 type backupStreamAdapter struct {
 	stream tabletmanagerservicepb.TabletManager_BackupClient
