@@ -17,7 +17,12 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
+	"math/bits"
+	"strconv"
+
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,6 +34,79 @@ func CoerceTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, 
 		return sqltypes.Value{}, err
 	}
 	return evalToSQLValueWithType(cast, typ), nil
+}
+
+// CastTo converts value to typ the way MySQL does when it stores the value in a
+// column of that type, so a non-integer value is rounded for an integer type.
+// A value that MySQL rejects in strict mode, which vttablet enforces by default, is an error.
+func CastTo(value sqltypes.Value, typ Type, sqlmode SQLMode) (sqltypes.Value, error) {
+	numeric := value.IsIntegral() || value.IsDecimal() || value.IsFloat() || value.IsText() || value.IsBinary()
+	if !sqltypes.IsIntegral(typ.typ) || !numeric {
+		cast, err := valueToEvalCast(value, typ.typ, typ.collation, typ.values, sqlmode)
+		if err != nil {
+			return sqltypes.Value{}, err
+		}
+		return evalToSQLValueWithType(cast, typ), nil
+	}
+
+	// A decimal keeps integers exact, where a float64 would round them above 2^53.
+	var dec decimal.Decimal
+	var err error
+	switch {
+	case value.IsIntegral(), value.IsDecimal():
+		dec, err = decimal.NewFromMySQL(value.Raw())
+	case value.IsFloat():
+		var f float64
+		f, err = value.ToFloat64()
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return sqltypes.Value{}, outOfRangeError(value, typ.typ)
+		}
+		// MySQL rounds a double half to even, and a decimal or a string half away from zero
+		dec = decimal.NewFromFloat(math.RoundToEven(f))
+	case value.IsText(), value.IsBinary():
+		dec, err = decimal.NewFromString(value.RawStr())
+	}
+	if err != nil {
+		return sqltypes.Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect integer value: '%s'", sanitizeErrorValue(value.Raw()))
+	}
+
+	dec = dec.Round(0)
+	_, size := integralName(typ.typ)
+	if sqltypes.IsUnsigned(typ.typ) {
+		u, ok := dec.Uint64()
+		if !ok || dec.Sign() < 0 || bits.Len64(u) > size {
+			return sqltypes.Value{}, outOfRangeError(value, typ.typ)
+		}
+		return sqltypes.MakeTrusted(typ.typ, strconv.AppendUint(nil, u, 10)), nil
+	}
+	i, ok := dec.Int64()
+	if !ok || (size < 64 && (i < -1<<(size-1) || i >= 1<<(size-1))) {
+		return sqltypes.Value{}, outOfRangeError(value, typ.typ)
+	}
+	return sqltypes.MakeTrusted(typ.typ, strconv.AppendInt(nil, i, 10)), nil
+}
+
+// integralName returns the name and the size in bits of an integral type.
+func integralName(typ sqltypes.Type) (string, int) {
+	switch typ {
+	case sqltypes.Int8, sqltypes.Uint8:
+		return "TINYINT", 8
+	case sqltypes.Int16, sqltypes.Uint16:
+		return "SMALLINT", 16
+	case sqltypes.Int24, sqltypes.Uint24:
+		return "MEDIUMINT", 24
+	case sqltypes.Int32, sqltypes.Uint32:
+		return "INT", 32
+	}
+	return "BIGINT", 64
+}
+
+func outOfRangeError(value sqltypes.Value, typ sqltypes.Type) error {
+	name, _ := integralName(typ)
+	if sqltypes.IsUnsigned(typ) {
+		name += " UNSIGNED"
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '%s'", name, sanitizeErrorValue(value.Raw()))
 }
 
 // CoerceTypes takes two input types, and decides how they should be coerced before compared

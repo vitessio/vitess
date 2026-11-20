@@ -51,6 +51,7 @@ type (
 		checkCols    []CheckCol
 		sqlmode      evalengine.SQLMode
 		collationEnv *collations.Environment
+		recordAs     *probeTable
 	}
 )
 
@@ -68,35 +69,59 @@ func (pt *probeTable) exists(inputRow sqltypes.Row) (sqltypes.Row, error) {
 	return inputRow, nil
 }
 
+// filter returns the rows not seen before. A nil probeTable keeps every row.
+func (pt *probeTable) filter(rows []sqltypes.Row) ([]sqltypes.Row, error) {
+	if pt == nil {
+		return rows, nil
+	}
+	out := make([]sqltypes.Row, 0, len(rows))
+	for _, row := range rows {
+		newRow, err := pt.exists(row)
+		if err != nil {
+			return nil, err
+		}
+		if newRow != nil {
+			out = append(out, newRow)
+		}
+	}
+	if _, err := pt.recordAs.filter(out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error) {
 	hasher := vthash.New()
 	for i, checkCol := range pt.checkCols {
 		if i >= len(inputRow) {
 			return vthash.Hash{}, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
-		col := inputRow[checkCol.Col]
-		err := evalengine.NullsafeHashcode128(&hasher, col, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
-		if err != nil {
-			if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
-				return vthash.Hash{}, err
-			}
-			checkCol = checkCol.SwitchToWeightString()
-			pt.checkCols[i] = checkCol
-			err = evalengine.NullsafeHashcode128(&hasher, inputRow[checkCol.Col], checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
-			if err != nil {
-				return vthash.Hash{}, err
-			}
+		value := inputRow[checkCol.Col]
+		err := evalengine.DistinctHashcode128(&hasher, value, checkCol.Type.Collation(), checkCol.Type.Type(), pt.sqlmode, checkCol.Type.Values())
+		if err == nil {
+			continue
+		}
+		if err != evalengine.UnsupportedCollationHashError || checkCol.WsCol == nil {
+			return vthash.Hash{}, err
+		}
+		// a value that needs a collation is compared by its weight string
+		ws := inputRow[*checkCol.WsCol]
+		if *checkCol.WsCol == checkCol.Col || (ws.IsNull() && !value.IsNull()) {
+			// no weight string, or a NULL one as for DECIMAL and FLOAT, so compare the bytes
+			evalengine.HashRawBytes128(&hasher, value)
+			continue
+		}
+		if err := evalengine.NullsafeHashcode128(&hasher, ws, collations.CollationBinaryID, sqltypes.VarBinary, pt.sqlmode, nil); err != nil {
+			return vthash.Hash{}, err
 		}
 	}
 	return hasher.Sum128(), nil
 }
 
 func newProbeTable(checkCols []CheckCol, collationEnv *collations.Environment) *probeTable {
-	cols := make([]CheckCol, len(checkCols))
-	copy(cols, checkCols)
 	return &probeTable{
 		seenRows:     make(map[vthash.Hash]struct{}),
-		checkCols:    cols,
+		checkCols:    checkCols,
 		collationEnv: collationEnv,
 	}
 }
@@ -176,11 +201,7 @@ func (d *Distinct) description() PrimitiveDescription {
 	other := map[string]any{}
 
 	if len(d.CheckCols) > 0 {
-		colls := make([]string, 0, len(d.CheckCols))
-		for _, checkCol := range d.CheckCols {
-			colls = append(colls, checkCol.String())
-		}
-		other["Collations"] = colls
+		other["Collations"] = checkColStrings(d.CheckCols)
 	}
 
 	if d.Truncate > 0 {
@@ -192,14 +213,12 @@ func (d *Distinct) description() PrimitiveDescription {
 	}
 }
 
-// SwitchToWeightString returns a new CheckCol that works on the weight string column instead
-func (cc CheckCol) SwitchToWeightString() CheckCol {
-	return CheckCol{
-		Col:          *cc.WsCol,
-		WsCol:        nil,
-		Type:         evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
-		CollationEnv: cc.CollationEnv,
+func checkColStrings(checkCols []CheckCol) []string {
+	colls := make([]string, 0, len(checkCols))
+	for _, checkCol := range checkCols {
+		colls = append(colls, checkCol.String())
 	}
+	return colls
 }
 
 func (cc CheckCol) String() string {

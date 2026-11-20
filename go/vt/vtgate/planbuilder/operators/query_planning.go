@@ -595,6 +595,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 				// we can't push limits down if we have a group by
 				return SkipChildren
 			}
+		case *RecurseCTE:
+			if op.Distinct {
+				// a route could spend its limit on duplicates and lose rows that the CTE needs
+				return SkipChildren
+			}
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source

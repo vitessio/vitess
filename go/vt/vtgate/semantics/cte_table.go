@@ -127,12 +127,17 @@ func (cte *CTETable) dependencies(colName string, org originable) (dependencies,
 }
 
 func (cte *CTETable) getExprFor(s string) (sqlparser.Expr, error) {
-	for _, se := range cte.Query.GetColumns() {
+	for i, se := range cte.Query.GetColumns() {
 		ae, ok := se.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.VT09015()
 		}
-		if ae.ColumnName() == s {
+		name := ae.ColumnName()
+		if len(cte.Columns) > 0 {
+			// a column list renames the columns by position
+			name = cte.Columns[i].String()
+		}
+		if name == s {
 			return ae.Expr, nil
 		}
 	}

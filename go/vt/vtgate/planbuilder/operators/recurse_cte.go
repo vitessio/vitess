@@ -23,8 +23,10 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -58,6 +60,16 @@ type RecurseCTE struct {
 
 	// Distinct is used to determine if the result set should be distinct
 	Distinct bool
+
+	// CheckCols and TermCheckCols are the columns used to deduplicate the seed and the term rows
+	CheckCols     []engine.CheckCol
+	TermCheckCols []engine.CheckCol
+
+	// Truncate is the number of columns without the weight strings added for Distinct
+	Truncate int
+
+	// TermFromCTE maps the term columns that pass on a column of the previous row, to copy its weight string
+	TermFromCTE map[int]int
 }
 
 var _ Operator = (*RecurseCTE)(nil)
@@ -88,6 +100,9 @@ func (r *RecurseCTE) Clone(inputs []Operator) Operator {
 	klone.Vars = maps.Clone(r.Vars)
 	klone.Predicates = slices.Clone(r.Predicates)
 	klone.Projections = slices.Clone(r.Projections)
+	klone.CheckCols = slices.Clone(r.CheckCols)
+	klone.TermCheckCols = slices.Clone(r.TermCheckCols)
+	klone.TermFromCTE = maps.Clone(r.TermFromCTE)
 	return &klone
 }
 
@@ -99,10 +114,30 @@ func (r *RecurseCTE) AddColumn(ctx *plancontext.PlanningContext, _, _ bool, expr
 	r.makeSureWeHaveTableInfo(ctx)
 	e := semantics.RewriteDerivedTableExpression(expr.Expr, r.MyTableInfo)
 	offset := r.Seed().FindCol(ctx, e, false)
-	if offset == -1 {
-		panic(vterrors.VT13001("CTE column not found"))
+	if offset != -1 {
+		return offset
 	}
-	return offset
+	// a UNION seed wrapped in a derived table has other dependencies, so find the CTE column by name
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok {
+		if offset := r.columnOffset(ctx, col.Name); offset != -1 {
+			return offset
+		}
+	}
+	panic(vterrors.VT13001("CTE column not found"))
+}
+
+// columnOffset returns the offset of the CTE column with this name, as renamed by a column list
+func (r *RecurseCTE) columnOffset(ctx *plancontext.PlanningContext, name sqlparser.IdentifierCI) int {
+	for offset, column := range r.Seed().GetColumns(ctx) {
+		columnName := column.ColumnName()
+		if offset < len(r.Def.Columns) {
+			columnName = r.Def.Columns[offset].String()
+		}
+		if name.EqualString(columnName) {
+			return offset
+		}
+	}
+	return -1
 }
 
 func (r *RecurseCTE) makeSureWeHaveTableInfo(ctx *plancontext.PlanningContext) {
@@ -143,7 +178,14 @@ func (r *RecurseCTE) GetColumns(ctx *plancontext.PlanningContext) []*sqlparser.A
 }
 
 func (r *RecurseCTE) GetSelectExprs(ctx *plancontext.PlanningContext) []sqlparser.SelectExpr {
-	return r.Seed().GetSelectExprs(ctx)
+	return truncateTo(r.Truncate, r.Seed().GetSelectExprs(ctx))
+}
+
+func truncateTo[K any](count int, slice []K) []K {
+	if count == 0 {
+		return slice
+	}
+	return slice[:count]
 }
 
 func (r *RecurseCTE) ShortDescription() string {
@@ -180,17 +222,93 @@ func (r *RecurseCTE) planOffsets(ctx *plancontext.PlanningContext) Operator {
 				continue
 			}
 
-			for offset, column := range columns {
-				if lhsExpr.Expr.Name.EqualString(column.ColumnName()) {
-					r.Vars[lhsExpr.Name] = offset
-					continue outer
-				}
+			if offset := r.columnOffset(ctx, lhsExpr.Expr.Name); offset != -1 {
+				r.Vars[lhsExpr.Name] = offset
+				continue outer
 			}
 
 			panic(vterrors.VT13001("couldn't find column"))
 		}
 	}
+
+	if r.Distinct {
+		r.planCheckCols(ctx, columns)
+	}
 	return r
+}
+
+// planCheckCols plans the columns that a UNION DISTINCT CTE deduplicates on, as Distinct does
+func (r *RecurseCTE) planCheckCols(ctx *plancontext.PlanningContext, columns []*sqlparser.AliasedExpr) {
+	if r.Truncate > 0 {
+		// offsets can be planned twice, as for INSERT ... SELECT, so keep the earlier weight strings truncated
+		columns = columns[:r.Truncate]
+	}
+	r.CheckCols, r.TermCheckCols, r.TermFromCTE = nil, nil, nil
+	collationEnv := ctx.VSchema.Environment().CollationEnv()
+	termColumns := r.Term().GetColumns(ctx)
+	r.makeSureWeHaveTableInfo(ctx)
+	cteColumns := min(r.MyTableInfo.Query.GetColumnCount(), len(columns))
+	for idx, col := range columns[:cteColumns] {
+		typ := checkColType(ctx, col.Expr)
+		var seedWs, termWs *int
+		if typ.Type() == sqltypes.Unknown || ctx.NeedsWeightString(col.Expr) {
+			seedWs = new(r.Seed().AddWSColumn(ctx, idx, false))
+			r.Truncate = len(columns)
+			cteCol, fromCTE := r.cteColumnFor(ctx, termColumns[idx].Expr)
+			switch {
+			case fromCTE && cteCol == idx:
+				// a slot for the previous row's weight string, which only the same column has in its collation
+				termWs = new(r.Term().AddWSColumn(ctx, idx, false))
+				if *termWs < len(termColumns) {
+					// the term or a parent reads this weight string, so it can't be overwritten
+					termWs = new(idx)
+					break
+				}
+				if r.TermFromCTE == nil {
+					r.TermFromCTE = make(map[int]int)
+				}
+				r.TermFromCTE[idx] = cteCol
+			case sameTableColumn(ctx, col.Expr, termColumns[idx].Expr):
+				// the seed's own column has the same collation, so its weight string matches
+				termWs = new(r.Term().AddWSColumn(ctx, idx, false))
+			default:
+				// any other value is compared by its bytes, as its weight string could be in another
+				// collation and drop rows, while bytes can only keep a row too many
+				termWs = new(idx)
+			}
+		}
+		r.CheckCols = append(r.CheckCols, engine.CheckCol{Col: idx, WsCol: seedWs, Type: typ, CollationEnv: collationEnv})
+		r.TermCheckCols = append(r.TermCheckCols, engine.CheckCol{Col: idx, WsCol: termWs, Type: typ, CollationEnv: collationEnv})
+	}
+}
+
+// sameTableColumn reports whether both expressions read the same column of the same table.
+func sameTableColumn(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
+	colA, okA := a.(*sqlparser.ColName)
+	colB, okB := b.(*sqlparser.ColName)
+	if !okA || !okB || !colA.Name.Equal(colB.Name) {
+		return false
+	}
+	tableA, errA := ctx.SemTable.TableInfoForExpr(colA)
+	tableB, errB := ctx.SemTable.TableInfoForExpr(colB)
+	if errA != nil || errB != nil {
+		return false
+	}
+	vtable := tableA.GetVindexTable()
+	return vtable != nil && vtable == tableB.GetVindexTable()
+}
+
+// cteColumnFor returns the column of the previous row that the expression only passes on.
+func (r *RecurseCTE) cteColumnFor(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, bool) {
+	for _, recurseExpr := range r.expressions() {
+		for _, lhsExpr := range recurseExpr.LeftExprs {
+			if ctx.SemTable.EqualsExprWithDeps(expr, lhsExpr.Expr) {
+				offset, found := r.Vars[lhsExpr.Name]
+				return offset, found
+			}
+		}
+	}
+	return 0, false
 }
 
 func (r *RecurseCTE) introducesTableID() semantics.TableSet {

@@ -51,6 +51,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [Recursive CTEs with `UNION DISTINCT` remove duplicates](#vtgate-recursive-cte-union-distinct)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -642,6 +643,14 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-recursive-cte-union-distinct"/>Recursive CTEs with `UNION DISTINCT` remove duplicates</a>
+
+A recursive CTE with `UNION DISTINCT` that VTGate can't send to a single shard used to run as `UNION ALL`: it returned duplicate rows, and on cyclic data it failed with `VT09030` instead of stopping. VTGate now removes the rows that the CTE has already produced, as MySQL does.
+
+To compare rows as MySQL stores them, VTGate converts a value of the recursive part that isn't an integer to the type of an integer CTE column, so `1.5` becomes `2`. A value that MySQL rejects there in strict mode, such as `'abc'`, or `1e30` under a `BIGINT` column, now fails the query with the same error. VTGate assumes MySQL's default `sql_mode`, so this also happens in a session with a non-strict `sql_mode`, where MySQL stores the value with a warning.
+
+See [#21774](https://github.com/vitessio/vitess/pull/21774) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

@@ -236,3 +236,32 @@ func TestHashJoinJSONKeys(t *testing.T) {
 		expectResultAnyOrder(t, r, expected)
 	})
 }
+
+// TestHashJoinUnknownComparisonType checks that a hash join on keys that the planner can't type
+// matches an integer with the same number as text, as MySQL compares them, with or without a collation.
+func TestHashJoinUnknownComparisonType(t *testing.T) {
+	for name, collation := range map[string]collations.ID{
+		"no collation":         collations.Unknown,
+		"connection collation": collations.MySQL8().DefaultConnectionCharset(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			jn := &HashJoin{
+				Opcode: LeftJoin,
+				Left: &fakePrimitive{results: []*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("m", "int64"), "1", "2"),
+				}},
+				Right: &fakePrimitive{results: []*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("n", "varchar"), "1", "3"),
+				}},
+				Cols:           []int{-1, 1},
+				Collation:      collation,
+				ComparisonType: sqltypes.Unknown,
+				CollationEnv:   collations.MySQL8(),
+			}
+
+			r, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+			require.NoError(t, err)
+			expectResultAnyOrder(t, r, sqltypes.MakeTestResult(sqltypes.MakeTestFields("m|n", "int64|varchar"), "1|1", "2|null"))
+		})
+	}
+}
