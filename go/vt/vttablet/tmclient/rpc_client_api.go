@@ -283,6 +283,8 @@ type TabletManagerClient interface {
 	// PromoteReplica makes the tablet the new primary
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error)
 
+	PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error)
+
 	//
 	// Backup / restore related methods
 	//

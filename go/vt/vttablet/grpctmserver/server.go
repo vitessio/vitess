@@ -678,6 +678,12 @@ func (s *server) PromoteReplica(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "PromoteReplicaAndJournal", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	return s.tm.PromoteReplicaAndJournal(ctx, request)
+}
+
 func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream tabletmanagerservicepb.TabletManager_BackupServer) (err error) {
 	ctx := stream.Context()
 	defer s.tm.HandleRPCPanic(ctx, "Backup", request, nil, true /*verbose*/, &err)
