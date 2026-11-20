@@ -596,60 +596,74 @@ func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate s
 }
 
 func findColumnVindex(ctx *plancontext.PlanningContext, a Operator, exp sqlparser.Expr) vindexes.SingleColumn {
+	var singCol vindexes.SingleColumn
+	visitColumnVindexes(ctx, a, exp, func(_ semantics.TableSet, vindex *vindexes.ColumnVindex, offset int) bool {
+		sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+		if isSingle && offset == 0 {
+			singCol = sC
+			return false
+		}
+		return true
+	})
+	return singCol
+}
+
+// visitColumnVindexes calls visit for each column vindex of a table in op that covers
+// a column exp is known to be equal to, passing the table, the column vindex and the
+// position of the column in the vindex's column list. The walk stops when visit returns false.
+func visitColumnVindexes(
+	ctx *plancontext.PlanningContext,
+	op Operator,
+	exp sqlparser.Expr,
+	visit func(table semantics.TableSet, vindex *vindexes.ColumnVindex, offset int) bool,
+) {
 	_, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
-		return nil
+		return
 	}
 
 	exp = unwrapDerivedTables(ctx, exp)
 	if exp == nil {
-		return nil
+		return
 	}
-
-	var singCol vindexes.SingleColumn
 
 	// for each equality expression that exp has with other column name, we check if it
 	// can be solved by any table in our routeTree. If an equality expression can be solved,
-	// we check if the equality expression and our table share the same vindex, if they do:
-	// the method will return the associated vindexes.SingleColumn.
+	// we hand every column vindex of that table that covers the column to visit.
 	_ = ctx.SemTable.ForeachExprEquality(exp, func(expr sqlparser.Expr) error {
 		col, isCol := expr.(*sqlparser.ColName)
 		if !isCol {
 			return nil
 		}
 		deps := ctx.SemTable.RecursiveDeps(expr)
-		_ = Visit(a, func(rel Operator) error {
+		return Visit(op, func(rel Operator) error {
 			to, isTableOp := rel.(tableIDIntroducer)
 			if !isTableOp {
 				return nil
 			}
 			id := to.introducesTableID()
-			if deps.IsSolvedBy(id) {
-				tableInfo, err := ctx.SemTable.TableInfoFor(id)
-				if err != nil {
-					// an error here is OK, we just can't ask this operator about its column vindexes
-					return nil
-				}
-				vtable := tableInfo.GetVindexTable()
-				if vtable != nil {
-					for _, vindex := range vtable.ColumnVindexes {
-						sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-						if isSingle && vindex.Columns[0].Equal(col.Name) {
-							singCol = sC
-							return io.EOF
-						}
+			if !deps.IsSolvedBy(id) {
+				return nil
+			}
+			tableInfo, err := ctx.SemTable.TableInfoFor(id)
+			if err != nil {
+				// an error here is OK, we just can't ask this operator about its column vindexes
+				return nil
+			}
+			vtable := tableInfo.GetVindexTable()
+			if vtable == nil {
+				return nil
+			}
+			for _, vindex := range vtable.ColumnVindexes {
+				for offset, column := range vindex.Columns {
+					if column.Equal(col.Name) && !visit(id, vindex, offset) {
+						return io.EOF
 					}
 				}
 			}
 			return nil
 		})
-		if singCol != nil {
-			return io.EOF
-		}
-		return nil
 	})
-
-	return singCol
 }
 
 // unwrapDerivedTables we want to find the bottom layer of derived tables
@@ -688,11 +702,76 @@ func getColName(exp sqlparser.Expr) *sqlparser.ColName {
 }
 
 func canMergeOnFilters(ctx *plancontext.PlanningContext, a, b *Route, joinPredicates []sqlparser.Expr) bool {
+	multiColumn := multiColumnVindexMatches{}
 	for _, predicate := range joinPredicates {
 		for _, expr := range sqlparser.SplitAndExpression(nil, predicate) {
 			if canMergeOnFilter(ctx, a, b, expr) {
 				return true
 			}
+			multiColumn.add(ctx, a, b, expr)
+		}
+	}
+	return multiColumn.complete()
+}
+
+type (
+	// multiColumnVindexMatches tracks which columns of a unique multi-column vindex
+	// the join predicates equate between one table on each side of a join.
+	multiColumnVindexMatches map[multiColumnVindexPair][]bool
+
+	// multiColumnVindexPair is a table on each side of a join that share a multi-column vindex.
+	multiColumnVindexPair struct {
+		left, right semantics.TableSet
+		vindex      vindexes.MultiColumn
+	}
+)
+
+// add records the vindex columns that predicate equates between a table in a and
+// the same vindex column of a table in b.
+func (m multiColumnVindexMatches) add(ctx *plancontext.PlanningContext, a, b *Route, predicate sqlparser.Expr) {
+	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
+	if !ok || comparison.Operator != sqlparser.EqualOp {
+		return
+	}
+	left := getColName(comparison.Left)
+	right := getColName(comparison.Right)
+	if left == nil || right == nil {
+		return
+	}
+	m.addColumns(ctx, a, b, left, right)
+	m.addColumns(ctx, a, b, right, left)
+}
+
+func (m multiColumnVindexMatches) addColumns(ctx *plancontext.PlanningContext, a, b *Route, left, right *sqlparser.ColName) {
+	visitColumnVindexes(ctx, a, left, func(lTable semantics.TableSet, lVindex *vindexes.ColumnVindex, lOffset int) bool {
+		multiCol, isMulti := lVindex.Vindex.(vindexes.MultiColumn)
+		if !isMulti || !multiCol.IsUnique() {
+			return true
+		}
+		visitColumnVindexes(ctx, b, right, func(rTable semantics.TableSet, rVindex *vindexes.ColumnVindex, rOffset int) bool {
+			if rVindex.Vindex != lVindex.Vindex || rOffset != lOffset || len(rVindex.Columns) != len(lVindex.Columns) {
+				return true
+			}
+			key := multiColumnVindexPair{left: lTable, right: rTable, vindex: multiCol}
+			matched, found := m[key]
+			if !found {
+				matched = make([]bool, len(lVindex.Columns))
+				m[key] = matched
+			}
+			matched[lOffset] = true
+			return true
+		})
+		return true
+	})
+}
+
+// complete reports whether the join predicates equate every column of a multi-column vindex
+// between a table on each side. Equal values in all vindex columns map to the same keyspace id,
+// so the joined rows live on the same shard.
+func (m multiColumnVindexMatches) complete() bool {
+	for _, matched := range m {
+		if !slices.Contains(matched, false) {
+			return true
 		}
 	}
 	return false
