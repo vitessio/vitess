@@ -121,8 +121,7 @@ func TestUpdateShardRecordsRefreshesShardsConcurrently(t *testing.T) {
 }
 
 // leaseFactory creates memorytopo connections whose locks taken with a TTL
-// expire when they are not checked for longer than the TTL, as with the etcd
-// topo, where checking a lock renews its lease.
+// expire when they are not checked for longer than the TTL.
 type leaseFactory struct {
 	*memorytopo.Factory
 }

@@ -69,9 +69,9 @@ func hasGTIDs(t *testing.T, tab *cluster.Vttablet, set, gtids string) bool {
 // Layout: P is the primary, R1 replicates from R4, and R3 and R4 from P. Read locks on R3 and
 // R4 block their appliers, so a write T1 on P reaches their relay logs only. R1 never
 // receives T1, because R4's binary log lacks it. ERS therefore waits on R3 and R4 to apply T1
-// and excludes R1 as strictly behind. ERS holds the shard lock for the whole wait, and
-// nothing renews its lease there, so the hold has a budget well within the lease TTL and the
-// lease's remaining TTL is checked before the release.
+// and excludes R1 as strictly behind. ERS holds the shard lock for the whole wait, and the
+// lock's lease is renewed until ERS unlocks it. The hold has a budget, and the lease's
+// remaining TTL is checked before the release.
 //
 // Whether R1's restarted vttablet reconnects its receiver during the hold depends on the
 // revision under test; this control asserts neither outcome.
@@ -148,8 +148,8 @@ func holdERS(t *testing.T, prepare func(t *testing.T, ci *cluster.LocalProcessCl
 		}
 	})
 
-	// ERS's lease decays from its last check, about a second after it starts. The hold must
-	// end within this budget; a longer one makes the attempt invalid, not a failed reparent.
+	// The hold must end within this budget; a longer one makes the attempt invalid, not a
+	// failed reparent.
 	const holdBudget = 20 * time.Second
 	deadline := start.Add(holdBudget)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {

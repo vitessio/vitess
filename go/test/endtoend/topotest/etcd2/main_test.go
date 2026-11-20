@@ -208,25 +208,26 @@ func TestKeyspaceLocking(t *testing.T) {
 	topoutils.WaitForBoolValue(t, &secondThreadLockAcquired, true)
 }
 
-// TestLockingWithTTL tests that locking with the TTL override works as intended.
-func TestLockingWithTTL(t *testing.T) {
-	// Create the topo server connection.
+// TestKeyspaceLockOutlivesLeaseTTL checks that a keyspace lock held for longer
+// than its lease's TTL still excludes another process: vtctld waits for it
+// until its own lock timeout.
+func TestKeyspaceLockOutlivesLeaseTTL(t *testing.T) {
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
 	require.NoError(t, err)
+	defer ts.Close()
 
-	ctx := t.Context()
-
-	// Acquire a keyspace lock with a short custom TTL.
-	ttl := 1 * time.Second
-	ctx, unlock, err := ts.LockKeyspace(ctx, KeyspaceName, "TestLockingWithTTL", topo.WithTTL(ttl))
+	_, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLockOutlivesLeaseTTL")
 	require.NoError(t, err)
 	defer unlock(&err)
 
-	// Check that CheckKeyspaceLocked DOES return an error after waiting more than
-	// the specified TTL as we should have lost our lock.
-	time.Sleep(ttl * 2)
-	err = topo.CheckKeyspaceLocked(ctx, KeyspaceName)
-	require.Error(t, err)
+	// vtctld waits for the lock for its default 45s --lock-timeout, longer than
+	// the default 30s --topo-etcd-lease-ttl. The keyspace's durability policy
+	// is already none, so the command changes nothing if it takes the lock.
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--durability-policy=none", KeyspaceName)
+	require.Error(t, err, "vtctld took the keyspace lock while it was held: %s", output)
+	// Only the wait for the lock times out on the lock's path.
+	require.Contains(t, output, "deadline exceeded: ")
+	require.Contains(t, output, "keyspaces/"+KeyspaceName+"/locks")
 }
 
 // TestNamedLocking tests that named locking works as intended.

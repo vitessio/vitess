@@ -150,9 +150,9 @@ func TestRestartReplicaVttabletKeepsMysqld(t *testing.T) {
 	utils.ConfirmReplication(t, primary, tablets[1:])
 }
 
-// heldLock is a test-owned shard lock. Its etcd lease is renewed only when the lock is
-// checked, so a checker calls topo.CheckShardLocked every interval, each check bounded by
-// the interval; the first failed check ends the checker and is its result.
+// heldLock is a test-owned shard lock. A checker calls topo.CheckShardLocked every
+// interval, each check bounded by the interval; the first failed check ends the checker
+// and is its result.
 type heldLock struct {
 	ctx    context.Context
 	unlock func(*error)

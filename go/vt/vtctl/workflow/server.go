@@ -3068,7 +3068,8 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 	// For switching reads, we need to lock both source and target keyspaces.
 	// The target lock is needed because we update denied tables when removing
 	// mirror rules.
-	// We need to hold the keyspace locks longer than the command timeout.
+	// A vtctld that stops renewing the keyspace locks keeps them for the command
+	// timeout.
 	ksLockTTL, set, err := protoutil.DurationFromProto(req.GetTimeout())
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "unable to parse Timeout into a valid duration")
@@ -3199,11 +3200,11 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// We need to hold the keyspace locks longer than waitTimeout*X -- where X
-	// is the number of sub-steps where the waitTimeout value is used: stopping
-	// existing streams, waiting for replication to catch up, initializing the
-	// target sequences, and completing the detached post-journal tail -- to be
-	// sure the lock is not lost.
+	// A vtctld that stops renewing the keyspace locks keeps them for longer than
+	// waitTimeout*X -- where X is the number of sub-steps where the waitTimeout
+	// value is used: stopping existing streams, waiting for replication to catch
+	// up, initializing the target sequences, and completing the detached
+	// post-journal tail.
 	postJournalTimeout := max(waitTimeout, 30*time.Second)
 	ksLockTTL := waitTimeout*3 + postJournalTimeout
 	startPostJournalCtx := func(ctx context.Context) (context.Context, context.CancelFunc) {

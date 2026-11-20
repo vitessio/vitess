@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"go.etcd.io/etcd/api/v3/mvccpb"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/vt/log"
@@ -142,6 +143,8 @@ func (s *Server) waitOnLastRev(ctx context.Context, cli *clientv3.Client, nodePa
 type etcdLockDescriptor struct {
 	s       *Server
 	leaseID clientv3.LeaseID
+	// stopKeepAlive ends the lease's KeepAlive.
+	stopKeepAlive context.CancelFunc
 }
 
 // TryLock is part of the topo.Conn interface.
@@ -159,7 +162,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/)
+	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/, true /*untilUnlock*/)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -174,7 +177,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, leaseTTL, true /*wait*/)
+	return s.lock(ctx, dirPath, contents, leaseTTL, true /*wait*/, true /*untilUnlock*/)
 }
 
 // LockWithTTL is part of the topo.Conn interface.
@@ -189,18 +192,19 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		return nil, convertError(err, dirPath)
 	}
 
-	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/)
+	return s.lock(ctx, dirPath, contents, int(ttl.Seconds()), true /*wait*/, true /*untilUnlock*/)
 }
 
 // LockName is part of the topo.Conn interface.
 func (s *Server) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), true /*wait*/)
+	return s.lock(ctx, dirPath, contents, int(topo.NamedLockTTL.Seconds()), true /*wait*/, false /*untilUnlock*/)
 }
 
 // lock is used by Lock(), LockWithTTL(), LockName(), TryLock() and primary election.
 // If wait is false, it returns a topo.NodeExists error instead of
-// waiting for older lock files to go away.
-func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait bool) (topo.LockDescriptor, error) {
+// waiting for older lock files to go away. With untilUnlock, the
+// lease's KeepAlive runs until Unlock. Otherwise it runs only as long as ctx.
+func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wait, untilUnlock bool) (topo.LockDescriptor, error) {
 	nodePath := path.Join(s.root, dirPath, locksPath)
 
 	// Get a lease, set its KeepAlive.
@@ -208,20 +212,33 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wa
 	if err != nil {
 		return nil, convertError(err, nodePath)
 	}
-	leaseKA, err := s.cli.KeepAlive(ctx, lease.ID)
+	// topo.Server bounds ctx to the acquisition, so a KeepAlive that runs until
+	// Unlock must outlive it.
+	kaParent := ctx
+	if untilUnlock {
+		kaParent = context.WithoutCancel(ctx)
+	}
+	kaCtx, stopKeepAlive := context.WithCancel(kaParent)
+	leaseKA, err := s.cli.KeepAlive(kaCtx, lease.ID)
 	if err != nil {
+		stopKeepAlive()
 		return nil, convertError(err, nodePath)
 	}
-	go func() {
-		// Drain the lease keepAlive channel, we're not
-		// interested in its contents.
-		for range leaseKA {
-		}
-	}()
+	if untilUnlock {
+		go s.keepAlive(kaCtx, s.cli, lease.ID, nodePath, leaseKA, topo.RemoteOperationTimeout)
+	} else {
+		go func() {
+			// Drain the lease keepAlive channel, we're not
+			// interested in its contents.
+			for range leaseKA {
+			}
+		}()
+	}
 
 	// Create an ephemeral node in the locks directory.
 	key, revision, err := s.newUniqueEphemeralKV(ctx, s.cli, lease.ID, nodePath, contents)
 	if err != nil {
+		stopKeepAlive()
 		return nil, err
 	}
 
@@ -231,6 +248,7 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wa
 		if err != nil {
 			// We had an error waiting on the last node.
 			// Revoke our lease, this will delete the file.
+			stopKeepAlive()
 			revokeCtx, revokeCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 			if _, rerr := s.cli.Revoke(revokeCtx, lease.ID); rerr != nil {
 				log.Warn("Revoke failed, may have left the key behind", slog.Int64("lease_id", int64(lease.ID)), slog.String("path", key), slog.Any("error", rerr))
@@ -244,9 +262,52 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wa
 		if done {
 			// No more older nodes, we're it!
 			return &etcdLockDescriptor{
-				s:       s,
-				leaseID: lease.ID,
+				s:             s,
+				leaseID:       lease.ID,
+				stopKeepAlive: stopKeepAlive,
 			}, nil
+		}
+	}
+}
+
+// keepAliveRetryDelay is how long keepAlive waits after a failed attempt to
+// renew a lease whose KeepAlive the etcd client gave up on.
+const keepAliveRetryDelay = time.Second
+
+// keepAlive drains leaseKA until ctx ends. The etcd client closes leaseKA when
+// it gets no response for a whole TTL, for example during an etcd outage, but
+// the lease can outlive the outage: a new etcd leader gives every lease a fresh
+// TTL. keepAlive then renews the same lease and starts a new KeepAlive on it,
+// until etcd reports the lease gone. It never grants a new lease: a holder that
+// lost its lease no longer holds the lock. Each renewal attempt gets
+// attemptTimeout, because one sent to an etcd member that stopped answering
+// without closing its connection never returns.
+func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID clientv3.LeaseID, nodePath string, leaseKA <-chan *clientv3.LeaseKeepAliveResponse, attemptTimeout time.Duration) {
+	for {
+		for range leaseKA {
+		}
+		for {
+			attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+			_, err := cli.KeepAliveOnce(attemptCtx, leaseID)
+			cancel()
+			// An etcd error can arrive after ctx ended or the client closed.
+			if ctx.Err() != nil || cli.Ctx().Err() != nil {
+				return
+			}
+			if err == nil {
+				break
+			}
+			if errors.Is(err, rpctypes.ErrLeaseNotFound) {
+				log.Warn("lease of the lock expired before the lock was released", slog.Int64("lease_id", int64(leaseID)), slog.String("path", nodePath))
+				return
+			}
+			// If ctx ends meanwhile, the next attempt fails before reaching etcd.
+			time.Sleep(keepAliveRetryDelay)
+		}
+		var err error
+		if leaseKA, err = cli.KeepAlive(ctx, leaseID); err != nil {
+			// Only a closed client fails it.
+			return
 		}
 	}
 }
@@ -263,6 +324,9 @@ func (ld *etcdLockDescriptor) Check(ctx context.Context) error {
 
 // Unlock is part of the topo.LockDescriptor interface.
 func (ld *etcdLockDescriptor) Unlock(ctx context.Context) error {
+	// Stop the KeepAlive first, so that it does not take the revoked lease for
+	// one that expired.
+	ld.stopKeepAlive()
 	_, err := ld.s.cli.Revoke(ctx, ld.leaseID)
 	if err != nil {
 		return convertError(err, "lease")
