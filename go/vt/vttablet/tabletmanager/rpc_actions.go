@@ -91,9 +91,17 @@ func (tm *TabletManager) SetReadOnly(ctx context.Context, rdonly bool) error {
 		// If super read only is already off, then we probably called this function from PRS or some other place
 		// because it is idempotent. We only need to redo prepared transactions the first time we transition from super read only
 		// to read write.
-		return tm.redoPreparedTransactionsAndSetReadWrite(ctx)
+		if err := tm.redoPreparedTransactionsAndSetReadWrite(ctx); err != nil {
+			return err
+		}
+	} else if err := tm.MysqlDaemon.SetReadOnly(ctx, rdonly); err != nil {
+		return err
 	}
-	return tm.MysqlDaemon.SetReadOnly(ctx, rdonly)
+
+	if !rdonly {
+		tm.tmState.SetPrimaryDemoted(false)
+	}
+	return nil
 }
 
 // ChangeTags changes the tablet tags

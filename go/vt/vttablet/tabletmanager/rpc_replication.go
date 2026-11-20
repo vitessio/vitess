@@ -665,29 +665,37 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 		slog.Bool("was_read_only", wasReadOnly),
 	)
 
+	stoppedServing := false
 	// If we are a primary tablet and not yet read-only, stop accepting new
 	// queries and wait for in-flight queries to complete. If we are not primary,
 	// or if we are already read-only, there's no need to stop the queryservice
 	// in order to ensure the guarantee we are being asked to provide, which is
 	// that no writes are occurring.
 	if wasPrimary && !wasReadOnly {
+		wasPrimaryDemoted := tm.tmState.IsPrimaryDemoted()
+		tm.tmState.SetPrimaryDemoted(true)
+		defer func() {
+			if finalErr != nil && revertPartialFailure {
+				tm.tmState.SetPrimaryDemoted(wasPrimaryDemoted)
+				if wasServing && stoppedServing {
+					log.Info("reverting query service to serving")
+					if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+						log.Warn("SetServingType(serving=true) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+					}
+				}
+			}
+		}()
+
 		// Note that this may block until the transaction timeout if clients
 		// don't finish their transactions in time. Even if some transactions
 		// have to be killed at the end of their timeout, this will be
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Info("DemotePrimary disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "primary demoted"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
-		defer func() {
-			if finalErr != nil && revertPartialFailure && wasServing {
-				log.Info("reverting query service to serving")
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
-					log.Warn("SetServingType(serving=true) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
-				}
-			}
-		}()
+		stoppedServing = true
 	}
 
 	log.Info("checking semi-sync status")
@@ -872,6 +880,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 	}
 	// Update serving graph
 	log.Info("UndoDemotePrimary re-enabling query service")
+	tm.tmState.SetPrimaryDemoted(false)
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
