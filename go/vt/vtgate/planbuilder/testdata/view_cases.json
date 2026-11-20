@@ -57,7 +57,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "drop view main.a"
+        "Query": "drop view a"
       },
       "TablesUsed": [
         "main.a"
@@ -77,12 +77,32 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "drop view main.a, main.b, main.c"
+        "Query": "drop view a, b, c"
       },
       "TablesUsed": [
         "main.a",
         "main.b",
         "main.c"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view if exists strips the keyspace qualifier",
+    "query": "drop view if exists main.a",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop view if exists main.a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop view if exists a"
+      },
+      "TablesUsed": [
+        "main.a"
       ]
     }
   },
