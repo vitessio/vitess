@@ -913,10 +913,50 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (engine.Primitive, error) {
+	// All inputs of a Concatenate must return the same number of columns. Inputs can
+	// legitimately be wider than the union's own columns: a distinct arm carries the
+	// weight_string columns its dedup needs, and a recursive CTE arm keeps the columns
+	// the recursion joins on. Instead of padding the narrower arms, we trim the wider
+	// ones: any arm that is wider than the narrowest one is wrapped in a
+	// SimpleProjection that keeps only the first N columns.
+	//
+	// Every column that operators above the union reference is added through
+	// Union.AddColumn or Union.AddWSColumn, which add it to all sources at the same
+	// offset, so those columns always sit below N. The columns above N are only used
+	// inside their own arm, by its Distinct or RecurseCTE, and the trim sits above
+	// them. This ordering also means we never call AddColumn on a source here, after
+	// offset planning has already happened. That is important, because AddColumn does
+	// not reliably grow GetColumns by one for all arm shapes once offsets have been
+	// planned - a Route over a projection reuses existing constants, an ApplyJoin only
+	// appends to its join columns, and a RecurseCTE panics if the seed lacks the
+	// column - so a loop padding the narrower arms here would never terminate.
+	//
+	// Union.GetColumns still pads the union's own columns with constant columns up to
+	// the widest arm, and a projection above the union can resolve a select expression
+	// to one of those padding columns. With the trim in place, that projection reads
+	// past the end of the trimmed rows and the query fails at execution time instead
+	// of silently returning wrong data.
+	minCols := -1
+	for _, src := range op.Sources {
+		if cols := len(src.GetColumns(ctx)); minCols == -1 || cols < minCols {
+			minCols = cols
+		}
+	}
+
 	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (engine.Primitive, error) {
 		primitive, err := transformToPrimitive(ctx, src)
 		if err != nil {
 			return nil, err
+		}
+		if len(src.GetColumns(ctx)) > minCols {
+			// This arm is wider than the narrowest one. The extra columns are only
+			// used inside the arm, below the trim, so we can simply drop them here.
+			cols := make([]int, minCols)
+			colNames := make([]string, minCols)
+			for i := range cols {
+				cols[i] = i
+			}
+			primitive = newSimpleProjection(cols, colNames, primitive)
 		}
 		return primitive, nil
 	})

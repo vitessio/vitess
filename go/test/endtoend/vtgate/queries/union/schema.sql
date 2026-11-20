@@ -23,3 +23,15 @@ create table t2_id4_idx(
                            primary key(id),
                            key idx_id4(id4)
 ) Engine=InnoDB;
+create table u1(
+                   id bigint,
+                   name varchar(64),
+                   manager_id bigint,
+                   primary key(id)
+) Engine=InnoDB;
+
+create table u2(
+                   id bigint,
+                   name varchar(64),
+                   primary key(id)
+) Engine=InnoDB;
