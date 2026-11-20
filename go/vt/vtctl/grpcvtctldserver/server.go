@@ -2532,6 +2532,27 @@ func (s *VtctldServer) addShardRecordPrimaryTerms(ctx context.Context, tablets [
 	return nil
 }
 
+// topoErrorf adds context to a topo error and gives it a vtrpc code. Topo errors carry
+// no vtrpc code of their own, so callers would otherwise see UNKNOWN.
+func topoErrorf(err error, format string, args ...any) error {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_UNKNOWN {
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			code = vtrpcpb.Code_NOT_FOUND
+		case topo.IsErrType(err, topo.BadVersion):
+			code = vtrpcpb.Code_ABORTED
+		case topo.IsErrType(err, topo.Timeout):
+			code = vtrpcpb.Code_DEADLINE_EXCEEDED
+		case topo.IsErrType(err, topo.Interrupted):
+			code = vtrpcpb.Code_CANCELED
+		default:
+			code = vtrpcpb.Code_UNAVAILABLE
+		}
+	}
+	return vterrors.Errorf(code, "%s: %v", fmt.Sprintf(format, args...), err)
+}
+
 // GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
 // It returns the cell located at the provided path in the topology server.
 func (s *VtctldServer) GetTopologyPath(ctx context.Context, req *vtctldatapb.GetTopologyPathRequest) (*vtctldatapb.GetTopologyPathResponse, error) {
