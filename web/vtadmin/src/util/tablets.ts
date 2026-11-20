@@ -35,9 +35,12 @@ export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce
  * formatAlias formats a tablet.alias object as a single string, The Vitess Way™:
  * the cell, a hyphen, and the uid left-padded with zeroes to 10 digits
  * (e.g., "zone1-0000000100"). This matches topoproto.TabletAliasString.
+ *
+ * A missing uid is treated as 0: vtadmin-api omits zero-valued fields from its
+ * JSON responses, so a tablet with uid 0 arrives without a uid property.
  */
 export const formatAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
-    alias?.cell && alias.uid != null ? `${alias.cell}-${padStart(alias.uid.toString(), 10, '0')}` : null;
+    alias?.cell ? `${alias.cell}-${padStart(String(alias.uid ?? 0), 10, '0')}` : null;
 
 export const formatType = (t: pb.Tablet) => t.tablet?.type && TABLET_TYPES[t.tablet?.type];
 

@@ -57,12 +57,12 @@ describe('formatAlias', () => {
         ).toEqual(null);
     });
 
-    it('handles invalid uid', () => {
+    it('treats a missing uid as 0', () => {
+        // vtadmin-api omits uid from the JSON when it is 0.
         expect(
             tablets.formatAlias({
                 cell: 'zone1',
-                uid: null,
             })
-        ).toEqual(null);
+        ).toEqual('zone1-0000000000');
     });
 });
