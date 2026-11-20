@@ -930,6 +930,56 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// MySQL reads numeric text from a character set whose smallest
+			// character is wider than one byte (the UTF-16 variants, UCS-2 and
+			// UTF-32) through latin1, decoding the characters first. These bytes
+			// are '+1' in UTF-16LE; the interleaved NUL bytes must not stop the
+			// number at the first byte, as they did before this was read through
+			// latin1.
+			expression: `CAST(_utf16le X'2B003100' AS DOUBLE)`,
+			result:     `FLOAT64(1)`,
+		},
+		{
+			expression: `CAST(_utf16le X'310035002E003500' AS DOUBLE)`,
+			result:     `FLOAT64(15.5)`,
+		},
+		{
+			expression: `CAST(_utf16le X'31003200' AS SIGNED)`,
+			result:     `INT64(12)`,
+		},
+		{
+			expression: `CAST(_utf16 X'002D0032' AS SIGNED)`,
+			result:     `INT64(-2)`,
+		},
+		{
+			expression: `CAST(_utf16le X'31003200' AS UNSIGNED)`,
+			result:     `UINT64(12)`,
+		},
+		{
+			expression: `CAST(_ucs2 X'00310032' AS SIGNED)`,
+			result:     `INT64(12)`,
+		},
+		{
+			expression: `CAST(_utf32 X'0000003100000032' AS SIGNED)`,
+			result:     `INT64(12)`,
+		},
+		{
+			// Arithmetic coercion of fixed-width text takes the same path.
+			expression: `_utf16le X'2B003100' + 0`,
+			result:     `FLOAT64(1)`,
+		},
+		{
+			// The decimal target reads through latin1 as well.
+			expression: `CAST(_utf16le X'310035002E003500' AS DECIMAL(20, 6))`,
+			result:     `DECIMAL(15.500000)`,
+		},
+		{
+			// A byte sequence that is not a character ends the number rather
+			// than reading its raw bytes: U+312B in UTF-16LE is not ASCII '+1'.
+			expression: `CAST(_utf16le X'2B31' AS SIGNED)`,
+			result:     `INT64(0)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
