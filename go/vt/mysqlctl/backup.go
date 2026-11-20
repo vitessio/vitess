@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/textutil"
@@ -95,9 +97,10 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
-
-	EmptyBackupMessage = "no new data to backup, skipping it"
 )
+
+// EmptyBackupMessage is logged when a backup has no new data to back up.
+const EmptyBackupMessage = "no new data to backup, skipping it"
 
 func init() {
 	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtbackup", "vtctld"} {
@@ -161,7 +164,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
-	params.Logger.Infof("Starting backup %v", bh.Name())
+	params.Logger.Info("Starting backup", slog.String("backup_name", bh.Name()))
 
 	// Scope stats to selected backup engine.
 	beParams := params.Copy()
@@ -181,7 +184,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 		}
 	}
 
-	params.Logger.Infof("Using backup engine %q", be.Name())
+	params.Logger.Info("Using backup engine", slog.String("backup_engine", be.Name()))
 
 	// Take the backup, and either AbortBackup or EndBackup.
 	backupResult, err := be.ExecuteBackup(ctx, beParams, bh)
@@ -189,10 +192,10 @@ func Backup(ctx context.Context, params BackupParams) error {
 	var finishErr error
 	switch backupResult {
 	case BackupUnusable:
-		logger.Errorf2(err, "backup is not usable, aborting it")
+		logger.Error("backup is not usable, aborting it", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		finishErr = bh.AbortBackup(ctx)
 	case BackupEmpty:
-		logger.Infof(EmptyBackupMessage)
+		logger.Info(EmptyBackupMessage)
 		// While an empty backup is considered "successful", it should leave no trace.
 		// We therefore ensire to clean up an backup files/directories/entries.
 		finishErr = bh.AbortBackup(ctx)
@@ -204,7 +207,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 			// We have a backup error, and we also failed
 			// to finish the backup: just log the backup
 			// finish error, return the backup error.
-			logger.Errorf2(finishErr, "failed to finish backup: %v")
+			logger.Error("failed to finish backup", slog.Any("error", finishErr), slog.String("error_code", vterrors.Code(finishErr).String()))
 		}
 		return err
 	}
@@ -234,14 +237,14 @@ func ParseBackupName(dir string, name string) (backupTime *time.Time, alias *top
 
 	btime, err := time.Parse(BackupTimestampFormat, timestamp)
 	if err != nil {
-		log.Error(fmt.Sprintf("error parsing backup time for %s/%s: %s", dir, name, err))
+		log.Error("error parsing backup time", slog.String("dir", dir), slog.String("backup_name", name), slog.Any("error", err))
 	} else {
 		backupTime = &btime
 	}
 
 	alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		log.Error(fmt.Sprintf("error parsing tablet alias for %s/%s: %s", dir, name, err))
+		log.Error("error parsing tablet alias", slog.String("dir", dir), slog.String("backup_name", name), slog.Any("error", err))
 		alias = nil
 	}
 
@@ -264,7 +267,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
 			// found active db
-			log.Warn(fmt.Sprintf("checkNoDB failed, found active db %v", dbName))
+			log.Warn("checkNoDB failed, found active db", slog.String("db_name", dbName))
 			return false, nil
 		}
 	}
@@ -294,7 +297,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 			// These paths are actually filename prefixes, not directories.
 			// An extension of the form ".###" is appended by mysqld.
 			path += ".*"
-			log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
+			log.Info("Restore: removing files", slog.String("mycnf_field", name), slog.String("path", path))
 			matches, err := filepath.Glob(path)
 			if err != nil {
 				return vterrors.Wrapf(err, "can't expand path glob %q", path)
@@ -309,10 +312,10 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 		// Regular directory: delete recursively.
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			log.Info(fmt.Sprintf("Restore: skipping removal of nonexistent %v (%v)", name, path))
+			log.Info("Restore: skipping removal of nonexistent path", slog.String("mycnf_field", name), slog.String("path", path))
 			continue
 		}
-		log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
+		log.Info("Restore: removing files", slog.String("mycnf_field", name), slog.String("path", path))
 		if err := os.RemoveAll(path); err != nil {
 			return vterrors.Wrapf(err, "can't remove existing files in %v (%v)", name, path)
 		}
@@ -328,23 +331,26 @@ func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysql
 	if deleteBeforeRestore || RestoreWasInterrupted(cnf) {
 		return true, nil
 	}
-	logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	logger.Info("Restore: No " + RestoreState + " file found, checking no existing data is present")
 	// Wait for mysqld to be ready, in case it was launched in parallel with us.
 	// If this doesn't succeed, we should not attempt a restore
 	if err := mysqld.Wait(ctx, cnf); err != nil {
 		return false, err
 	}
 	if err := mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
-		logger.Errorf("error waiting for the grants: %v", err)
+		logger.Error("error waiting for the grants", slog.Any("error", err))
 		return false, err
 	}
 	return checkNoDB(ctx, mysqld, dbName)
 }
 
-// ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have
-// @@gtid_purged == <gtid-of-backup>. This then also implies that @@gtid_executed equals same value. This is because we restore without
-// any binary logs, unless the backup includes them: then gtid_executed is only checked.
-func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
+// ensureRestoredGTIDsMatchManifest makes @@gtid_executed and @@gtid_purged equal
+// the backup's GTID position. Both usually match already, because a full backup
+// is restored without binary logs, but Xtrabackup 2.4 restores @@gtid_purged as
+// of the backup. If the backup includes binary logs, it only checks them and
+// @@gtid_executed. This runs before the restore state file is removed, so a restore
+// interrupted while resetting GTIDs is started again.
+func ensureRestoredGTIDsMatchManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
 	if manifest == nil {
 		return nil
 	}
@@ -356,24 +362,23 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	if manifest.Position.GTIDSet == nil {
 		return nil
 	}
-	gtid := manifest.Position.GTIDSet.String()
-	if gtid == "" {
-		return nil
-	}
-	// Xtrabackup 2.4's restore seems to set @@gtid_purged to be the @@gtid_purged at the time of backup. But this is not
-	// the desired value. We want to set @@gtid_purged to be the @@gtid_executed of the backup.
-	// As reminder, when restoring from a full backup, setting @@gtid_purged also sets @@gtid_executed.
-	restoredGTIDPurgedPos, err := params.Mysqld.GetGTIDPurged(ctx)
+	purged, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to read gtid_purged after restore")
 	}
-	if restoredGTIDPurgedPos.Equal(manifest.Position) {
+	executed, err := params.Mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read gtid_executed after restore")
+	}
+	if purged.Equal(manifest.Position) && executed.Equal(manifest.Position) {
 		return nil
 	}
-	params.Logger.Infof("Restore: @@gtid_purged does not equal manifest's GTID position. Setting @@gtid_purged to %v", gtid)
-	// This is not good. We want to apply a new @@gtid_purged value.
-	err = params.Mysqld.SetReplicationPosition(ctx, manifest.Position)
-	if err != nil {
+	params.Logger.Info("Restore: GTIDs do not equal the manifest's GTID position. Setting them",
+		slog.String("executed", executed.String()),
+		slog.String("purged", purged.String()),
+		slog.String("position", manifest.Position.String()),
+	)
+	if err := params.Mysqld.SetReplicationPosition(ctx, manifest.Position); err != nil {
 		return vterrors.Wrap(err, "error setting replication position")
 	}
 	return nil
@@ -389,7 +394,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	startTs := time.Now()
 	// find the right backup handle: most recent one, with a MANIFEST
-	params.Logger.Infof("Restore: looking for a suitable backup to restore")
+	params.Logger.Info("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return nil, err
@@ -418,19 +423,19 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
-		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
+		params.Logger.Error("no backup to restore on BackupStorage. Starting up empty.", slog.String("dir", backupDir))
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
-			params.Logger.Errorf("mysqld is not running: %v", err)
+			params.Logger.Error("mysqld is not running", slog.Any("error", err))
 			return nil, err
 		}
 		if err = params.Mysqld.WaitForDBAGrants(ctx, DbaGrantWaitTime); err != nil {
-			params.Logger.Errorf("error waiting for the grants: %v", err)
+			params.Logger.Error("error waiting for the grants", slog.Any("error", err))
 			return nil, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err := params.Mysqld.ResetReplication(ctx); err != nil {
-			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
+			params.Logger.Error("error resetting replication. Continuing", slog.Any("error", err))
 		}
 
 		// Always return ErrNoBackup
@@ -450,7 +455,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
-	params.Logger.Infof("Restore: %v", restorePath.String())
+	params.Logger.Info("Restore: found restore path", slog.String("restore_path", restorePath.String()))
 	if params.DryRun {
 		return nil, nil
 	}
@@ -474,33 +479,33 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// is executed. And since with --skip-grant-tables anyone can connect to MySQL
 		// without password, we are passing --skip-networking to greatly reduce the set
 		// of those who can connect.
-		params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
+		params.Logger.Info("Restore: starting mysqld for mysql_upgrade")
 		// Note Start will use dba user for waiting, this is fine, it will be allowed.
 		if err := params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking"); err != nil {
 			return backupManifest, err
 		}
 	}
 
-	params.Logger.Infof("Restore: running mysql_upgrade")
+	params.Logger.Info("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(ctx); err != nil {
 		return backupManifest, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
-	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
+	params.Logger.Info("Restore: restarting mysqld after mysql_upgrade")
 	if err := params.Mysqld.Shutdown(context.Background(), params.Cnf, true, params.MysqlShutdownTimeout); err != nil {
 		return backupManifest, err
 	}
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
 		return backupManifest, err
 	}
-	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
+	if err = ensureRestoredGTIDsMatchManifest(ctx, manifest, &params); err != nil {
 		return backupManifest, err
 	}
 
 	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
-		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		params.Logger.Info("Restore: applying incremental backups", slog.Int("backup_count", len(handles)))
 		// Incremental restores are always done via 'builtin' engine, which copies
 		// appropriate binlog files.
 		builtInRE := BackupRestoreEngineMap[builtinBackupEngineName]
@@ -509,36 +514,44 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			if err != nil {
 				return backupManifest, err
 			}
-			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
+			params.Logger.Info("Restore: applied incremental backup", slog.String("position", replication.EncodePosition(manifest.Position)))
 		}
-		params.Logger.Infof("Restore: done applying incremental backups")
+		params.Logger.Info("Restore: done applying incremental backups")
 	}
 
-	params.Logger.Infof("Restore: removing state file")
+	params.Logger.Info("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
 		return backupManifest, err
 	}
 
 	backupstats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
 	params.Stats.Scope(backupstats.Operation("Restore")).TimedIncrement(time.Since(startTs))
-	params.Logger.Infof("Restore: complete")
+	params.Logger.Info("Restore: complete")
 	return manifest, nil
 }
 
-// scanLinesToLogger scans full lines from the given Reader and sends them to
-// the given Logger until EOF.
-func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
+// scanLinesToLogger scans full lines from the given Reader, which is the
+// "stdout" or "stderr" stream of command, and sends each one to the given
+// Logger, under the stream's name, until EOF.
+func scanLinesToLogger(command, stream string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
 	defer doneFunc()
 
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		line := scanner.Text()
-		logger.Infof("%s: %s", prefix, line)
+		if stream == "stderr" {
+			logger.Info("command stderr", slog.String("command", command), slog.String("stderr", scanner.Text()))
+		} else {
+			logger.Info("command stdout", slog.String("command", command), slog.String("stdout", scanner.Text()))
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		// This is usually run in a background goroutine, so there's no point
 		// returning an error. Just log it.
-		logger.Warningf("error scanning lines from %s: %v", prefix, err)
+		if stream == "stderr" {
+			logger.Warn("error scanning lines from command stderr", slog.String("command", command), slog.Any("error", err))
+		} else {
+			logger.Warn("error scanning lines from command stdout", slog.String("command", command), slog.Any("error", err))
+		}
 	}
 }
 
@@ -550,7 +563,10 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		return errors.New("backup init SQL queries provided but no tablet types on which to run them")
 	}
 	if !topoproto.IsTypeInList(params.TabletType, params.InitSQL.TabletTypes) {
-		params.Logger.Infof("Skipping backup init SQL queries %q as the backup tablet type %s is not in the provided list %s", strings.Join(params.InitSQL.Queries, ", "), params.TabletType, topoproto.MakeStringTypeCSV(params.InitSQL.TabletTypes))
+		params.Logger.Info("Skipping backup init SQL queries as the backup tablet type is not in the provided list",
+			slog.Any("queries", params.InitSQL.Queries),
+			slog.String("tablet_type", params.TabletType.String()),
+			slog.Any("tablet_types", topoproto.MakeStringTypeUnsortedList(params.InitSQL.TabletTypes)))
 		return nil
 	}
 	initTimeout, ok, err := protoutil.DurationFromProto(params.InitSQL.Timeout)
@@ -561,7 +577,10 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "backup init SQL queries provided but no timeout provided -- this is dangerous and not allowed")
 	}
 	queriesCSV := strings.Join(params.InitSQL.Queries, ", ")
-	params.Logger.Infof("Executing init SQL queries %q, with a timeout of %v and fail backup on error set to %t", queriesCSV, initTimeout, params.InitSQL.FailOnError)
+	params.Logger.Info("Executing init SQL queries",
+		slog.Any("queries", params.InitSQL.Queries),
+		slog.Duration("timeout", initTimeout),
+		slog.Bool("fail_on_error", params.InitSQL.FailOnError))
 	initCtx, cancel := context.WithTimeout(ctx, initTimeout)
 	defer cancel()
 	// Disable super_read_only before executing init SQL queries, because MySQL
@@ -569,17 +588,17 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 	resetFunc, err := params.Mysqld.SetSuperReadOnly(initCtx, false)
 	if err != nil {
 		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok && sqlErr.Number() == sqlerror.ERUnknownSystemVariable {
-			params.Logger.Infof("Server does not support super_read_only, continuing with init SQL queries: %v", err)
+			params.Logger.Info("Server does not support super_read_only, continuing with init SQL queries", slog.Any("error", err))
 		} else if params.InitSQL.FailOnError {
 			return vterrors.Wrap(err, "failed to disable super_read_only for init SQL queries")
 		} else {
-			params.Logger.Infof("Failed to disable super_read_only for init SQL queries: %v. Will still attempt init SQL queries as fail-on-error is false", err)
+			params.Logger.Info("Failed to disable super_read_only for init SQL queries. Will still attempt init SQL queries as fail-on-error is false", slog.Any("error", err))
 		}
 	}
 	if resetFunc != nil {
 		defer func() {
 			if err := resetFunc(); err != nil {
-				params.Logger.Errorf("Failed to reset super_read_only after init SQL queries: %v", err)
+				params.Logger.Error("Failed to reset super_read_only after init SQL queries", slog.Any("error", err))
 			}
 		}()
 	}
@@ -593,13 +612,13 @@ func ExecuteBackupInitSQL(ctx context.Context, params *BackupParams) error {
 		}
 		select {
 		case <-initCtx.Done():
-			params.Logger.Infof("Canceling init SQL work due to hitting the configured timeout of %v or the the backup itself having been canceled", initTimeout)
+			params.Logger.Info("Canceling init SQL work due to hitting the configured timeout or the backup itself having been canceled", slog.Duration("timeout", initTimeout))
 		default:
-			params.Logger.Infof("Failed to execute init SQL queries %q: %v", queriesCSV, err)
+			params.Logger.Info("Failed to execute init SQL queries", slog.Any("queries", params.InitSQL.Queries), slog.Any("error", err))
 		}
-		params.Logger.Infof("Continuing with backup after failed init SQL work as fail-on-error is false")
+		params.Logger.Info("Continuing with backup after failed init SQL work as fail-on-error is false")
 		return nil
 	}
-	params.Logger.Infof("Successfully completed init SQL queries: %q", queriesCSV)
+	params.Logger.Info("Successfully completed init SQL queries", slog.Any("queries", params.InitSQL.Queries))
 	return nil
 }

@@ -581,7 +581,11 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
 	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
-		return fmt.Errorf("could not set message: %v: %v", query, err)
+		// Wrap the real failure, not the query: the query quotes the message,
+		// which quotes an earlier MySQL error carrying its own "(errno N) ...
+		// during query:" marker, and reading that marker would log the wrong
+		// mysql_errno for a failure that has nothing to do with it.
+		return fmt.Errorf("could not set message: %w", err)
 	}
 	insertLog(vr.dbClient, LogMessage, vr.id, vr.state.String(), message)
 	return nil
@@ -632,7 +636,12 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 		vr.dbClient.AddQueryToTrxBatch(query)
 	} else { // Otherwise, send it down the wire
 		if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
-			return fmt.Errorf("could not set state: %v: %v", query, err)
+			// Wrap the real failure, not the query: the query quotes the
+			// message, which quotes an earlier MySQL error carrying its own
+			// "(errno N) ... during query:" marker, and reading that marker
+			// would log the wrong mysql_errno for a failure that has nothing to
+			// do with it.
+			return fmt.Errorf("could not set state: %w", err)
 		}
 	}
 	if state == vr.state {

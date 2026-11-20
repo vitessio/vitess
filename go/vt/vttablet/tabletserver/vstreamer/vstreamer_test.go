@@ -787,14 +787,14 @@ func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
 	require.NoError(t, err)
 	uvs.pos = pos
 
-	catchup := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "catchup", nil)
-	require.NotNil(t, catchup)
+	catchup, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "catchup", nil)
+	require.NoError(t, err)
 	require.NoError(t, catchup.refreshHistorianForStartup(uvs.ctx))
-	fastforward := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", nil)
-	require.NotNil(t, fastforward)
+	fastforward, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", nil)
+	require.NoError(t, err)
 	require.NoError(t, fastforward.refreshHistorianForStartup(uvs.ctx))
-	replicate := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send, "replicate", uvs.options)
-	require.NotNil(t, replicate)
+	replicate, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send, "replicate", uvs.options)
+	require.NoError(t, err)
 	require.NoError(t, replicate.refreshHistorianForStartup(uvs.ctx))
 
 	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))

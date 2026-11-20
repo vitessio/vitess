@@ -20,7 +20,7 @@ package cache
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -120,17 +120,23 @@ type Cache[Key Keyer, Value any] struct {
 // enqueued (via EnqueueBackfill), fillFunc will be called with that request.
 func New[Key Keyer, Value any](fillFunc func(ctx context.Context, req Key) (Value, error), cfg Config) *Cache[Key, Value] {
 	if cfg.BackfillEnqueueWaitTime <= 0 {
-		log.Warn(fmt.Sprintf("BackfillEnqueueWaitTime (%v) must be positive, defaulting to %v", cfg.BackfillEnqueueWaitTime, DefaultBackfillEnqueueWaitTime))
+		log.Warn("BackfillEnqueueWaitTime must be positive, defaulting",
+			slog.Duration("backfill_enqueue_wait_time", cfg.BackfillEnqueueWaitTime),
+			slog.Duration("default_backfill_enqueue_wait_time", DefaultBackfillEnqueueWaitTime))
 		cfg.BackfillEnqueueWaitTime = DefaultBackfillEnqueueWaitTime
 	}
 
 	if cfg.BackfillRequestTTL <= 0 {
-		log.Warn(fmt.Sprintf("BackfillRequestTTL (%v) must be positive, defaulting to %v", cfg.BackfillRequestTTL, DefaultBackfillRequestTTL))
+		log.Warn("BackfillRequestTTL must be positive, defaulting",
+			slog.Duration("backfill_request_ttl", cfg.BackfillRequestTTL),
+			slog.Duration("default_backfill_request_ttl", DefaultBackfillRequestTTL))
 		cfg.BackfillRequestTTL = DefaultBackfillRequestTTL
 	}
 
 	if cfg.BackfillQueueSize < 0 {
-		log.Warn(fmt.Sprintf("BackfillQueueSize (%v) must be positive, defaulting to %v", cfg.BackfillQueueSize, DefaultBackfillQueueSize))
+		log.Warn("BackfillQueueSize must be positive, defaulting",
+			slog.Int("backfill_queue_size", cfg.BackfillQueueSize),
+			slog.Int("default_backfill_queue_size", DefaultBackfillQueueSize))
 		cfg.BackfillQueueSize = DefaultBackfillQueueSize
 	}
 
@@ -225,7 +231,10 @@ func (c *Cache[Key, Value]) backfill() {
 
 		if req.requestedAt.Add(c.cfg.BackfillRequestTTL).Before(time.Now()) {
 			// We took too long to get to this request, per config options.
-			log.Warn(fmt.Sprintf("backfill for %s requested at %s; discarding due to exceeding TTL (%s)", req.k.Key(), req.requestedAt, c.cfg.BackfillRequestTTL))
+			log.Warn("discarding backfill request due to exceeding TTL",
+				slog.String("cache_key", req.k.Key()),
+				slog.Time("requested_at", req.requestedAt),
+				slog.Duration("backfill_request_ttl", c.cfg.BackfillRequestTTL))
 			continue
 		}
 
@@ -236,7 +245,10 @@ func (c *Cache[Key, Value]) backfill() {
 			if !t.IsZero() && t.Add(c.cfg.BackfillRequestDuplicateInterval).After(time.Now()) {
 				// We recently added a value for this key to the cache, either via
 				// another backfill request, or directly via a call to Add.
-				log.Info(fmt.Sprintf("filled cache for %s less than %s ago (at %s)", key, c.cfg.BackfillRequestDuplicateInterval, t.UTC()))
+				log.Info("filled cache for key less than the duplicate interval ago",
+					slog.String("cache_key", key),
+					slog.Duration("backfill_request_duplicate_interval", c.cfg.BackfillRequestDuplicateInterval),
+					slog.Time("filled_at", t.UTC()))
 				c.m.Unlock()
 				continue
 			}
@@ -253,14 +265,14 @@ func (c *Cache[Key, Value]) backfill() {
 
 		val, err := c.fillFunc(c.ctx, req.k)
 		if err != nil {
-			log.Error(fmt.Sprintf("backfill failed for key %s: %s", key, err))
+			log.Error("backfill failed for key", slog.String("cache_key", key), slog.Any("error", err))
 			// TODO: consider re-requesting with a retry-counter paired with a config to give up after N attempts
 			continue
 		}
 
 		// Finally, store the value.
 		if err := c.add(key, val, cache.DefaultExpiration); err != nil {
-			log.Warn(fmt.Sprintf("failed to add (%s, %+v) to cache: %s", key, val, err))
+			log.Warn("failed to add value to cache", slog.String("cache_key", key), slog.Any("error", err))
 		}
 	}
 }

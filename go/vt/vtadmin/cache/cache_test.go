@@ -18,19 +18,76 @@ package cache_test
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtadmin/cache"
 )
 
 type testkey string
 
 func (k testkey) Key() string { return string(k) }
+
+func TestLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	const value = "cached-value-sentinel"
+	c := cache.New(func(ctx context.Context, req testkey) (any, error) {
+		return value, nil
+	}, cache.Config{
+		BackfillEnqueueWaitTime: -1,
+		BackfillRequestTTL:      time.Hour,
+	})
+	t.Cleanup(func() { _ = c.Close() })
+
+	record := logs.Record(t, "BackfillEnqueueWaitTime must be positive, defaulting")
+	assert.Equal(t, "WARN", record["level"])
+	assert.InDelta(t, -1, record["backfill_enqueue_wait_time"], 0)
+	assert.InDelta(t, float64(cache.DefaultBackfillEnqueueWaitTime), record["default_backfill_enqueue_wait_time"], 0)
+
+	// Storing a backfilled value fails only when the key is added, replaced or
+	// expires between the cache's existence check and its write, so race a
+	// goroutine that adds the key and then replaces it with an expired entry.
+	key := testkey("ks/-80")
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for !stop.Load() {
+			_ = c.Add(key, nil, time.Hour)
+			_ = c.Add(key, nil, time.Nanosecond)
+		}
+	})
+	t.Cleanup(func() {
+		stop.Store(true)
+		wg.Wait()
+	})
+	require.Eventually(t, func() bool {
+		c.EnqueueBackfill(key)
+		return strings.Contains(logs.String(), "failed to add value to cache")
+	}, 30*time.Second, time.Millisecond)
+
+	assert.NotContains(t, logs.String(), value)
+	var failed []map[string]any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "failed to add value to cache" {
+			failed = append(failed, record)
+		}
+	}
+	require.NotEmpty(t, failed)
+	assert.Equal(t, "WARN", failed[0]["level"])
+	assert.Equal(t, "ks/-80", failed[0]["cache_key"])
+	assert.NotContains(t, failed[0], "cached_value")
+	assert.Contains(t, failed[0]["error"], "ks/-80")
+}
 
 func TestBackfillDuplicates(t *testing.T) {
 	t.Parallel()

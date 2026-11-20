@@ -18,7 +18,7 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/sqlescape"
@@ -255,7 +255,7 @@ func (tm *TabletManager) executeMultiFetchAsDba(
 	if err == nil && reloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
+			log.Error("failed to reload the schema", slog.Any("error", reloadErr), slog.String("error_code", vterrors.Code(reloadErr).String()))
 		}
 	}
 	return results, err
@@ -353,7 +353,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 	if err == nil && req.ReloadSchema {
 		reloadErr := tm.QueryServiceControl.ReloadSchema(ctx)
 		if reloadErr != nil {
-			log.Error(fmt.Sprintf("failed to reload the schema %v", reloadErr))
+			log.Error("failed to reload the schema", slog.Any("error", reloadErr), slog.String("error_code", vterrors.Code(reloadErr).String()))
 		}
 	}
 	return sqltypes.ResultToProto3(result), err

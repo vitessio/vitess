@@ -19,6 +19,7 @@ package vtgateconn
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -244,7 +245,7 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	defer dialersM.Unlock()
 
 	if _, ok := dialers[name]; ok {
-		log.Warn(fmt.Sprintf("Dialer %s already exists, overwriting it", name))
+		log.Warn("Dialer already exists, overwriting it", slog.String("protocol", name))
 	}
 	dialers[name] = dialer
 }

@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	maps0 "maps"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -170,7 +171,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
 	log.Info("In syncSidecarDB")
 	defer func(start time.Time) {
-		log.Info(fmt.Sprintf("syncSidecarDB took %d ms", time.Since(start).Milliseconds()))
+		log.Info("syncSidecarDB finished", slog.Duration("duration", time.Since(start)))
 	}(time.Now())
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
@@ -183,12 +184,12 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
 	if err := sidecardb.Init(ctx, se.env.Environment(), exec); err != nil {
-		log.Error(fmt.Sprintf("Error in sidecardb.Init: %+v", err))
+		log.Error("Error in sidecardb.Init", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if se.env.Config().DB.HasGlobalSettings() {
 			log.Warn("Ignoring sidecardb.Init error for unmanaged tablets")
 			return nil
 		}
-		log.Error(fmt.Sprintf("syncSidecarDB error %+v", err))
+		log.Error("syncSidecarDB error", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	log.Info("syncSidecarDB done")
@@ -235,13 +236,13 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType, servin
 	if err != nil {
 		if !se.dbCreationFailed {
 			// This is the first failure.
-			log.Error(fmt.Sprintf("db creation failed for %v: %v, will keep retrying", dbname, err))
+			log.Error("db creation failed, will keep retrying", slog.String("db_name", dbname), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			se.dbCreationFailed = true
 		}
 		return err
 	}
 
-	log.Info(fmt.Sprintf("db %v created", dbname))
+	log.Info("db created", slog.String("db_name", dbname))
 	se.dbCreationFailed = false
 	// creates sidecar schema, the first time the database is created
 	if err := se.syncSidecarDB(ctx, conn); err != nil {
@@ -288,7 +289,7 @@ func (se *Engine) Open() error {
 	se.ticks.Start(func() {
 		// update stats on periodic reloads
 		if err := se.reloadAndIncludeStats(ctx); err != nil {
-			log.Error(fmt.Sprintf("periodic schema reload failed: %v", err))
+			log.Error("periodic schema reload failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	})
 
@@ -405,7 +406,7 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Info("ReloadAtEx: found cached schema at " + replication.EncodePosition(pos))
+		log.V(2).Info("ReloadAtEx: found cached schema", slog.String("position", replication.EncodePosition(pos)))
 		return nil
 	}
 	if err := se.reload(ctx, includeStats); err != nil {
@@ -599,7 +600,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		includeStats = false
 
 		if err := se.updateTableIndexMetrics(ctx, conn.Conn); err != nil {
-			log.Error(fmt.Sprintf("Updating index/table statistics failed, error: %v", err))
+			log.Error("Updating index/table statistics failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 	tableData, err := getTableData(ctx, conn.Conn, includeStats)
@@ -631,7 +632,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 
 	udfsChanged, err := getChangedUserDefinedFunctions(ctx, conn.Conn, shouldUseDatabase)
 	if err != nil {
-		se.throttledLogger.Errorf("error in getting changed UDFs: %v", err)
+		se.throttledLogger.Error("error in getting changed UDFs", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 
 	rec := concurrency.AllErrorRecorder{}
@@ -697,7 +698,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 			continue
 		}
 
-		log.V(2).Info("Reading schema for table: " + tableName)
+		log.V(2).Info("Reading schema for table", slog.String("table", tableName))
 		tableType := row[1].String()
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, tableType, row[3].ToString(), se.env.Environment().CollationEnv(),
 			se.env.Config().TrackSchemaVersions)
@@ -738,7 +739,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		// So, we do this step in the end when we can receive no more errors that fail the reload operation.
 		err = reloadDataInDB(ctx, conn.Conn, altered, created, dropped, udfsChanged, se.env.Environment().Parser())
 		if err != nil {
-			log.Error(fmt.Sprintf("error in updating schema information in Engine.reload() - %v", err))
+			log.Error("error in updating schema information in Engine.reload()", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 
@@ -746,7 +747,11 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	maps0.Copy(se.tables, changedTables)
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
-		log.Info(fmt.Sprintf("schema engine created %v, altered %v, dropped %v", extractNamesFromTablesList(created), extractNamesFromTablesList(altered), extractNamesFromTablesList(dropped)))
+		log.Info("schema engine created, altered, dropped tables",
+			slog.Any("created_tables", extractNamesFromTablesList(created)),
+			slog.Any("altered_tables", extractNamesFromTablesList(altered)),
+			slog.Any("dropped_tables", extractNamesFromTablesList(dropped)),
+		)
 	}
 	se.broadcast(created, altered, dropped, udfsChanged)
 	return nil
@@ -813,7 +818,7 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.Conn)
 
 		se.innoDbReadRowsCounter.Set(value)
 	} else {
-		log.Warn(fmt.Sprintf("got strange results from 'show status': %v", readRowsData.Rows))
+		log.Warn("got strange results from 'show status'", slog.String("result", fmt.Sprint(readRowsData.Rows)))
 	}
 	return nil
 }
@@ -1010,7 +1015,7 @@ func (se *Engine) RefreshHistorianForStreamStart(ctx context.Context) error {
 func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.IdentifierCS, gtid string) (*binlogdatapb.MinimalTable, error) {
 	mt, err := se.historian.GetTableForPos(tableName, gtid)
 	if err != nil {
-		log.Info("GetTableForPos returned error: " + err.Error())
+		log.Info("GetTableForPos returned error", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 	if mt != nil {
@@ -1050,7 +1055,7 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 	// It's expected that internal tables are not found within VReplication workflows.
 	// No need to refresh the cache for internal tables.
 	if schema.IsInternalOperationTableName(tableNameStr) {
-		log.Info(fmt.Sprintf("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr))
+		log.Info("internal table found in vttablet schema: skipping for GTID search", slog.String("table", tableNameStr))
 		return nil, nil
 	}
 	// We don't currently have the non-internal table in the cache. This can happen when
@@ -1074,7 +1079,14 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		}
 	}
 
-	log.Info(fmt.Sprintf("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables))
+	tables := slices.Sorted(maps0.Keys(se.tables))
+	if tables == nil {
+		tables = []string{}
+	}
+	log.Info("table not found in vttablet schema",
+		slog.String("table", tableNameStr),
+		slog.Any("tables", tables),
+	)
 	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
 
@@ -1317,10 +1329,7 @@ func (se *Engine) Environment() *vtenv.Environment {
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {
-	var tableNames []string
-	if len(tables) > 0 {
-		tableNames = make([]string, 0, len(tables))
-	}
+	tableNames := make([]string, 0, len(tables))
 	for _, table := range tables {
 		tableNames = append(tableNames, table.Name.String())
 	}
@@ -1333,7 +1342,14 @@ func (se *Engine) ResetSequences(tables []string) error {
 	for _, tableName := range tables {
 		if table, ok := se.tables[tableName]; ok {
 			if table.SequenceInfo != nil {
-				log.Info(fmt.Sprintf("Resetting sequence info for table %s: %+v", tableName, table.SequenceInfo))
+				table.SequenceInfo.Lock()
+				nextVal, lastVal := table.SequenceInfo.NextVal, table.SequenceInfo.LastVal
+				table.SequenceInfo.Unlock()
+				log.Info("Resetting sequence info for table",
+					slog.String("table", tableName),
+					slog.Int64("next_value", nextVal),
+					slog.Int64("last_value", lastVal),
+				)
 				table.SequenceInfo.Reset()
 			}
 		} else {

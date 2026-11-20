@@ -15,6 +15,7 @@ package discovery
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -501,6 +503,7 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	}()
 	SetTabletPickerRetryDelay(11 * time.Millisecond)
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	result := make(chan *topodatapb.Tablet)
 	// start picker first, then add tablet
 	go func() {
@@ -516,6 +519,10 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 	got := <-result
 	require.NotNil(t, got, "Tablet should not be nil")
 	assert.True(t, proto.Equal(want, got), "Pick: %v, want %v", got, want)
+	record := logs.Record(t, "Tablet picker found a healthy tablet for streaming")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "cell-0000000100", record["tablet"])
+	assert.Equal(t, got.String(), record["tablet_record"])
 }
 
 func TestPickErrorLocalPreferenceDefault(t *testing.T) {
@@ -553,7 +560,10 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 
 	te := newPickerTestEnv(t, ctx, []string{"cell"})
 
-	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPreference: "OnlySpecified"})
+	tp, err := NewTabletPicker(ctx, te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{
+		CellPreference:                      "OnlySpecified",
+		ExcludeTabletsWithMaxReplicationLag: 90 * time.Second,
+	})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
@@ -563,9 +573,18 @@ func TestPickErrorOnlySpecified(t *testing.T) {
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 20*time.Millisecond)
 	defer timeoutCancel()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// no tablets
 	_, err = tp.PickForStreaming(timeoutCtx)
 	require.EqualError(t, err, "context has expired")
+	record := logs.Wait(t, "No healthy serving tablet found for streaming, sleeping")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "ks", record["keyspace"])
+	assert.Equal(t, "0", record["shard"])
+	assert.Equal(t, []any{"cell"}, record["cells"])
+	assert.Equal(t, []any{"replica"}, record["tablet_types"])
+	assert.EqualValues(t, 90, record["max_replication_lag_seconds"])
+	assert.EqualValues(t, 11*time.Millisecond, record["retry_delay"])
 	// no tablets of the correct type
 	defer deleteTablet(t, te, addTablet(ctx, te, 200, topodatapb.TabletType_RDONLY, "cell", true, true))
 	timeoutCtx, timeoutCancel = context.WithTimeout(ctx, 20*time.Millisecond)

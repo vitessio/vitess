@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -1514,6 +1516,75 @@ func TestWorkflowDelete(t *testing.T) {
 	}
 }
 
+// TestWorkflowDeleteAfterConcurrentSwitchTraffic confirms that WorkflowDelete
+// refuses to delete a workflow whose writes were switched while it waited for
+// the workflow lock, which SwitchTraffic holds while it switches traffic.
+func TestWorkflowDeleteAfterConcurrentSwitchTraffic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	workflowName := "wf1"
+	tables := []string{"t1", "t1_2", "t1_3"}
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	t.Cleanup(env.close)
+	env.tmc.schema = make(map[string]*tabletmanagerdatapb.SchemaDefinition, len(tables))
+	for _, table := range tables {
+		env.tmc.schema[table] = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   table,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", table),
+			}},
+		}
+	}
+
+	// Hold the workflow lock the way SwitchTraffic does while it switches traffic.
+	lockName := fmt.Sprintf("%s/%s", targetKeyspace.KeyspaceName, workflowName)
+	_, unlock, err := env.ts.LockName(ctx, lockName, "WorkflowSwitchTraffic")
+	require.NoError(t, err)
+	lockNameCalls := env.topoFactory.GetCallStats().Counts()["LockName"]
+
+	type deleteResult struct {
+		resp *vtctldatapb.WorkflowDeleteResponse
+		err  error
+	}
+	results := make(chan deleteResult, 1)
+	go func() {
+		resp, err := env.ws.WorkflowDelete(ctx, &vtctldatapb.WorkflowDeleteRequest{
+			Keyspace: targetKeyspace.KeyspaceName,
+			Workflow: workflowName,
+		})
+		results <- deleteResult{resp: resp, err: err}
+	}()
+
+	// Wait until WorkflowDelete waits for the workflow lock.
+	assert.Eventually(t, func() bool {
+		return env.topoFactory.GetCallStats().Counts()["LockName"] > lockNameCalls
+	}, 30*time.Second, 10*time.Millisecond)
+
+	// Switch writes, then release the lock as SwitchTraffic does when it finishes.
+	env.updateTableRoutingRules(t, ctx, allTabletTypes, tables,
+		sourceKeyspace.KeyspaceName, targetKeyspace.KeyspaceName, targetKeyspace.KeyspaceName)
+	unlock(&err)
+	require.NoError(t, err)
+
+	res := <-results
+	require.ErrorIs(t, res.err, ErrWorkflowDeleteWritesSwitched)
+	require.Nil(t, res.resp)
+
+	// The routing rules that send traffic to the target are still in place.
+	rr, err := env.ts.GetRoutingRules(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, rr.Rules)
+}
+
 func TestMoveTablesTrafficSwitching(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -1651,6 +1722,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		// wantCanceled means that the failed switch must have been canceled,
 		// leaving writes on the source.
 		wantCanceled bool
+		// wantRefreshWarnings means that the forced partial refreshes of the
+		// failing source and target tablets must be logged.
+		wantRefreshWarnings bool
 	}{
 		{
 			name: "basic forward",
@@ -2043,6 +2117,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				StartState:   "Reads Not Switched. Writes Not Switched",
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
+			wantRefreshWarnings: true,
 		},
 		{
 			name: "forward with an error reading the source positions",
@@ -2175,6 +2250,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			if tc.check != nil {
 				defer tc.check(t, env, err)
@@ -2201,6 +2277,26 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+
+			if tc.wantRefreshWarnings {
+				refreshed := make(map[string]bool)
+				for _, record := range logs.Records(t) {
+					msg := record["msg"]
+					if msg != "failed to successfully refresh all tablets in the source shard" &&
+						msg != "failed to successfully refresh all tablets in the target shard" {
+						continue
+					}
+					assert.Equal(t, "WARN", record["level"])
+					assert.Equal(t, workflowName, record["workflow"])
+					assert.Contains(t, record["partial_refresh_details"], "tablet refresh error")
+					// The refresh RPC failed but the topo read didn't, so there
+					// is no error to log.
+					assert.NotContains(t, record, "error")
+					refreshed[fmt.Sprintf("%s %s/%s", msg, record["keyspace"], record["shard"])] = true
+				}
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the source shard "+sourceKeyspaceName+"/0"], refreshed)
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the target shard "+targetKeyspaceName+"/-80"], refreshed)
+			}
 
 			if tc.multiTenant { // Confirm the keyspace routing rules
 				gotKrrs, err := env.ts.GetKeyspaceRoutingRules(ctx)

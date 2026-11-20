@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -768,6 +770,7 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	// The call must return (not hang) once ctx expires, and the connection
 	// kill must have been attempted.
@@ -782,6 +785,9 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 		require.FailNow(t, "ExecOnce hung after ctx expired despite the KILL QUERY failure")
 	}
 	assert.True(t, connKilled.Load(), "connection kill must be attempted when KILL QUERY fails")
+
+	record := logs.Record(t, "Killing query")
+	assert.Equal(t, "select :redacted1 /* INT64 */ from dual", record["query"])
 }
 
 // TestDBExecOnceNotInTxnEscalatesWhenKillQueryDoesNotUnblock verifies that a

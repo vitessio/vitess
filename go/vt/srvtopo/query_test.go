@@ -18,7 +18,10 @@ package srvtopo
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 // TestResilientQueryGetCurrentValueInitialization tests that the resilient query returns the correct results when it has been
@@ -72,4 +77,41 @@ func TestResilientQueryGetCurrentValueInitialization(t *testing.T) {
 		require.NoError(t, errs[i])
 		assert.EqualValues(t, cell, ress[i])
 	}
+}
+
+// TestResilientQueryLogsEmptyCachedValue checks that a cached nil list of
+// names logs as an empty list when a refresh fails, and that the caller IDs
+// in the context stay out of the logs.
+func TestResilientQueryLogsEmptyCachedValue(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	var calls atomic.Int32
+	query := func(ctx context.Context, entry *queryEntry) (any, error) {
+		if calls.Add(1) == 1 {
+			return []string(nil), nil
+		}
+		return nil, errors.New("refresh failed")
+	}
+	rq := &resilientQuery{
+		query:                query,
+		counts:               stats.NewCountersWithSingleLabel("", "Test for resilient query", "type"),
+		cacheRefreshInterval: time.Millisecond,
+		cacheTTL:             time.Minute,
+		entries:              make(map[string]*queryEntry),
+	}
+	cell := cellName("cell-1")
+	ctx := callerid.NewContext(t.Context(),
+		callerid.NewEffectiveCallerID("effective-principal", "", ""),
+		callerid.NewImmediateCallerID("immediate-username"))
+
+	_, err := rq.getCurrentValue(ctx, cell, false)
+	require.NoError(t, err)
+	time.Sleep(2 * time.Millisecond)
+	_, err = rq.getCurrentValue(ctx, cell, false)
+	require.NoError(t, err)
+
+	record := logs.Wait(t, "ResilientQuery failed (cached value still considered valid)")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, []any{}, record["cached_value"])
+	assert.NotContains(t, logs.String(), "effective-principal")
+	assert.NotContains(t, logs.String(), "immediate-username")
 }

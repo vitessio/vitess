@@ -150,10 +150,10 @@ type streamerPlan struct {
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions,
-) *vstreamer {
+) (*vstreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil
+		return nil, vterrors.Wrapf(err, "invalid VStream options")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
@@ -173,7 +173,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vse:          vse,
 		options:      options,
 		config:       config,
-	}
+	}, nil
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
@@ -435,10 +435,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 						return
 					}
 				}
-				logger.Info("vstreamer throttled",
-					slog.String("workflow", vs.filter.GetWorkflowName()),
-					slog.String("reason", checkResult.Summary()),
-				)
+				attrs := append([]slog.Attr{slog.String("workflow", vs.filter.GetWorkflowName())}, checkResult.LogAttrs()...)
+				logger.Info("vstreamer throttled", attrs...)
 				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled

@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 	"github.com/z-division/go-zookeeper/zk"
@@ -60,7 +61,7 @@ func commandStat(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !statArgs.Force || err != zk.ErrNoNode {
-				log.Warn(fmt.Sprintf("stat: cannot access %v: %v", zkPath, err))
+				log.Warn("stat: cannot access", slog.String("path", zkPath), slog.Any("error", err))
 			}
 			continue
 		}

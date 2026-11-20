@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"math"
 	"slices"
 	"sort"
@@ -142,7 +143,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		wr.sourceTs = externalTopo
-		log.Info(fmt.Sprintf("Successfully opened external topo: %+v", externalTopo))
+		log.Info("Successfully opened external topo", slog.String("external_cluster", externalCluster))
 	}
 
 	var (
@@ -208,7 +209,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if len(tables) == 0 {
 			return errors.New("no tables to move")
 		}
-		log.Info("Found tables to move: " + strings.Join(tables, ","))
+		log.Info("Found tables to move", slog.String("workflow", workflow), slog.Any("tables", tables))
 
 		if !vschema.Sharded {
 			// Save the original in case we need to restore it for a late failure
@@ -289,7 +290,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	// routing rules in place.
 	if externalTopo == nil {
 		if noRoutingRules {
-			log.Warn(fmt.Sprintf("Found --no-routing-rules flag, not creating routing rules for workflow %s.%s", targetKeyspace, workflow))
+			log.Warn("Found --no-routing-rules flag, not creating routing rules for workflow", slog.String("keyspace", targetKeyspace), slog.String("workflow", workflow))
 		} else {
 			// Save routing rules before vschema. If we save vschema first, and routing rules
 			// fails to save, we may generate duplicate table errors.
@@ -407,7 +408,7 @@ func (wr *Wrangler) getKeyspaceTables(ctx context.Context, ks string, ts *topo.S
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("got table schemas from source primary %v.", primary))
+	log.Info("got table schemas from source primary", slog.String("primary_tablet", topoproto.TabletAliasString(primary)))
 
 	var sourceTables []string
 	for _, td := range schema.TableDefinitions {
@@ -1176,7 +1177,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			return err
 		}
 
-		var applyDDLs []string
+		var applyDDLs, applyTables []string
 		for _, ts := range mz.ms.TableSettings {
 			if hasTargetTable[ts.TargetTable] {
 				// Table already exists.
@@ -1196,7 +1197,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Error("Error getting DDLs of source tables: " + err.Error())
+				log.Error("Error getting DDLs of source tables", slog.String("workflow", mz.ms.Workflow), slog.Any("error", err))
 				return err
 			}
 
@@ -1239,6 +1240,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 
 			applyDDLs = append(applyDDLs, createDDL)
+			applyTables = append(applyTables, ts.TargetTable)
 		}
 
 		if len(applyDDLs) > 0 {
@@ -1251,12 +1253,15 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				// reading the source schema.
 				env := schemadiff.NewEnv(mz.wr.env, mz.wr.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
-				log.Info(fmt.Sprintf("AtomicCopy schema:\n %v", applyDDLs))
+				log.Info("AtomicCopy schema", slog.String("workflow", mz.ms.Workflow), slog.Any("tables", applyTables))
 				if err != nil {
-					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
+					log.Error("AtomicCopy: failed to normalize schema via schemadiff",
+						slog.String("workflow", mz.ms.Workflow),
+						slog.Any("error", err),
+						slog.String("error_code", vterrors.Code(err).String()))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
+					log.Info("AtomicCopy used, and schema was normalized via schemadiff", slog.String("workflow", mz.ms.Workflow), slog.Int("query_count", len(applyDDLs)))
 				}
 			}
 

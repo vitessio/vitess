@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -116,20 +116,22 @@ func (thc *tabletHealthCheck) SimpleCopy() *TabletHealth {
 // function must be called only after connMu has been released: the logger can
 // be a CallbackLogger whose callback re-enters the healthcheck (e.g. via
 // GetTabletHealthByAlias) and would deadlock on connMu.
-func (thc *tabletHealthCheck) setServingState(serving bool, reason string) func() {
+func (thc *tabletHealthCheck) setServingState(serving bool, reason string, err error) func() {
 	var logServingChange func()
 	if !thc.loggedServingState || (serving != thc.Serving) {
-		msg := fmt.Sprintf("HealthCheckUpdate(Serving State): tablet: %v serving %v => %v for %v/%v (%v) reason: %s",
-			topotools.TabletIdent(thc.Tablet),
-			thc.Serving,
-			serving,
-			thc.Tablet.GetKeyspace(),
-			thc.Tablet.GetShard(),
-			thc.Target.GetTabletType(),
-			reason,
+		attrs := tabletIdentAttrs(thc.Tablet,
+			slog.Bool("was_serving", thc.Serving),
+			slog.Bool("serving", serving),
+			slog.String("keyspace", thc.Tablet.GetKeyspace()),
+			slog.String("shard", thc.Tablet.GetShard()),
+			slog.String("tablet_type", thc.Target.GetTabletType().String()),
+			slog.String("reason", reason),
 		)
+		if err != nil {
+			attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		}
 		logServingChange = func() {
-			thc.logger.Infof("%s", msg)
+			thc.logger.Info("HealthCheckUpdate(Serving State)", attrs...)
 		}
 		thc.loggedServingState = true
 	}
@@ -219,11 +221,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.PrimaryTermStartTime = shr.PrimaryTermStartTimestamp
 	thc.Stats = shr.RealtimeStats
 	thc.LastError = healthErr
-	reason := "healthCheck update"
-	if healthErr != nil {
-		reason = "healthCheck update error: " + healthErr.Error()
-	}
-	logServingChange := thc.setServingState(serving, reason)
+	logServingChange := thc.setServingState(serving, "healthCheck update", healthErr)
 	thc.connMu.Unlock()
 	if logServingChange != nil {
 		logServingChange()
@@ -235,30 +233,21 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 }
 
 // isTrivialReplagChange returns true iff the old and new RealtimeStats
-// haven't changed enough to warrant re-calling FilterLegacyStatsByReplicationLag.
+// haven't changed enough to warrant re-calling FilterStatsByReplicationLag.
 func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStats) bool {
 	// first time always return false
 	if thc.Stats == nil {
 		return false
 	}
 	// Skip replag filter when replag remains in the low rep lag range,
-	// which should be the case majority of the time.
+	// which should be the case majority of the time. Any other change,
+	// however small, re-runs the filter: thc.Stats holds the previous
+	// response, so a lag that grows a little on each update must still
+	// take the tablet out of the healthy list at the high watermark.
 	lowRepLag := lowReplicationLag.Get().Seconds()
 	oldRepLag := float64(thc.Stats.ReplicationLagSeconds)
 	newRepLag := float64(newStats.ReplicationLagSeconds)
-	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
-		return true
-	}
-	// Skip replag filter when replag remains in the high rep lag range,
-	// and did not change beyond +/- 10%.
-	// when there is a high rep lag, it takes a long time for it to reduce,
-	// so it is not necessary to re-calculate every time.
-	// In that case, we won't save the new record, so we still
-	// remember the original replication lag.
-	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
-		return true
-	}
-	return false
+	return oldRepLag <= lowRepLag && newRepLag <= lowRepLag
 }
 
 // checkConn performs health checking on the given tablet.
@@ -325,7 +314,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			// the healthcheck cache again via the topology watcher.
 			// WARNING: Under no other circumstances should we be deleting the tablet here.
 			if strings.Contains(err.Error(), "health stats mismatch") {
-				thc.logger.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
+				thc.logger.Warn("deleting tablet from healthcheck due to health stats mismatch",
+					slog.String("tablet", topoproto.TabletAliasString(thc.Tablet.GetAlias())),
+					slog.String("tablet_record", fmt.Sprintf("%v", thc.Tablet)))
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
@@ -339,7 +330,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		if timedout.Load() {
 			thc.connMu.Lock()
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
-			logServingChange := thc.setServingState(false, thc.LastError.Error())
+			logServingChange := thc.setServingState(false, "healthcheck timed out", thc.LastError)
 			target := thc.Target
 			thc.connMu.Unlock()
 			if logServingChange != nil {
@@ -378,9 +369,13 @@ func nextHealthCheckRetryDelay(current time.Duration) time.Duration {
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, conn queryservice.QueryService, err error) {
-	thc.logger.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
+	thc.logger.Warn("tablet healthcheck stream error",
+		slog.String("tablet", topoproto.TabletAliasString(thc.Tablet.GetAlias())),
+		slog.String("tablet_record", fmt.Sprintf("%v", thc.Tablet)),
+		slog.Any("error", err),
+		slog.String("error_code", vterrors.Code(err).String()))
 	thc.connMu.Lock()
-	logServingChange := thc.setServingState(false, err.Error())
+	logServingChange := thc.setServingState(false, "healthcheck stream error", err)
 	thc.LastError = err
 	thc.Conn = nil
 	thc.connMu.Unlock()
@@ -394,7 +389,7 @@ func (thc *tabletHealthCheck) closeConnection(ctx context.Context, conn queryser
 // To be called only on exit from checkConn().
 func (thc *tabletHealthCheck) finalizeConn() {
 	thc.connMu.Lock()
-	logServingChange := thc.setServingState(false, "finalizeConn closing connection")
+	logServingChange := thc.setServingState(false, "finalizeConn closing connection", nil)
 	// Note: checkConn() exits only when thc.ctx.Done() is closed. Thus it's
 	// safe to simply get Err() value here and assign to LastError.
 	thc.LastError = thc.ctx.Err()

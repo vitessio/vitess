@@ -17,11 +17,34 @@ limitations under the License.
 package rbac
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
+
+func TestReifyLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	_, err := NewAuthorizer(&Config{
+		Rules: []*struct {
+			Resource string
+			Actions  []string
+			Subjects []string
+			Clusters []string
+		}{
+			{Resource: "*", Actions: []string{"*"}, Subjects: []string{"*"}, Clusters: []string{"*"}},
+		},
+	})
+	require.NoError(t, err)
+
+	record := logs.Record(t, "[rbac]: loaded authorizer")
+	assert.Equal(t, "INFO", record["level"])
+	assert.InDelta(t, 1, record["rule_count"], 0)
+}
 
 func TestIsAuthorized(t *testing.T) {
 	t.Parallel()

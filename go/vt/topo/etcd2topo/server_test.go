@@ -19,6 +19,7 @@ package etcd2topo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -28,10 +29,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo"
@@ -198,6 +201,36 @@ func TestNewServerAgainstUnreachableEtcd(t *testing.T) {
 		s.Close()
 	}
 	require.Error(t, err, "NewServer should fail when no etcd is reachable at the given address")
+}
+
+// TestNewUniqueEphemeralKVLogsDeleteFailure cancels the lock node creation
+// against an etcd address nobody is listening on, so the cleanup delete
+// fails too.
+func TestNewUniqueEphemeralKVLogsDeleteFailure(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := listener.Addr().String()
+	require.NoError(t, listener.Close())
+
+	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{"http://" + addr}})
+	require.NoError(t, err)
+	defer cli.Close()
+
+	oldTimeout := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { topo.RemoteOperationTimeout = oldTimeout })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s := &Server{cli: cli}
+	_, _, err = s.newUniqueEphemeralKV(ctx, cli, 42, "/vitess/locks", "contents")
+	require.Error(t, err)
+
+	record := logs.Record(t, "cli.Delete failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/vitess/locks/42", record["path"])
+	assert.NotEmpty(t, record["error"])
 }
 
 func TestEtcd2TLS(t *testing.T) {

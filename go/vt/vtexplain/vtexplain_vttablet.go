@@ -19,7 +19,9 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -853,7 +855,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			for _, colTypeMap := range tableColumnMap {
 				if colTypeMap[col] != querypb.Type_NULL_TYPE {
 					if colType != querypb.Type_NULL_TYPE {
-						log.Error("vtexplain: ambiguous column " + col)
+						log.Error("vtexplain: ambiguous column", slog.String("column", col))
 						return colNames, colTypes
 					}
 
@@ -862,7 +864,15 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			}
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
+				tables := make([]string, 0, len(tableColumnMap))
+				for table := range tableColumnMap {
+					tables = append(tables, table.String())
+				}
+				slices.Sort(tables)
+				log.Error("vtexplain: invalid column",
+					slog.String("column", col),
+					slog.Any("tables", tables),
+					slog.String("table_columns", fmt.Sprint(tableColumnMap)))
 			}
 
 			colNames = append(colNames, col)
@@ -874,7 +884,10 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colType := colTypeMap[col]
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
+				log.Error("vtexplain: invalid column",
+					slog.String("table", node.Qualifier.Name.String()),
+					slog.String("column", col),
+					slog.String("table_columns", fmt.Sprint(tableColumnMap)))
 			}
 
 			colNames = append(colNames, col)
@@ -908,7 +921,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		case sqlparser.DecimalVal:
 			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
-			log.Error("vtexplain: unsupported sql value " + sqlparser.String(node))
+			log.Error("vtexplain: unsupported sql value", slog.String("expression", sqlparser.String(node)))
 		}
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, tableColumnMap, colNames, colTypes)
@@ -919,7 +932,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT64)
 	default:
-		log.Error(fmt.Sprintf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node)))
+		log.Error("vtexplain: unsupported select expression type", slog.String("type", fmt.Sprintf("%T", node)), slog.String("expression", sqlparser.String(node)))
 	}
 
 	return colNames, colTypes

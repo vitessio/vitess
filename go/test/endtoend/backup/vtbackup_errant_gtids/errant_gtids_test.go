@@ -110,7 +110,9 @@ func testPoisonedBaseBackup(t *testing.T) {
 	require.NotEmpty(t, backups)
 
 	err := startVtbackup(t).wait(t)
-	require.ErrorContains(t, err, fmt.Sprintf("restored backup %q has errant GTIDs %s", backups[len(backups)-1], errantGTID))
+	// The text log format escapes the quotes around the backup name, so check it apart from the message.
+	require.ErrorContains(t, err, backups[len(backups)-1])
+	require.ErrorContains(t, err, "has errant GTIDs "+errantGTID)
 	require.ErrorContains(t, err, "came from the restored backup")
 	assert.Len(t, listBackups(t), len(backups))
 

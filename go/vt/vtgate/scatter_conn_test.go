@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -333,20 +333,16 @@ func TestExecutePanic(t *testing.T) {
 		Autocommit: false,
 	}
 
-	original := log.Error
-	defer func() {
-		log.Error = original
-	}()
-
-	var logMessage string
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logMessage = msg
-	}
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	assert.Panics(t, func() {
 		_, _ = sc.ExecuteMultiShard(ctx, nil, rss, queries, econtext.NewSafeSession(session), true /*autocommit*/, false, nullResultsObserver{}, false)
 	})
-	require.Contains(t, logMessage, "(*ScatterConn).multiGoTransaction")
+	// The stack is the one captured in the goroutine that panicked. Match the
+	// file name, since function names and paths vary with build flags.
+	record := logs.Record(t, "caught a panic during parallel execution")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Contains(t, record["stack"], "scatter_conn.go")
 }
 
 func TestReservedOnMultiReplica(t *testing.T) {

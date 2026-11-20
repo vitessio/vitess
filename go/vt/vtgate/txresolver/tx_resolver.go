@@ -18,13 +18,14 @@ package txresolver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type TxResolver struct {
@@ -79,7 +80,7 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	if !tr.tryLockTarget(dest) {
 		return
 	}
-	log.Info("resolving transactions for shard: " + dest)
+	log.Info("resolving transactions for shard", slog.String("keyspace", target.Keyspace), slog.String("shard", target.Shard))
 
 	defer func() {
 		tr.mu.Lock()
@@ -88,10 +89,14 @@ func (tr *TxResolver) resolveTransactions(ctx context.Context, target *querypb.T
 	}()
 	err := tr.txConn.ResolveTransactions(ctx, target)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to resolve transactions for shard: %s, %v", dest, err))
+		log.Error("failed to resolve transactions for shard",
+			slog.String("keyspace", target.Keyspace),
+			slog.String("shard", target.Shard),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
-	log.Info("successfully resolved all the transactions for shard: " + dest)
+	log.Info("successfully resolved all the transactions for shard", slog.String("keyspace", target.Keyspace), slog.String("shard", target.Shard))
 }
 
 func (tr *TxResolver) tryLockTarget(dest string) bool {

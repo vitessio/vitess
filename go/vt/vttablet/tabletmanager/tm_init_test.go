@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -1363,4 +1364,93 @@ func TestValidateFlags(t *testing.T) {
 
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
+}
+
+// TestStartFailureStopsBackgroundGoroutines checks that a failed Start promptly
+// stops the keyspace rebuild and shard sync goroutines it has spawned. They use
+// the topo server, which the caller may close as soon as Start has returned.
+func TestStartFailureStopsBackgroundGoroutines(t *testing.T) {
+	savedInterval := rebuildKeyspaceRetryInterval
+	t.Cleanup(func() { rebuildKeyspaceRetryInterval = savedInterval })
+	// Start can only return in time if stopping the keyspace rebuild interrupts
+	// its wait between retries.
+	rebuildKeyspaceRetryInterval = time.Hour
+
+	tests := []struct {
+		name string
+		// failStart makes Start fail after it has spawned the goroutines.
+		failStart     func(t *testing.T, factory *memorytopo.Factory)
+		wantErr       string
+		wantShardSync bool
+	}{
+		{
+			name: "createKeyspaceShard fails after starting the keyspace rebuild",
+			failStart: func(t *testing.T, factory *memorytopo.Factory) {
+				factory.AddOperationError(memorytopo.Get, topo.SrvVSchemaFile, errors.New("simulated topo error"))
+			},
+			wantErr: "failed to read SrvVSchema",
+		},
+		{
+			name: "handleRestore fails after starting the keyspace rebuild and shard sync",
+			failStart: func(t *testing.T, _ *memorytopo.Factory) {
+				// --restore-from-backup without a my.cnf makes Start fail in handleRestore.
+				savedRestore := restoreFromBackup
+				t.Cleanup(func() { restoreFromBackup = savedRestore })
+				restoreFromBackup = true
+			},
+			wantErr:       "without a my.cnf file",
+			wantShardSync: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts, factory := memorytopo.NewServerAndFactory(ctx, "cell1")
+			tt.failStart(t, factory)
+			// With only one of two shards populated the keyspace rebuild keeps
+			// retrying, so its goroutine never exits on its own.
+			tablet := newTestTablet(t, 1, "ks", "-80", nil)
+			fakeDb := newTestMysqlDaemon(t, 1)
+			tm := &TabletManager{
+				BatchCtx:            ctx,
+				TopoServer:          ts,
+				MysqlDaemon:         fakeDb,
+				DBConfigs:           &dbconfigs.DBConfigs{},
+				SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+				QueryServiceControl: tabletservermock.NewController(),
+			}
+			// The shard sync loop does not use BatchCtx, so stop it explicitly
+			// should the test fail with it still running.
+			t.Cleanup(tm.stopShardSync)
+
+			startErr := make(chan error, 1)
+			go func() { startErr <- tm.Start(tablet, nil) }()
+			select {
+			case err := <-startErr:
+				require.ErrorContains(t, err, tt.wantErr)
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "Start did not return after failing")
+			}
+
+			tm.mutex.Lock()
+			rebuildDone, shardSyncDone := tm._rebuildKeyspaceDone, tm._shardSyncDone
+			tm.mutex.Unlock()
+			require.NotNil(t, rebuildDone, "Start should have started a keyspace rebuild before failing")
+			if tt.wantShardSync {
+				require.NotNil(t, shardSyncDone, "Start should have started the shard sync loop before failing")
+			}
+
+			assertStopped := func(name string, done <-chan struct{}) {
+				select {
+				case <-done:
+				default:
+					assert.Fail(t, name+" goroutine is still running after Start failed")
+				}
+			}
+			assertStopped("rebuildKeyspace", rebuildDone)
+			if tt.wantShardSync {
+				assertStopped("shardSyncLoop", shardSyncDone)
+			}
+		})
+	}
 }
