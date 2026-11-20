@@ -9,9 +9,10 @@ name: Warm Go caches
 #
 # It is also the only writer of the tool download entries that jobs restore
 # through the tool-downloads action (see the tool-downloads job), of the
-# Maven repository cache that docker_ci restores (see the maven job), and of
-# the bootstrap image build cache that the build-bootstrap action reads (see
-# the bootstrap job).
+# MicroCeph snaps that the setup-microceph action installs (see the
+# microceph-snaps job), of the Maven repository cache that docker_ci restores
+# (see the maven job), and of the bootstrap image build cache that the
+# build-bootstrap action reads (see the bootstrap job).
 on:
   push:
     branches:
@@ -208,6 +209,72 @@ jobs:
           SHA: ${{ github.sha }}
           KEY: ${{ steps.restore.outputs.key }}
         run: tools/delete_superseded_cache_entries.sh "${KEY%"${SHA}"}" "${KEY}"
+
+  # The snaps that the setup-microceph action installs, which jobs restore from
+  # here because the Snap Store often doesn't answer GitHub's runners. The key
+  # holds the hash of download-snaps.sh, which says what to download, so only a
+  # change to it saves an entry. Only x64 jobs install MicroCeph.
+  microceph-snaps:
+    name: "Warm MicroCeph snaps"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      # The same key as the setup-microceph action restores.
+      - name: Determine the cache key
+        id: key
+        env:
+          PREFIX: microceph-snaps-${{ runner.os }}-${{ runner.arch }}-
+          SUM: ${{ hashFiles('.github/actions/setup-microceph/download-snaps.sh') }}
+        run: |
+          echo "prefix=${PREFIX}" >> "${GITHUB_OUTPUT}"
+          echo "key=${PREFIX}${SUM}" >> "${GITHUB_OUTPUT}"
+
+      # A key is never saved twice, so only a change to the script saves an
+      # entry.
+      - name: Look up the MicroCeph snaps
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/microceph-snaps
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
+      - name: Download the MicroCeph snaps
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: .github/actions/setup-microceph/download-snaps.sh dist/microceph-snaps
+
+      - name: Save the MicroCeph snaps
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/microceph-snaps
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Delete superseded MicroCeph snap entries
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
 
   # The Maven repository for the test containers of docker_ci, keyed by what
   # determines it: build.env sets the Maven version. See
