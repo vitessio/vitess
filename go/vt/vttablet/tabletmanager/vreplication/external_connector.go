@@ -145,11 +145,10 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 ) error {
 	var row []sqltypes.Value
 	if lastpk != nil {
-		r := sqltypes.Proto3ToResult(lastpk)
-		if len(r.Rows) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+		var err error
+		if row, err = vstreamer.DecodeLastPK(lastpk); err != nil {
+			return err
 		}
-		row = r.Rows[0]
 	}
 	return c.vstreamer.StreamRows(ctx, query, row, send, options)
 }

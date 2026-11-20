@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,12 +35,14 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func initialize(ctx context.Context, t *testing.T) (*vtgateconn.VTGateConn, *mysql.Conn, *mysql.Conn, func()) {
@@ -587,6 +590,105 @@ func TestVStreamCopyResume(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
+}
+
+// TestVStreamCopyResumeMalformedLastPK resumes a copy through VTGate with the
+// malformed lastpk from #21432, whose length runs past the end of its values. It
+// checks that the client receives INVALID_ARGUMENT with the validation message,
+// that no row is streamed before the error, and that a well-formed resume on the
+// same cluster still works.
+func TestVStreamCopyResumeMalformedLastPK(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+	gconn, conn, mconn, closeConnections := initialize(ctx, t)
+	defer closeConnections()
+
+	// Rows of our own, above the ids TestVStreamCopyResume uses, so that the
+	// well-formed resume below has rows to copy when this test runs on its own.
+	_, err := conn.ExecuteFetch("insert into t1_copy_resume(id1,id2) values(1001,1001), (1002,1002), (1003,1003)", 1, false)
+	require.NoError(t, err)
+	defer func() {
+		_, err := conn.ExecuteFetch("delete from t1_copy_resume where id1 in (1001,1002,1003)", 1, false)
+		assert.NoError(t, err)
+	}()
+
+	mpos, err := mconn.PrimaryPosition()
+	require.NoError(t, err)
+
+	idField := &querypb.Field{Name: "id1", Type: querypb.Type_INT64, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)}
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1_copy_resume",
+			Filter: "select * from t1_copy_resume",
+		}},
+	}
+	vgtidFor := func(lastpk *querypb.QueryResult) *binlogdatapb.VGtid {
+		tablePKs := []*binlogdatapb.TableLastPK{{TableName: "t1_copy_resume", Lastpk: lastpk}}
+		gtid := fmt.Sprintf("%s/%s", mpos.GTIDSet.Flavor(), mpos)
+		return &binlogdatapb.VGtid{ShardGtids: []*binlogdatapb.ShardGtid{
+			{Keyspace: "ks", Shard: "-80", Gtid: gtid, TablePKs: tablePKs},
+			{Keyspace: "ks", Shard: "80-", Gtid: gtid, TablePKs: tablePKs},
+		}}
+	}
+
+	t.Run("malformed lastpk fails the stream", func(t *testing.T) {
+		// The length claims 10 bytes, but there is only 1.
+		malformed := &querypb.QueryResult{
+			Fields: []*querypb.Field{idField},
+			Rows:   []*querypb.Row{{Lengths: []int64{10}, Values: []byte("1")}},
+		}
+		reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtidFor(malformed), filter, &vtgatepb.VStreamFlags{})
+		require.NoError(t, err)
+
+		// The client must receive the code and message from the tablet's
+		// validation, and no row may be streamed before the error.
+		rowEvents := 0
+		for {
+			events, err := reader.Recv()
+			if err != nil {
+				require.NotErrorIs(t, err, io.EOF, "stream ended without an error")
+				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "unexpected error: %v", err)
+				require.ErrorContains(t, err, "past the end of the values")
+				break
+			}
+			for _, ev := range events {
+				if ev.Type == binlogdatapb.VEventType_ROW {
+					rowEvents++
+				}
+			}
+		}
+		assert.Zero(t, rowEvents, "rows were streamed before the malformed lastpk was rejected")
+	})
+
+	t.Run("well-formed lastpk still resumes", func(t *testing.T) {
+		valid := sqltypes.ResultToProto3(&sqltypes.Result{
+			Fields: []*querypb.Field{idField},
+			Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1001)}},
+		})
+		reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtidFor(valid), filter, &vtgatepb.VStreamFlags{})
+		require.NoError(t, err)
+
+		// Only the rows after id1=1001 are copied. Each row's values are id1
+		// followed by id2, which are equal here.
+		want := map[string]bool{"10021002": false, "10031003": false}
+		for seen := 0; seen < len(want); {
+			events, err := reader.Recv()
+			require.NoError(t, err)
+			for _, ev := range events {
+				if ev.Type != binlogdatapb.VEventType_ROW {
+					continue
+				}
+				for _, change := range ev.RowEvent.RowChanges {
+					got := string(change.After.GetValues())
+					found, ok := want[got]
+					require.True(t, ok, "unexpected row copied: %s", got)
+					require.False(t, found, "row copied twice: %s", got)
+					want[got] = true
+					seen++
+				}
+			}
+		}
+	})
 }
 
 func TestVStreamCurrent(t *testing.T) {
