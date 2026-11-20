@@ -1841,15 +1841,33 @@ func TestRecentCheckBeforeOperate(t *testing.T) {
 	assert.False(t, throttler.recentlyChecked())
 }
 
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark. A check in between
+// must not dereference the nil rate limiter.
+func TestCheckBeforeOperate(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.isOpen.Store(true)
+	throttler.isEnabled.Store(true)
+	t.Cleanup(func() {
+		throttler.isEnabled.Store(false)
+		throttler.isOpen.Store(false)
+	})
+
+	assert.NotPanics(t, func() {
+		throttler.Check(t.Context(), throttlerapp.TestingName.String(), nil, &CheckFlags{})
+	})
+}
+
 // Disable doesn't wait for Operate to exit, so after a Disable and an Enable the old Operate can exit after the new
-// one stored its rate limiter. The old Operate must stop its own rate limiter: a stopped one reads as checked just
-// now, forever, so the throttler would report itself recently checked and never go dormant.
+// one stored its rate limiter. The old Operate must stop its own rate limiter, whose goroutine leaks otherwise, and
+// not the new one's: a stopped one reads as checked just now, forever, so the throttler would report itself recently
+// checked and never go dormant.
 func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
 	throttler := newTestThrottler()
 
 	oldCtx, cancelOld := context.WithCancel(t.Context())
 	oldWG := &sync.WaitGroup{}
 	throttler.Operate(oldCtx, oldWG)
+	oldRateLimiter := throttler.recentCheckRateLimiter.Load()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	wg := &sync.WaitGroup{}
@@ -1862,12 +1880,15 @@ func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
 	cancelOld()
 	oldWG.Wait()
 	assert.False(t, throttler.recentlyChecked(), "nothing checked the throttler")
+	// Stop marks a rate limiter as last used at MaxInt64, so its Diff is negative.
+	assert.Negative(t, oldRateLimiter.Diff(), "the old Operate didn't stop its rate limiter")
 }
 
 // Disable doesn't wait for Operate to exit, so a Disable and an Enable in quick succession start an Operate while the
 // previous one still runs. The new Operate must not run its loop until the previous one has exited: the loops share
 // the throttler's channels and inventory, and the previous one's cleanup clears inventory.TabletMetrics, a plain map,
-// which the new one writes to.
+// which the new one writes to. An Operate that is cancelled while it waits, as on two Disables and Enables in a row,
+// must keep waiting, or else the Operate after it overlaps the one before it.
 func TestOperateWaitsForPreviousOperate(t *testing.T) {
 	throttler := newTestThrottler()
 
@@ -1882,6 +1903,12 @@ func TestOperateWaitsForPreviousOperate(t *testing.T) {
 	}
 	<-entered
 	cancelOld()
+
+	// The next Operate is cancelled while it waits for the old one.
+	middleCtx, cancelMiddle := context.WithCancel(t.Context())
+	middleWG := &sync.WaitGroup{}
+	throttler.Operate(middleCtx, middleWG)
+	cancelMiddle()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	wg := &sync.WaitGroup{}
@@ -1904,7 +1931,8 @@ func TestOperateWaitsForPreviousOperate(t *testing.T) {
 
 	close(release)
 	oldWG.Wait()
-	assert.Eventually(t, sendMetric, 30*time.Second, 10*time.Millisecond, "the new Operate must run its loop once the old one has exited")
+	middleWG.Wait()
+	assert.Eventually(t, sendMetric, 30*time.Second, 10*time.Millisecond, "the new Operate must run its loop once the ones before it have exited")
 }
 
 // The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
