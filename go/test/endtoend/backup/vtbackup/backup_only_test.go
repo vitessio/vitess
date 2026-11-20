@@ -167,8 +167,42 @@ func TestTabletBackupOnly(t *testing.T) {
 
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
+	backupWithJSON(t, replica1)
 
 	tearDown(t, true)
+}
+
+// backupWithJSON backs up tablet through vtctld with --json, checks the outcome it
+// reports, and removes the backup. A vttablet older than v25 ignores
+// include_outcome, so in the vttablet=N-1 run the status is UNKNOWN.
+func backupWithJSON(t *testing.T, tablet *cluster.Vttablet) {
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+
+	output, err := localCluster.VtctldClientProcess.ExecuteCommandWithOutput("Backup", "--json", tablet.Alias)
+	require.NoErrorf(t, err, "output: %v", output)
+	// The output combines stdout and stderr, and the JSON object is printed last.
+	idx := strings.LastIndex(output, "{\n  \"status\"")
+	require.GreaterOrEqualf(t, idx, 0, "no backup JSON object in output: %v", output)
+	var result struct {
+		Status     string          `json:"status"`
+		BackupName string          `json:"backup_name"`
+		Manifest   json.RawMessage `json:"manifest"`
+	}
+	require.NoErrorf(t, json.NewDecoder(strings.NewReader(output[idx:])).Decode(&result), "output: %v", output)
+
+	backups := verifyBackupCount(t, shardKsName, 1)
+	require.Len(t, backups, 1)
+	if vttabletVersion >= 25 {
+		assert.Equal(t, "USABLE", result.Status)
+		assert.Equal(t, backups[0], result.BackupName)
+		assert.NotEqual(t, "null", string(result.Manifest))
+	} else {
+		assert.Equal(t, "UNKNOWN", result.Status)
+		assert.Empty(t, result.BackupName)
+		assert.Equal(t, "null", string(result.Manifest))
+	}
+	removeBackups(t)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {

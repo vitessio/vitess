@@ -18,15 +18,20 @@ package grpctmserver
 
 import (
 	"context"
+	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -684,16 +689,90 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	ctx = callinfo.GRPCCallInfo(ctx)
 
 	// create a logger, send the result back to the caller
-	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		// If the client disconnects, we will just fail
-		// to send the log events, but won't interrupt
-		// the backup.
-		stream.Send(&tabletmanagerdatapb.BackupResponse{
-			Event: e,
-		})
-	})
+	sender := &backupSender{stream: stream}
+	logger := logutil.NewCallbackLogger(sender.event)
 
-	return s.tm.Backup(ctx, logger, request)
+	outcome, err := s.tm.Backup(ctx, logger, request)
+	// A backup that was stored is reported even if a later step failed, such as
+	// restoring the tablet, so the caller knows it exists and does not retry it.
+	// The error still fails the RPC once the terminal message is sent.
+	if !request.IncludeOutcome || (err != nil && outcome.Result != mysqlctl.BackupUsable) {
+		return err
+	}
+	// The caller asked for the outcome, so end the stream with a terminal message
+	// carrying it. Only callers that know these fields can set IncludeOutcome, so
+	// this message has no Event, unlike every message before it.
+	status := backupResultToStatus(outcome.Result)
+	resp := &tabletmanagerdatapb.BackupResponse{
+		Manifest:   outcome.Manifest,
+		Status:     status,
+		BackupName: outcome.Name,
+	}
+	// A message over the gRPC limit fails the whole RPC, not just this Send, so
+	// the caller would see an error for a backup that is already stored. Drop
+	// the manifest instead; the name and status still identify the backup, and
+	// the warning tells the caller why the manifest is missing.
+	if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+		log.Warn("backup MANIFEST exceeds --grpc-max-message-size; sending the terminal Backup message without it",
+			slog.String("backup_name", resp.BackupName),
+			slog.Int("manifest_bytes", len(resp.Manifest)),
+			slog.Int("max_message_size", maxSize),
+		)
+		logger.Warningf("backup %v: its MANIFEST (%d bytes) would put the message over vttablet's --grpc-max-message-size (%d bytes), so it is reported without it; raise --grpc-max-message-size on vttablet, vtctld and the client to include it",
+			resp.BackupName, len(resp.Manifest), maxSize)
+		resp.Manifest = ""
+	}
+	if sendErr := sender.last(resp); sendErr != nil {
+		// gRPC has already sent this error to the caller as the RPC's status, so
+		// returning it would change nothing. The likely cause is a client that
+		// disconnected during a long backup.
+		log.Warn("backup completed but sending the terminal Backup message failed",
+			slog.String("status", status.String()),
+			slog.Any("error", sendErr),
+		)
+	}
+	return err
+}
+
+// backupSender sends the messages of one Backup stream. The engine's progress
+// goroutines can still log after tm.Backup returns, and gRPC does not allow
+// concurrent Sends on a stream, so log events and the terminal message share a
+// lock, and events that come after the terminal message are dropped.
+type backupSender struct {
+	stream tabletmanagerservicepb.TabletManager_BackupServer
+	mu     sync.Mutex
+	done   bool
+}
+
+// event sends a log event. If the client disconnects, we will just fail to send
+// the log events, but won't interrupt the backup.
+func (b *backupSender) event(e *logutilpb.Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.done {
+		b.stream.Send(&tabletmanagerdatapb.BackupResponse{Event: e})
+	}
+}
+
+// last sends the terminal message. No event is sent after it.
+func (b *backupSender) last(resp *tabletmanagerdatapb.BackupResponse) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.done = true
+	return b.stream.Send(resp)
+}
+
+// backupResultToStatus maps the mysqlctl backup classification to the proto
+// status enum sent on the terminal Backup stream message.
+func backupResultToStatus(result mysqlctl.BackupResult) tabletmanagerdatapb.BackupResponse_Status {
+	switch result {
+	case mysqlctl.BackupUsable:
+		return tabletmanagerdatapb.BackupResponse_USABLE
+	case mysqlctl.BackupEmpty:
+		return tabletmanagerdatapb.BackupResponse_EMPTY
+	default:
+		return tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED
+	}
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {
@@ -701,11 +780,15 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 	defer s.tm.HandleRPCPanic(ctx, "RestoreFromBackup", request, nil, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
+	// Restore workers can log concurrently; gRPC permits only one Send at a time.
+	var sendMu sync.Mutex
 	// create a logger, send the result back to the caller
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		sendMu.Lock()
+		defer sendMu.Unlock()
 		// If the client disconnects, we will just fail
 		// to send the log events, but won't interrupt
-		// the backup.
+		// the restore.
 		stream.Send(&tabletmanagerdatapb.RestoreFromBackupResponse{
 			Event: e,
 		})

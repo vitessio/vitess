@@ -17,20 +17,24 @@ limitations under the License.
 package grpcvtctldserver
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -47,7 +51,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/grpccommon"
 	hk "vitess.io/vitess/go/vt/hook"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -694,6 +700,8 @@ func TestApplyVSchema(t *testing.T) {
 	}
 }
 
+// TestBackup verifies tablet selection and forwarding of progress, terminal
+// outcome metadata, and stream errors for a single-tablet backup.
 func TestBackup(t *testing.T) {
 	ctx := t.Context()
 	includeBinlogsTMC := &testutil.TabletManagerClient{
@@ -702,6 +710,8 @@ func TestBackup(t *testing.T) {
 			EventInterval time.Duration
 			EventJitter   time.Duration
 			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
 		}{
 			"zone1-0000000100": {
 				Events: []*logutilpb.Event{{}, {}, {}},
@@ -726,6 +736,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -779,6 +791,54 @@ func TestBackup(t *testing.T) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 				assert.True(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeBinlogs())
+				assert.False(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeOutcome())
+			},
+		},
+		{
+			name: "forwards manifest and status",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000100": {
+						Events:   []*logutilpb.Event{{}, {}},
+						Manifest: `{"BackupName":"test-backup"}`,
+						Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type:     topodatapb.TabletType_REPLICA,
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				IncludeOutcome: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
+				term := responses[len(responses)-1]
+				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, "zone1-0000000100", term.BackupName)
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
 		},
 		{
@@ -790,6 +850,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -825,6 +887,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -861,6 +925,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -896,6 +962,8 @@ func TestBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events:        []*logutilpb.Event{{}, {}, {}},
@@ -963,6 +1031,316 @@ func TestBackup(t *testing.T) {
 	}
 }
 
+// failingBackupSendStream counts Send calls and fails every one of them.
+type failingBackupSendStream struct {
+	sent int
+}
+
+// Send implements the backupTablet stream interface for failingBackupSendStream.
+func (s *failingBackupSendStream) Send(*vtctldatapb.BackupResponse) error {
+	s.sent++
+	return errors.New("grpc: message larger than max")
+}
+
+// TestBackupTabletSendFailure verifies that a failed Send is logged without the
+// manifest and does not stop backupTablet from draining the tablet stream.
+func TestBackupTabletSendFailure(t *testing.T) {
+	var logBuf bytes.Buffer
+	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	defer log.SwapLogger(oldLogger)
+
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events:   []*logutilpb.Event{{Value: "progress-event"}},
+				Manifest: `{"BackupName":"secret-manifest-body"}`,
+				Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	stream := &failingBackupSendStream{}
+
+	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream)
+	require.NoError(t, err, "a failed Send should be logged, not returned")
+	assert.Equal(t, 2, stream.sent, "expected 1 log event + 1 terminal message")
+
+	out := logBuf.String()
+	// Each failed Send is logged with main's line: the response without its
+	// MANIFEST, then the error.
+	for _, want := range []*vtctldatapb.BackupResponse{
+		{TabletAlias: tablet.Alias, Keyspace: "ks", Shard: "-", Event: &logutilpb.Event{Value: "progress-event"}},
+		{TabletAlias: tablet.Alias, Keyspace: "ks", Shard: "-", Status: tabletmanagerdatapb.BackupResponse_USABLE, BackupName: "zone1-0000000100"},
+	} {
+		line := fmt.Sprintf("failed to send stream response %+v: %v", want, errors.New("grpc: message larger than max"))
+		assert.Contains(t, out, "msg="+strconv.Quote(line))
+	}
+	assert.NotContains(t, out, "secret-manifest-body", "manifest must not be logged")
+}
+
+// recordingBackupSendStream records every response sent through it.
+type recordingBackupSendStream struct {
+	resps []*vtctldatapb.BackupResponse
+}
+
+// Send implements the backupTablet stream interface for recordingBackupSendStream.
+func (s *recordingBackupSendStream) Send(resp *vtctldatapb.BackupResponse) error {
+	s.resps = append(s.resps, resp)
+	return nil
+}
+
+// TestBackupTabletManifestTooLarge verifies that a manifest which would push the
+// forwarded message over --grpc-max-message-size is dropped, keeping the status.
+func TestBackupTabletManifestTooLarge(t *testing.T) {
+	setMaxMessageSize(t, 1024)
+
+	ctx := t.Context()
+	// The MANIFEST alone fits the limit, but the message carrying it does not.
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events:   []*logutilpb.Event{{}},
+				Manifest: strings.Repeat("x", 1020),
+				Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	stream := &recordingBackupSendStream{}
+
+	require.NoError(t, s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream))
+	require.Len(t, stream.resps, 2, "expected 1 log event + 1 terminal message")
+	term := stream.resps[1]
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
+	assert.Empty(t, term.Manifest)
+	assert.LessOrEqual(t, term.SizeVT(), grpccommon.MaxMessageSize())
+	// The caller is told why the manifest is missing.
+	require.NotNil(t, term.Event)
+	assert.Equal(t, logutilpb.Level_WARNING, term.Event.Level)
+	assert.Contains(t, term.Event.Value, "--grpc-max-message-size")
+}
+
+// TestBackupTabletForwardsOutcomeThenError verifies that a stored backup's
+// terminal message is forwarded and the tablet's later error still fails the RPC.
+func TestBackupTabletForwardsOutcomeThenError(t *testing.T) {
+	ctx := t.Context()
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), outcomeThenErrorTMC{})
+	stream := &recordingBackupSendStream{}
+
+	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream)
+	require.ErrorContains(t, err, "tablet restoration failed")
+	require.Len(t, stream.resps, 2, "expected 1 log event + 1 terminal message")
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, stream.resps[1].Status)
+	assert.Equal(t, "b1", stream.resps[1].BackupName)
+}
+
+func TestFakeBackupStreamDelayedReceiver(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		errorAfter     time.Duration
+		eventInterval  time.Duration
+		wantEvents     int
+		wantOutcome    bool
+		cancelProducer bool
+	}{
+		{name: "EOF after buffered outcome", eventInterval: time.Microsecond, wantEvents: 16, wantOutcome: true},
+		{name: "error after buffered outcome", errorAfter: time.Second, eventInterval: time.Microsecond, wantEvents: 16, wantOutcome: true},
+		{name: "error before outcome", errorAfter: time.Millisecond, eventInterval: time.Hour, wantEvents: 1},
+		{name: "cancellation stops producer", errorAfter: time.Hour, eventInterval: time.Hour, cancelProducer: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			streamCtx, cancelStream := context.WithCancel(ctx)
+			t.Cleanup(cancelStream)
+			tablet := &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:  topodatapb.TabletType_REPLICA,
+			}
+			events := make([]*logutilpb.Event, 16)
+			for index := range events {
+				events[index] = &logutilpb.Event{Value: fmt.Sprintf("progress %d", index)}
+			}
+			client := &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000100": {
+						Events:        events,
+						EventInterval: testCase.eventInterval,
+						EventJitter:   time.Nanosecond,
+						ErrorAfter:    testCase.errorAfter,
+						Manifest:      `{"BackupName":"b1"}`,
+						Status:        tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+			}
+			stream, err := client.Backup(streamCtx, tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: true})
+			require.NoError(t, err)
+			completion, ok := stream.(interface {
+				Closed() <-chan struct{}
+				CloseErr() error
+			})
+			require.True(t, ok)
+			if testCase.cancelProducer {
+				cancelStream()
+			}
+			select {
+			case <-completion.Closed():
+			case <-ctx.Done():
+				t.Fatal("fake backup producer did not finish")
+			}
+			if testCase.cancelProducer {
+				require.ErrorIs(t, completion.CloseErr(), context.Canceled)
+				return
+			}
+
+			for _, event := range events[:testCase.wantEvents] {
+				response, err := stream.Recv()
+				require.NoError(t, err, "buffered log events must precede completion")
+				require.NotNil(t, response.Event)
+				assert.Equal(t, event.Value, response.Event.Value)
+			}
+			if testCase.wantOutcome {
+				outcome, err := stream.Recv()
+				require.NoError(t, err, "the buffered outcome must precede completion")
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, outcome.Status)
+				assert.Equal(t, "zone1-0000000100", outcome.BackupName)
+				assert.Equal(t, `{"BackupName":"b1"}`, outcome.Manifest)
+			}
+			for range 2 {
+				response, err := stream.Recv()
+				assert.Nil(t, response)
+				if testCase.errorAfter != 0 {
+					require.ErrorContains(t, err, "error triggered after")
+				} else {
+					require.ErrorIs(t, err, io.EOF)
+				}
+			}
+		})
+	}
+}
+
+// outcomeThenErrorTMC is a tablet manager client whose Backup stream sends a log
+// event and a stored backup's terminal message, and then fails, in that order.
+type outcomeThenErrorTMC struct {
+	tmclient.TabletManagerClient
+}
+
+func (outcomeThenErrorTMC) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
+	return &sliceBackupStream{
+		resps: []*tabletmanagerdatapb.BackupResponse{
+			{Event: &logutilpb.Event{Value: "progress"}},
+			{BackupName: "b1", Status: tabletmanagerdatapb.BackupResponse_USABLE},
+		},
+		err: errors.New("backup completed, but tablet restoration failed"),
+	}, nil
+}
+
+// sliceBackupStream returns resps in order, and then err.
+type sliceBackupStream struct {
+	resps []*tabletmanagerdatapb.BackupResponse
+	err   error
+}
+
+func (s *sliceBackupStream) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
+	if len(s.resps) == 0 {
+		return nil, s.err
+	}
+	resp := s.resps[0]
+	s.resps = s.resps[1:]
+	return resp, nil
+}
+
+// TestBackupTabletForwardsOversizedEvent verifies that only a MANIFEST is
+// dropped for size: an oversized log event is forwarded unchanged, as on main.
+func TestBackupTabletForwardsOversizedEvent(t *testing.T) {
+	setMaxMessageSize(t, 1024)
+
+	ctx := t.Context()
+	big := strings.Repeat("y", 4096)
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events: []*logutilpb.Event{{Value: big}},
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	for _, req := range []*vtctldatapb.BackupRequest{{}, {IncludeOutcome: true}} {
+		stream := &recordingBackupSendStream{}
+		require.NoError(t, s.backupTablet(ctx, tablet, req, stream))
+		require.NotEmpty(t, stream.resps)
+		require.NotNil(t, stream.resps[0].Event)
+		assert.Equal(t, big, stream.resps[0].Event.Value, "include_outcome=%v", req.IncludeOutcome)
+	}
+}
+
+// setMaxMessageSize sets --grpc-max-message-size for the rest of the test.
+func setMaxMessageSize(t *testing.T, size int) {
+	fs := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
+	grpccommon.RegisterFlags(fs)
+	orig := grpccommon.MaxMessageSize()
+	require.NoError(t, fs.Set("grpc-max-message-size", strconv.Itoa(size)))
+	t.Cleanup(func() { _ = fs.Set("grpc-max-message-size", strconv.Itoa(orig)) })
+}
+
+// TestBackupShard verifies shard tablet selection and backup stream forwarding
+// across successful and failing tablet-manager responses.
 func TestBackupShard(t *testing.T) {
 	ctx := t.Context()
 	includeBinlogsTMC := &testutil.TabletManagerClient{
@@ -971,6 +1349,8 @@ func TestBackupShard(t *testing.T) {
 			EventInterval time.Duration
 			EventJitter   time.Duration
 			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
 		}{
 			"zone1-0000000100": {
 				Events: []*logutilpb.Event{{}, {}, {}},
@@ -1008,6 +1388,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1113,6 +1495,81 @@ func TestBackupShard(t *testing.T) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 				assert.True(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeBinlogs())
+				assert.False(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeOutcome())
+			},
+		},
+		{
+			name: "forwards the outcome when requested",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000101": {
+						Events:   []*logutilpb.Event{{}, {}},
+						Manifest: `{"BackupName":"test-backup"}`,
+						Status:   tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {
+						Position: "some-position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							ReplicationLagSeconds: 1,
+						},
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:       "ks",
+				Shard:          "-",
+				IncludeOutcome: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
+				term := responses[len(responses)-1]
+				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, "zone1-0000000101", term.BackupName)
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
 		},
 		{
@@ -1124,6 +1581,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
 					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
@@ -1178,6 +1637,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
 					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
@@ -1232,6 +1693,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
 				},
@@ -1329,6 +1792,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
 					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
@@ -1380,6 +1845,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
 					"zone1-0000000102": {Events: []*logutilpb.Event{{}}},
@@ -1480,6 +1947,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
 				},
@@ -1538,6 +2007,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1581,6 +2052,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1642,6 +2115,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1708,6 +2183,8 @@ func TestBackupShard(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},
@@ -1822,6 +2299,8 @@ func TestBackupShardStatsAlignment(t *testing.T) {
 				EventInterval time.Duration
 				EventJitter   time.Duration
 				ErrorAfter    time.Duration
+				Manifest      string
+				Status        tabletmanagerdatapb.BackupResponse_Status
 			}{
 				"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
 			},
@@ -11882,6 +12361,8 @@ func TestReparentTablet(t *testing.T) {
 	}
 }
 
+// TestRestoreFromBackup verifies restore progress forwarding and error handling
+// for tablet-manager restore streams.
 func TestRestoreFromBackup(t *testing.T) {
 	ctx := t.Context()
 
@@ -11952,6 +12433,8 @@ func TestRestoreFromBackup(t *testing.T) {
 					EventInterval time.Duration
 					EventJitter   time.Duration
 					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
 				}{
 					"zone1-0000000100": {
 						Events: []*logutilpb.Event{{}, {}, {}},

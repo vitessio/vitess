@@ -412,9 +412,15 @@ func (e *eofEventStream) Recv() (*logutilpb.Event, error) {
 	return nil, io.EOF
 }
 
+type eofBackupStream struct{}
+
+func (e *eofBackupStream) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
+	return nil, io.EOF
+}
+
 // Backup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
-	return &eofEventStream{}, nil
+func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
+	return &eofBackupStream{}, nil
 }
 
 // RestoreFromBackup is part of the tmclient.TabletManagerClient interface.

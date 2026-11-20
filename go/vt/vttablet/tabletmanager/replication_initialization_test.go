@@ -889,7 +889,7 @@ func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
 			t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
 			holdInitializationShardLock(t, ts)
 
-			err := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+			_, err := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
 			if tc.backupErr != nil {
 				require.ErrorContains(t, err, "backup failed")
 			} else {
@@ -991,7 +991,8 @@ func TestBackupOfRunningDeferredReplica(t *testing.T) {
 			// The backup holds the action lock until its cleanup returns.
 			returned := make(chan error, 1)
 			go func() {
-				returned <- tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+				_, backupErr := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+				returned <- backupErr
 			}()
 			var err error
 			require.Eventually(t, func() bool {
@@ -1401,7 +1402,8 @@ func TestBackupKeepsTheDeferralItStartedWith(t *testing.T) {
 	t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
 	holdInitializationShardLock(t, tm.TopoServer)
 
-	require.NoError(t, tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)}))
+	_, err := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+	require.NoError(t, err)
 	assert.Zero(t, replicationQueries.Load(), "backup cleanup changed replication under another operation's shard lock")
 	assert.True(t, md.Replicating)
 }
