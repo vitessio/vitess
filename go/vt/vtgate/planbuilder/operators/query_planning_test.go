@@ -54,6 +54,24 @@ func TestMergeOffsetExpressions(t *testing.T) {
 			expectedFailed: true,
 		},
 		{
+			name:           "string offset",
+			offset1:        sqlparser.NewStrLiteral("5"),
+			offset2:        sqlparser.NewIntLiteral("1"),
+			expectedFailed: true,
+		},
+		{
+			name:           "hexadecimal offset",
+			offset1:        sqlparser.NewHexNumLiteral("0x1"),
+			offset2:        sqlparser.NewIntLiteral("1"),
+			expectedFailed: true,
+		},
+		{
+			name:           "fractional offset",
+			offset1:        sqlparser.NewFloatLiteral("1.5"),
+			offset2:        sqlparser.NewIntLiteral("1"),
+			expectedFailed: true,
+		},
+		{
 			name:           "first offset is nil",
 			offset1:        nil,
 			offset2:        sqlparser.NewIntLiteral("3"),

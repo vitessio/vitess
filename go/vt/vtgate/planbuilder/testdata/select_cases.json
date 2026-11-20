@@ -1376,14 +1376,14 @@
   },
   {
     "comment": "merged offsets whose sum does not fit in a BIGINT",
-    "query": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 1 offset 1",
+    "query": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 0 offset 1",
     "plan": {
       "Type": "Scatter",
       "QueryType": "SELECT",
-      "Original": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 1 offset 1",
+      "Original": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 0 offset 1",
       "Instructions": {
         "OperatorType": "Limit",
-        "Count": "1",
+        "Count": "0",
         "Offset": "9223372036854775807",
         "Inputs": [
           {

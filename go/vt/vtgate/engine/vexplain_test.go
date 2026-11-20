@@ -17,7 +17,9 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
 	"log/slog"
+	"math"
 	"sync"
 	"testing"
 
@@ -78,39 +80,50 @@ func TestVExplainMySQLNoRoutesSpecialHandling(t *testing.T) {
 // bind variable before running EXPLAIN, mirroring Limit.TryExecute - otherwise the
 // EXPLAIN would be sent with :__upper_limit unbound.
 func TestVExplainMySQLPushedDownLimit(t *testing.T) {
-	route := NewRoute(
-		Scatter,
-		&vindexes.Keyspace{Name: "ks", Sharded: true},
-		"dummy_select limit :__upper_limit",
-		"dummy_select_field",
-	)
-	limit := &Limit{
-		Count:  evalengine.NewLiteralInt(5),
-		Offset: evalengine.NewLiteralInt(10),
-		Input:  route,
+	for _, tc := range []struct {
+		name          string
+		count, offset int64
+		upper         string
+	}{
+		{name: "in range", count: 5, offset: 10, upper: "15"},
+		{name: "overflow", count: 1, offset: math.MaxInt64, upper: "9223372036854775807"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			route := NewRoute(
+				Scatter,
+				&vindexes.Keyspace{Name: "ks", Sharded: true},
+				"dummy_select limit :__upper_limit",
+				"dummy_select_field",
+			)
+			limit := &Limit{
+				Count:  evalengine.NewLiteralInt(tc.count),
+				Offset: evalengine.NewLiteralInt(tc.offset),
+				Input:  route,
+			}
+
+			vexplain := &VExplain{Input: limit, Type: sqlparser.MySQLVExplainType}
+
+			vc := &loggingVCursor{
+				shards: []string{"-20", "20-"},
+				results: []*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
+				},
+			}
+
+			_, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+
+			// EXPLAIN must be sent to every shard with :__upper_limit bound to count+offset.
+			// The per-shard EXPLAINs run concurrently, so their log lines may arrive in
+			// either order; assert membership rather than a fixed order.
+			vc.ExpectLogUnordered(t, []string{
+				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"%s" ks -20`, tc.upper),
+				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"%s" ks 20-`, tc.upper),
+			})
+		})
 	}
-
-	vexplain := &VExplain{Input: limit, Type: sqlparser.MySQLVExplainType}
-
-	vc := &loggingVCursor{
-		shards: []string{"-20", "20-"},
-		results: []*sqltypes.Result{
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields("json", "varchar"), `{"plan":"x"}`),
-		},
-	}
-
-	_, err := vexplain.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-
-	// EXPLAIN must be sent to every shard with :__upper_limit bound to count+offset.
-	// The per-shard EXPLAINs run concurrently, so their log lines may arrive in
-	// either order; assert membership rather than a fixed order.
-	vc.ExpectLogUnordered(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks -20`,
-		`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"15" ks 20-`,
-	})
 }
 
 // TestVExplainMySQLPerInputBindVars verifies that sibling inputs of a container

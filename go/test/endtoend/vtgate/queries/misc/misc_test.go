@@ -1043,3 +1043,13 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+// TestLimitOffsetAboveBigint compares large unsigned limits and overflowing sums with MySQL.
+func TestLimitOffsetAboveBigint(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3)")
+	mcmp.AssertMatches("select id1 from t1 order by id1 limit 18446744073709551615 offset 1", "[[INT64(2)] [INT64(3)]]")
+	mcmp.AssertMatches("select id1 from t1 limit 1 offset 9223372036854775807", "[]")
+}
