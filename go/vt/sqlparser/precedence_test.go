@@ -125,14 +125,9 @@ func TestAssignmentPrecedence(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		tree, err := parser.Parse(tcase.input)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
+		require.NoError(t, err)
 		expr := readable(tree.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr)
-		if expr != tcase.output {
-			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
-		}
+		assert.Equalf(t, tcase.output, expr, "Parse: \n%s, want: \n%s", expr, tcase.output)
 	}
 }
 
