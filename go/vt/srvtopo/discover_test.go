@@ -17,6 +17,7 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"time"
@@ -195,4 +196,20 @@ func TestFindAllTargetsAndKeyspaces(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, targets)
 	assert.Equal(t, []string{"doesnt-exist"}, ksList)
+}
+
+// TestFindAllTargetsAndKeyspacesCancelledContext covers a context that is already cancelled, with nothing
+// cached. FindAllTargetsAndKeyspaces reads the partitions of the SrvKeyspace that it gets back, so the read
+// has to report why it has no SrvKeyspace.
+func TestFindAllTargetsAndKeyspacesCancelledContext(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "cell1", "test_keyspace", &topodatapb.SrvKeyspace{}))
+	rs := NewResilientServer(ctx, ts, stats.NewCountersWithSingleLabel("", "", "type"))
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+
+	_, _, err := FindAllTargetsAndKeyspaces(cancelled, rs, "cell1", []string{"test_keyspace"}, []topodatapb.TabletType{topodatapb.TabletType_PRIMARY})
+	assert.ErrorContains(t, err, context.Canceled.Error())
 }
