@@ -396,7 +396,8 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 	}
 	var ks *vindexes.Keyspace
 	viewMap := make(map[string]any)
-	for _, tbl := range ddlStatement.GetFromTables() {
+	tables := ddlStatement.GetFromTables()
+	for i, tbl := range tables {
 		ksForView, err := vschema.FindViewTarget(tbl)
 		if err != nil {
 			return nil, nil, err
@@ -413,7 +414,7 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 			return nil, nil, vterrors.VT03013(tbl.Name.String())
 		}
 		viewMap[tbl.Name.String()] = nil
-		tbl.Qualifier = sqlparser.NewIdentifierCS("")
+		tables[i].Qualifier = sqlparser.NewIdentifierCS("")
 	}
 	return key.DestinationAllShards{}, ks, nil
 }
