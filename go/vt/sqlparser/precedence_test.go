@@ -38,6 +38,8 @@ func readable(node Expr) string {
 		return fmt.Sprintf("(%s %s %s)", readable(node.Left), node.Operator.ToString(), readable(node.Right))
 	case *IsExpr:
 		return fmt.Sprintf("(%s %s)", readable(node.Left), node.Right.ToString())
+	case *AssignmentExpr:
+		return fmt.Sprintf("(%s := %s)", readable(node.Left), readable(node.Right))
 	default:
 		return String(node)
 	}
@@ -106,6 +108,34 @@ func TestIsPrecedence(t *testing.T) {
 	}
 }
 
+func TestAssignmentPrecedence(t *testing.T) {
+	validSQL := []struct {
+		input  string
+		output string
+	}{{
+		input:  "select @a := 1 or 0",
+		output: "(@a := (1 or 0))",
+	}, {
+		input:  "select @a := 1 xor 0",
+		output: "(@a := (1 xor 0))",
+	}, {
+		input:  "select @a := 1 and 0",
+		output: "(@a := (1 and 0))",
+	}}
+	parser := NewTestParser()
+	for _, tcase := range validSQL {
+		tree, err := parser.Parse(tcase.input)
+		if err != nil {
+			t.Error(err)
+			continue
+		}
+		expr := readable(tree.(*Select).SelectExprs.Exprs[0].(*AliasedExpr).Expr)
+		if expr != tcase.output {
+			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
+		}
+	}
+}
+
 func TestParens(t *testing.T) {
 	tests := []struct {
 		in, expected string
@@ -149,6 +179,9 @@ func TestParens(t *testing.T) {
 		{in: "1 not like ('a' is null)", expected: "1 not like ('a' is null)"},
 		{in: ":vtg1 not like (:vtg2 is null)", expected: ":vtg1 not like (:vtg2 is null)"},
 		{in: "a and b member of (c)", expected: "a and b member of (c)"},
+		{in: "(@a := 0) = 0", expected: "(@a := 0) = 0"},
+		{in: "(@a := 1) or 0", expected: "(@a := 1) or 0"},
+		{in: "@a := 1 or 0", expected: "@a := 1 or 0"},
 		{
 			in:       "foo is null and (bar = true or cast('1448364' as unsigned) member of (baz))",
 			expected: "foo is null and (bar = true or cast('1448364' as unsigned) member of (baz))",

@@ -324,12 +324,13 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
 %left <str> EXPRESSION_PREC_SETTER
+%left <str> ASSIGNMENT_OPT
 %left <str> OR '|'
 %left <str> XOR
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE ELSEIF END
-%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN ASSIGNMENT_OPT MEMBER
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP RLIKE IN MEMBER
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
