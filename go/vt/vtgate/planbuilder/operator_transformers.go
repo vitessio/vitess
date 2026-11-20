@@ -781,6 +781,9 @@ func buildUpdatePrimitive(
 	hints *queryHints,
 ) (engine.Primitive, error) {
 	upd := dmlOp.(*operators.Update)
+	if err := checkReferenceWrite(rb, upd.Target.VTable); err != nil {
+		return nil, err
+	}
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
 	if rb.Routing.OpCode() == engine.None {
@@ -810,6 +813,9 @@ func buildUpdatePrimitive(
 
 func buildDeletePrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, dmlOp operators.Operator, stmt *sqlparser.Delete, hints *queryHints) (engine.Primitive, error) {
 	del := dmlOp.(*operators.Delete)
+	if err := checkReferenceWrite(rb, del.Target.VTable); err != nil {
+		return nil, err
+	}
 
 	var vindexes []*vindexes.ColumnVindex
 	vQuery := ""
@@ -823,6 +829,18 @@ func buildDeletePrimitive(ctx *plancontext.PlanningContext, rb *operators.Route,
 	edml := createDMLPrimitive(ctx, rb, hints, del.Target.VTable, generateQuery(stmt), vindexes, vQuery)
 
 	return &engine.Delete{DML: edml}, nil
+}
+
+// checkReferenceWrite rejects a reference table written through a sharded route, where each
+// shard would pick the rows of its own copy. A table with a source is written as that source.
+func checkReferenceWrite(rb *operators.Route, vTbl *vindexes.BaseTable) error {
+	if _, sharded := rb.Routing.(*operators.ShardedRouting); !sharded {
+		return nil
+	}
+	if vTbl.Type == vindexes.TypeReference || !vTbl.Keyspace.Sharded {
+		return vterrors.VT12001("DML on reference table through a sharded route")
+	}
+	return nil
 }
 
 func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, hints *queryHints, vTbl *vindexes.BaseTable, query string, colVindexes []*vindexes.ColumnVindex, vindexQuery string) *engine.DML {
