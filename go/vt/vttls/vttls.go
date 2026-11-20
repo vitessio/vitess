@@ -22,7 +22,6 @@ import (
 	"encoding/pem"
 	"os"
 	"strings"
-	"sync"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -100,34 +99,30 @@ func TLSVersionToNumber(tlsVersion string) (uint16, error) {
 	}
 }
 
-var onceByKeys = sync.Map{}
-
 // ClientConfig returns the TLS config to use for a client to
-// connect to a server with the provided parameters.
+// connect to a server with the provided parameters. The certificate,
+// key and CA files are loaded together once per set of paths, and
+// loaded again by ReloadCachedFiles; the CRL is read on every call.
 func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
 	config := &tls.Config{
 		MinVersion: minTLSVersion,
 	}
 
-	// Load the client-side cert & key if any.
+	k := clientFilesKey{ca: ca}
 	if cert != "" && key != "" {
-		certificates, err := loadTLSCertificate(cert, key)
-		if err != nil {
+		k.cert, k.key = cert, key
+	}
+	files := &clientFiles{}
+	if k != (clientFilesKey{}) {
+		var err error
+		if files, err = loadClientFiles(k); err != nil {
 			return nil, err
 		}
-
-		config.Certificates = *certificates
 	}
 
-	// Load the server CA if any.
-	if ca != "" {
-		certificatePool, err := loadx509CertPool(ca)
-		if err != nil {
-			return nil, err
-		}
-
-		config.RootCAs = certificatePool
-	}
+	// The client-side cert & key, and the server CA, if any.
+	config.Certificates = files.certificates
+	config.RootCAs = files.roots
 
 	// Set the server name if any.
 	if name != "" {
@@ -137,8 +132,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 	var checker *crlChecker
 	if crl != "" {
 		var err error
-		checker, err = newCRLChecker(crl, ca)
-		if err != nil {
+		if checker, err = loadClientCRL(crlWatch{crl: crl, files: k}, files.caCertificates); err != nil {
 			return nil, err
 		}
 	}
@@ -239,33 +233,43 @@ func ServerTLSEnabled(cert, key, crl string) (bool, error) {
 }
 
 // ServerConfig returns the TLS config to use for a server to
-// accept client connections.
+// accept client connections. It reads every file anew, so that it
+// picks up certificates, keys, CAs and CRLs that changed on disk.
 func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
 	config := &tls.Config{
 		MinVersion: minTLSVersion,
 	}
 
-	var certificates *[]tls.Certificate
+	var certificate tls.Certificate
 	var err error
 
 	if serverCA != "" {
-		certificates, err = combineAndLoadTLSCertificates(serverCA, cert, key)
+		certificate, err = readAndCombineTLSCertificates(serverCA, cert, key)
 	} else {
-		certificates, err = loadTLSCertificate(cert, key)
+		certificate, err = tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+			err = vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load tls certificate, cert %s, key: %s: %v", cert, key, err)
+		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	config.Certificates = *certificates
+	config.Certificates = []tls.Certificate{certificate}
 
 	// if specified, load ca to validate client,
 	// and enforce clients present valid certs.
+	var caCertificates []*x509.Certificate
 	if ca != "" {
-		certificatePool, err := loadx509CertPool(ca)
+		b, err := os.ReadFile(ca)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 		}
+		certificatePool := x509.NewCertPool()
+		if !certificatePool.AppendCertsFromPEM(b) {
+			return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "failed to append certificates from ca file: %s", ca)
+		}
+		caCertificates = parseX509Certificates(b)
 
 		config.ClientCAs = certificatePool
 		config.ClientAuth = tls.RequireAndVerifyClientCert
@@ -277,7 +281,11 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 			// there would be nothing to check the CRL against.
 			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "a CRL is configured without a CA: no client certificate is requested without one, so the CRL could not apply")
 		}
-		checker, err := newCRLChecker(crl, ca)
+		crls, err := loadCRLSet(crl)
+		if err != nil {
+			return nil, err
+		}
+		checker, err := newCRLCheckerFrom(crls, caCertificates)
 		if err != nil {
 			return nil, err
 		}
@@ -287,78 +295,43 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	return config, nil
 }
 
-var certPools = sync.Map{}
-
-func loadx509CertPool(ca string) (*x509.CertPool, error) {
-	once, _ := onceByKeys.LoadOrStore(ca, &sync.Once{})
-
-	var err error
-	once.(*sync.Once).Do(func() {
-		err = doLoadx509CertPool(ca)
-	})
+// ServerConfigWithCRL returns a copy of config, which ServerConfig built
+// from the CA file contents caPEM, that checks client certificates
+// against the CRLs that the file crl holds now, under the certificates
+// of caPEM. The certificate, key and CA of config stay as they are: a
+// server reloads its CRL alone with it.
+func ServerConfigWithCRL(config *tls.Config, caPEM []byte, crl string) (*tls.Config, error) {
+	crls, err := loadCRLSet(crl)
 	if err != nil {
 		return nil, err
 	}
-
-	result, ok := certPools.Load(ca)
-
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded x509 cert pool for ca: %s", ca)
+	checker, err := newCRLCheckerFrom(crls, parseX509Certificates(caPEM))
+	if err != nil {
+		return nil, err
 	}
-
-	return result.(*x509.CertPool), nil
+	withCRL := config.Clone()
+	withCRL.VerifyConnection = checker.verifyConnection
+	return withCRL, nil
 }
 
-func doLoadx509CertPool(ca string) error {
+// readx509Certificates returns the certificates in the PEM file ca, see
+// parseX509Certificates.
+func readx509Certificates(ca string) ([]*x509.Certificate, error) {
 	b, err := os.ReadFile(ca)
 	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 	}
-
-	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM(b) {
-		return vterrors.Errorf(vtrpc.Code_UNKNOWN, "failed to append certificates")
+	certificates := parseX509Certificates(b)
+	if len(certificates) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_UNKNOWN, "no certificates found in ca file: %s", ca)
 	}
-
-	certPools.Store(ca, cp)
-
-	return nil
+	return certificates, nil
 }
 
-var caCertificates = sync.Map{}
-
-// loadx509Certificates returns the certificates in the PEM file ca,
-// parsed once per path like loadx509CertPool does.
-func loadx509Certificates(ca string) ([]*x509.Certificate, error) {
-	identifier := tlsCertificatesIdentifier("ca-certificates", ca)
-	once, _ := onceByKeys.LoadOrStore(identifier, &sync.Once{})
-
-	var err error
-	once.(*sync.Once).Do(func() {
-		err = doLoadx509Certificates(ca)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	result, ok := caCertificates.Load(ca)
-
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded x509 certificates for ca: %s", ca)
-	}
-
-	return result.([]*x509.Certificate), nil
-}
-
-// doLoadx509Certificates parses the certificates in the PEM file ca,
+// parseX509Certificates parses the certificates in the PEM contents b,
 // skipping the blocks that are not parsable certificates just like
 // x509.CertPool.AppendCertsFromPEM does.
-func doLoadx509Certificates(ca string) error {
-	b, err := os.ReadFile(ca)
-	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
-	}
-
+func parseX509Certificates(b []byte) []*x509.Certificate {
 	var certificates []*x509.Certificate
 	for len(b) > 0 {
 		var block *pem.Block
@@ -375,115 +348,35 @@ func doLoadx509Certificates(ca string) error {
 		}
 		certificates = append(certificates, certificate)
 	}
-	if len(certificates) == 0 {
-		return vterrors.Errorf(vtrpc.Code_UNKNOWN, "no certificates found in ca file: %s", ca)
-	}
-
-	caCertificates.Store(ca, certificates)
-
-	return nil
+	return certificates
 }
 
-var tlsCertificates = sync.Map{}
-
-func tlsCertificatesIdentifier(tokens ...string) string {
-	return strings.Join(tokens, ";")
-}
-
-func loadTLSCertificate(cert, key string) (*[]tls.Certificate, error) {
-	tlsIdentifier := tlsCertificatesIdentifier(cert, key)
-	once, _ := onceByKeys.LoadOrStore(tlsIdentifier, &sync.Once{})
-
-	var err error
-	once.(*sync.Once).Do(func() {
-		err = doLoadTLSCertificate(cert, key)
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	result, ok := tlsCertificates.Load(tlsIdentifier)
-
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate with cert: %s, key: %s", cert, key)
-	}
-
-	return result.(*[]tls.Certificate), nil
-}
-
-func doLoadTLSCertificate(cert, key string) error {
-	tlsIdentifier := tlsCertificatesIdentifier(cert, key)
-
-	var certificate []tls.Certificate
-	// Load the server cert and key.
-	crt, err := tls.LoadX509KeyPair(cert, key)
-	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load tls certificate, cert %s, key: %s", cert, key)
-	}
-
-	certificate = []tls.Certificate{crt}
-
-	tlsCertificates.Store(tlsIdentifier, &certificate)
-
-	return nil
-}
-
-var combinedTLSCertificates = sync.Map{}
-
-func combineAndLoadTLSCertificates(ca, cert, key string) (*[]tls.Certificate, error) {
-	combinedTLSIdentifier := tlsCertificatesIdentifier(ca, cert, key)
-	once, _ := onceByKeys.LoadOrStore(combinedTLSIdentifier, &sync.Once{})
-
-	var err error
-	once.(*sync.Once).Do(func() {
-		err = doLoadAndCombineTLSCertificates(ca, cert, key)
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	result, ok := combinedTLSCertificates.Load(combinedTLSIdentifier)
-
-	if !ok {
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate chain with ca: %s, cert: %s, key: %s", ca, cert, key)
-	}
-
-	return result.(*[]tls.Certificate), nil
-}
-
-func doLoadAndCombineTLSCertificates(ca, cert, key string) error {
-	combinedTLSIdentifier := tlsCertificatesIdentifier(ca, cert, key)
-
+// readAndCombineTLSCertificates loads the certificate in cert, with
+// the chain in ca appended, and its key in key.
+func readAndCombineTLSCertificates(ca, cert, key string) (tls.Certificate, error) {
 	// Read CA certificates chain
 	caB, err := os.ReadFile(ca)
 	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
+		return tls.Certificate{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 	}
 
 	// Read server certificate
 	certB, err := os.ReadFile(cert)
 	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read server cert file: %s", cert)
+		return tls.Certificate{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read server cert file: %s", cert)
 	}
 
 	// Read server key file
 	keyB, err := os.ReadFile(key)
 	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read key file: %s", key)
+		return tls.Certificate{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read key file: %s", key)
 	}
 
 	// Load CA, server cert and key.
-	var certificate []tls.Certificate
 	crt, err := tls.X509KeyPair(append(certB, caB...), keyB)
 	if err != nil {
-		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load and merge tls certificate with CA, ca %s, cert %s, key: %s", ca, cert, key)
+		return tls.Certificate{}, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load and merge tls certificate with CA, ca %s, cert %s, key: %s", ca, cert, key)
 	}
 
-	certificate = []tls.Certificate{crt}
-
-	combinedTLSCertificates.Store(combinedTLSIdentifier, &certificate)
-
-	return nil
+	return crt, nil
 }

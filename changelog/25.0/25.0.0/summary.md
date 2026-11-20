@@ -12,6 +12,7 @@
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
         - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
+        - [Reloading TLS certificates without a restart](#tls-reload)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
         - [VRLog feature removed](#vttablet-vrlog-removed)
@@ -213,6 +214,23 @@ Things to be aware of:
 **Upgrade order**: upgrade both `vtctld` and the tablets before using `--include-binlogs` with `vtctldclient Backup` or `BackupShard`. An older `vtctld` or `vttablet` silently ignores the field and takes a backup without binary logs.
 
 See [#17667](https://github.com/vitessio/vitess/issues/17667).
+
+#### <a id="tls-reload"/>Reloading TLS certificates without a restart</a>
+
+Vitess components can now reload their TLS certificate, key, CA and CRL files from disk without a restart, on `SIGHUP` with the new `--tls-reload-on-sighup` flag, and periodically with the new `--tls-reload-interval` flag. Both are off by default. The files reloaded are those of:
+
+- The gRPC server of every Vitess component (`--grpc-cert`, `--grpc-key`, `--grpc-ca`, `--grpc-crl`, `--grpc-server-ca`), and the MySQL server of `vtgate` and `vtcombo` (`--mysql-server-ssl-cert`, `--mysql-server-ssl-key`, `--mysql-server-ssl-ca`, `--mysql-server-ssl-crl`, `--mysql-server-ssl-server-ca`). `vtgate` already reloaded its MySQL server's TLS config on `SIGHUP`, but reused the certificate, key and CA it had loaded at startup, so only a changed CRL took effect; with the new flags, every file does.
+- The TLS clients of `vtgate`, `vttablet`, `vtctld`, `vtorc`, `vtbackup`, `vtcombo`, `mysqlctld` and `vttestserver`: their gRPC clients (the `--tablet-grpc-*`, `--tablet-manager-grpc-*`, `--vtgate-grpc-*`, `--vtctld-grpc-*` and `--binlog-player-grpc-*` flags), their MySQL client connections to `mysqld` (the `--db-ssl-*` flags), and the connections of the LDAP authentication server to LDAP.
+
+`--tls-reload-interval` (default `0`, disabled) checks the files for changes periodically, which suits deployments that update certificates without signaling the process, such as Kubernetes secrets. `--tls-reload-on-sighup` (default `false`) reloads them on every `SIGHUP`. Without it, `SIGHUP` reloads only the CRL of the MySQL server of `vtgate` and `vtcombo`, under the CA it loaded, as it did before, and leaves every other TLS file as it was loaded. `vttestserver` passes both flags on to the `vtcombo` process it starts, but not the signal: to reload the files of `vtcombo`'s gRPC and MySQL servers on `SIGHUP`, send it to the `vtcombo` process.
+
+New connections use the reloaded files as soon as a reload succeeds; established connections keep the session they negotiated until they close. A gRPC client connection, such as the one from `vtgate` to a `vttablet`, stays open for as long as it is healthy, and uses the reloaded files when it next reconnects. A reload that fails, for instance because a certificate was replaced before its key, is logged and leaves the previous files in use: the next reload tries again. The MySQL and LDAP clients still read their CRL file for every new connection, so a new CRL takes effect for them without a reload, and a CRL file that cannot be read or parsed still fails their new connections; a gRPC client picks up a changed CRL with the next reload, as it does its other files, and keeps the one it loaded while the file cannot be used. A TLS session resumed after a reload is held against the reloaded files: it does not resume once the CA that issued the client's certificate is removed or the CRL revokes it.
+
+Every component listed above already handled `SIGHUP` rather than terminating on it, so sending it to reload the TLS files does not stop any of them. **Note** that operators already send `SIGHUP` to `vttablet` and `vtgate` to reload the table ACLs, `--db-credentials-file` and the static authentication file. With `--tls-reload-on-sighup`, that signal also installs whatever TLS files are on disk. Do not stage new TLS files, such as a new CA ahead of a rolling restart, at the paths a running component uses; if a reload installs them early, restore the previous files and send `SIGHUP` again.
+
+To rotate a CA, first install a CA file that holds both the old and the new CA and reload, then reissue the certificates under the new CA, and remove the old CA last.
+
+Each server exports, labeled by `Server` (`grpc` or `mysql`), `TLSReloadSuccessTimestamp`, the Unix time of the last successful load, `TLSReloadErrors`, the number of failed reloads, and `TLSCertNotAfter`, the Unix time at which the certificate it presents expires. The reloads of a component's TLS clients are counted in `TLSReloadSuccessTimestamp` and `TLSReloadErrors` under `clients`. Every TLS server logs a line naming the certificate it loaded, and exports `TLSReloadSuccessTimestamp` and `TLSCertNotAfter`, from startup, whether or not either flag is set.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 

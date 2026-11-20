@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -138,6 +139,14 @@ var (
 	gRPCEnableOptionalTLS bool
 	// gRPCServerCA if specified will combine server cert and server CA.
 	gRPCServerCA string
+	// tlsReloadInterval is how often the TLS files of the servers and
+	// clients are checked for changes, zero for never.
+	tlsReloadInterval time.Duration
+	// tlsReloadOnSIGHUP is whether SIGHUP reloads the TLS files of the
+	// gRPC and MySQL servers and of the clients. Without it, SIGHUP
+	// reloads only the CRL of vtgate's MySQL server, as it did before
+	// this flag.
+	tlsReloadOnSIGHUP bool
 )
 
 // RegisterGRPCServerFlags registers flags required to run a gRPC server via Run
@@ -178,6 +187,16 @@ func GRPCCertificateAuthority() string {
 	return gRPCCA
 }
 
+// TLSReloadInterval returns the value of the `--tls-reload-interval` flag.
+func TLSReloadInterval() time.Duration {
+	return tlsReloadInterval
+}
+
+// TLSReloadOnSIGHUP returns the value of the `--tls-reload-on-sighup` flag.
+func TLSReloadOnSIGHUP() bool {
+	return tlsReloadOnSIGHUP
+}
+
 // GRPCKey returns the value of the `--grpc-key` flag.
 func GRPCKey() string {
 	return gRPCKey
@@ -206,6 +225,42 @@ func isGRPCEnabled() bool {
 	return false
 }
 
+// newGRPCServerCreds returns the transport credentials of a gRPC server
+// serving TLS from files, and the reloader that keeps them current.
+// credentials.NewTLS copies the config it is given, so a reloaded
+// config reaches handshakes through GetConfigForClient instead, to
+// which gRPC applies its own defaults, such as ALPN.
+func newGRPCServerCreds(files TLSServerFiles, optionalTLS bool) (credentials.TransportCredentials, *TLSReloader, error) {
+	var current atomic.Pointer[tls.Config]
+	reloader, err := NewTLSReloader("grpc", files, tls.VersionTLS12, current.Store)
+	if err != nil {
+		return nil, nil, err
+	}
+	creds := credentials.NewTLS(&tls.Config{
+		MinVersion: tls.VersionTLS12,
+		GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			return current.Load(), nil
+		},
+	})
+	if optionalTLS {
+		// Optional TLS is for moving clients to TLS one at a time: the
+		// plain-text connections are served, unauthenticated, until the
+		// last client has moved and the flag is dropped. Say so plainly
+		// when a client CA is configured, since --grpc-ca then only holds
+		// for the TLS connections, and point at the stats that show the
+		// plain-text connections without claiming they prove that every
+		// client has moved: one that is offline or connects only now and
+		// then does not show in them.
+		if files.CA != "" {
+			log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
+		} else {
+			log.Warn("Optional TLS is active. Plain-text connections will be accepted")
+		}
+		creds = grpcoptionaltls.New(creds)
+	}
+	return creds, reloader, nil
+}
+
 // createGRPCServer create the gRPC server we will be using.
 // It has to be called after flags are parsed, but before
 // services register themselves.
@@ -224,30 +279,13 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if tlsEnabled {
-		config, err := vttls.ServerConfig(gRPCCert, gRPCKey, gRPCCA, gRPCCRL, gRPCServerCA, tls.VersionTLS12)
+		creds, reloader, err := newGRPCServerCreds(TLSServerFiles{Cert: gRPCCert, Key: gRPCKey, CA: gRPCCA, CRL: gRPCCRL, ServerCA: gRPCServerCA}, gRPCEnableOptionalTLS)
 		if err != nil {
 			log.Error("Failed to load gRPC cert/key/ca", slog.Any("error", err))
 			os.Exit(1)
 		}
-
-		// create the creds server options
-		creds := credentials.NewTLS(config)
-		if gRPCEnableOptionalTLS {
-			// Optional TLS is for moving clients to TLS one at a time: the
-			// plain-text connections are served, unauthenticated, until the
-			// last client has moved and the flag is dropped. Say so plainly
-			// when a client CA is configured, since --grpc-ca then only holds
-			// for the TLS connections, and point at the stats that show the
-			// plain-text connections without claiming they prove that every
-			// client has moved: one that is offline or connects only now and
-			// then does not show in them.
-			if gRPCCA != "" {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted and are not authenticated: the client certificate check of --grpc-ca only applies to TLS connections. Drop --grpc-enable-optional-tls once every client uses TLS. The GrpcOptionalTlsOpenConnections and GrpcOptionalTlsConnections stats show whether plain-text connections are open now and whether new ones are still being made; a client that is offline or connects only now and then can show in neither")
-			} else {
-				log.Warn("Optional TLS is active. Plain-text connections will be accepted")
-			}
-			creds = grpcoptionaltls.New(creds)
-		}
+		reloader.StartOnProcessSignals(tlsReloadOnSIGHUP, tlsReloadInterval)
+		OnTermSync(reloader.Stop)
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	// Override the default max message size for both send and receive
