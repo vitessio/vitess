@@ -67,6 +67,7 @@ const (
 	hashPrefixBytes            = 0xCCCC
 	hashPrefixDate             = 0xCCC0
 	hashPrefixDecimal          = 0xDDDD
+	hashPrefixRawBytes         = 0xEEEE
 )
 
 var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot coerce into target type without losing precision")
@@ -231,6 +232,42 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		return nullsafeHashcode128Default(hash, v, collation, coerceTo, sqlmode, values)
 	}
 	return nil
+}
+
+// DistinctHashcode128 is NullsafeHashcode128 for DISTINCT and UNION. It also hashes values of an
+// unknown type, as decimals or by their bytes, and BIT, GEOMETRY and VECTOR values by their bytes.
+func DistinctHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
+	switch {
+	case v.IsNull():
+		hash.Write16(hashPrefixNil)
+	case coerceTo == sqltypes.Unknown && sqltypes.IsNumber(v.Type()):
+		// sqltypes.Unknown would take the float path, which loses precision above 2^53
+		return NullsafeHashcode128(hash, v, collation, sqltypes.Decimal, sqlmode, values)
+	case coerceTo == sqltypes.Unknown:
+		coll := colldata.Lookup(collation)
+		if coll == nil {
+			return UnsupportedCollationHashError
+		}
+		hash.Write16(hashPrefixBytes)
+		coll.Hash(hash, v.Raw(), 0)
+	case coerceTo == sqltypes.Bit, coerceTo == sqltypes.Geometry, coerceTo == sqltypes.Vector:
+		hash.Write16(hashPrefixBytes)
+		colldata.Lookup(collations.CollationBinaryID).Hash(hash, v.Raw(), 0)
+	default:
+		return NullsafeHashcode128(hash, v, collation, coerceTo, sqlmode, values)
+	}
+	return nil
+}
+
+// HashRawBytes128 hashes a value by its bytes, with its own prefix so that it never matches
+// a weight string.
+func HashRawBytes128(hash *vthash.Hasher, v sqltypes.Value) {
+	if v.IsNull() {
+		hash.Write16(hashPrefixNil)
+		return
+	}
+	hash.Write16(hashPrefixRawBytes)
+	colldata.Lookup(collations.CollationBinaryID).Hash(hash, v.Raw(), 0)
 }
 
 func nullsafeHashcode128Default(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {

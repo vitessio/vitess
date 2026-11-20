@@ -248,6 +248,10 @@ func (aj *ApplyJoin) AddColumn(
 	col := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	offset := len(aj.JoinColumns.columns)
 	aj.JoinColumns.add(col)
+	if len(aj.Columns) > 0 {
+		// offsets are already planned, so this column needs its own
+		aj.planOffsetFor(ctx, col)
+	}
 	return offset
 }
 
@@ -278,13 +282,8 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		aj.JoinColumns.addRight(wsExpr)
 	}
 
-	if out >= 0 {
-		aj.addOffset(out)
-	} else {
-		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
-		aj.JoinColumns.add(col)
-		aj.planOffsetFor(ctx, col)
-	}
+	// the column is already in JoinColumns, and a left offset is negative
+	aj.addOffset(out)
 
 	return len(aj.Columns) - 1
 }

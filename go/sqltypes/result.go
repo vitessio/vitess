@@ -192,12 +192,13 @@ func (result *Result) Truncate(l int) *Result {
 		SessionStateChanges: result.SessionStateChanges,
 	}
 	if result.Fields != nil {
-		out.Fields = result.Fields[:l]
+		out.Fields = result.Fields[:l:l]
 	}
 	if result.Rows != nil {
 		out.Rows = make([][]Value, 0, len(result.Rows))
 		for _, r := range result.Rows {
-			out.Rows = append(out.Rows, r[:l])
+			// a caller appending to a row must not write over the truncated columns
+			out.Rows = append(out.Rows, r[:l:l])
 		}
 	}
 	return out

@@ -7482,5 +7482,51 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "DISTINCT over an aggregate that vtgate can't type compares it by its weight string, not in the connection's collation",
+    "query": "select distinct m from (select max(name) as m from user group by col) t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct m from (select max(name) as m from user group by col) t",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SimpleProjection",
+            "Columns": "0,2",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "max(0|2) AS m",
+                "GroupBy": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select max(`name`) as m, col, weight_string(max(`name`)) from `user` where 1 != 1 group by col",
+                    "OrderBy": "1 ASC",
+                    "Query": "select max(`name`) as m, col, weight_string(max(`name`)) from `user` group by col order by col asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]
