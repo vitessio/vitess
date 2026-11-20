@@ -745,6 +745,13 @@ func TestParseStringToFloat(t *testing.T) {
 		{str: "    10  ", val: 10},
 		{str: "2266951196291479516", val: 2266951196291479516},
 		{str: "abcd123", val: 0},
+		{str: "NaN", val: 0},
+		{str: "nan", val: 0},
+		{str: "inf", val: 0},
+		{str: "+INF", val: 0},
+		{str: "-Infinity", val: 0},
+		{str: "nanx", val: 0},
+		{str: "info", val: 0},
 	}
 
 	for _, tc := range tcs {
@@ -753,4 +760,22 @@ func TestParseStringToFloat(t *testing.T) {
 			require.Equal(t, tc.val, got)
 		})
 	}
+}
+
+func TestParseFloat64Special(t *testing.T) {
+	val, err := ParseFloat64Special("NaN")
+	require.NoError(t, err)
+	require.True(t, math.IsNaN(val))
+
+	val, err = ParseFloat64Special("+Inf")
+	require.NoError(t, err)
+	require.True(t, math.IsInf(val, 1))
+
+	val, err = ParseFloat64Special("-Infinity")
+	require.NoError(t, err)
+	require.True(t, math.IsInf(val, -1))
+
+	val, err = ParseFloat64Special("123.45")
+	require.NoError(t, err)
+	require.Equal(t, 123.45, val)
 }

@@ -104,7 +104,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 		}
 		return MakeTrusted(typ, val), nil
 	case IsFloat(typ):
-		if _, err := fastparse.ParseFloat64(hack.String(val)); err != nil {
+		if _, err := fastparse.ParseFloat64Special(hack.String(val)); err != nil {
 			return NULL, err
 		}
 		// The parser accepts Go's NaN, Inf and Infinity, which MySQL has no
@@ -442,7 +442,7 @@ func (v Value) ToFloat64() (float64, error) {
 		return 0, ErrIncompatibleTypeCast
 	}
 
-	return fastparse.ParseFloat64(v.RawStr())
+	return fastparse.ParseFloat64Special(v.RawStr())
 }
 
 // ToUint16 returns the value as MySQL would return it as a uint16.
