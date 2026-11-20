@@ -38,6 +38,7 @@ const (
 	P14
 	P15
 	P16
+	P17
 )
 
 // precedenceFor returns the precedence of an expression.
@@ -46,6 +47,8 @@ const (
 //     Also make sure to add the new constructs to random_expr.go so we have test coverage for the new expressions *
 func precedenceFor(in Expr) Precendence {
 	switch node := in.(type) {
+	case *AssignmentExpr:
+		return P17
 	case *OrExpr:
 		return P16
 	case *XorExpr:
