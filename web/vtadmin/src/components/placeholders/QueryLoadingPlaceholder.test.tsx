@@ -30,7 +30,7 @@ const queryHelper = () => {
         defaultOptions: { queries: { retry: false } },
     });
 
-    const wrapper: React.FC = ({ children }) => (
+    const wrapper: React.FC<React.PropsWithChildren> = ({ children }) => (
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
