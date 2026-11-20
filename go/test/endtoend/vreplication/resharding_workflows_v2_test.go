@@ -525,6 +525,9 @@ func testReshardV2Workflow(t *testing.T) {
 	execMultipleQueries(t, vtgateConn, defaultTargetKs+"/-80", internalSchema)
 	execMultipleQueries(t, vtgateConn, defaultTargetKs+"/80-", internalSchema)
 
+	runningOnlineDDLUUID := execOnlineDDL(t, "online --postpone-completion", defaultTargetKs, "alter table loadtest add column reshard_online_ddl_test int")
+	require.NoError(t, waitForWorkflowState(vc, defaultTargetKs+"."+runningOnlineDDLUUID, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
 	createAdditionalTargetShards(t, "-40,40-80,80-c0,c0-")
 	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
 	validateReadsRouteToSource(t, "replica")
@@ -538,7 +541,7 @@ func testReshardV2Workflow(t *testing.T) {
 	// Confirm that updating Reshard workflows works.
 	testWorkflowUpdate(t)
 
-	testRestOfWorkflow(t)
+	testRestOfWorkflow(t, runningOnlineDDLUUID)
 
 	// Confirm that we lost no customer related writes during the Reshard.
 	dataGenCancel()
@@ -616,7 +619,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	// Confirm that updating MoveTable workflows works.
 	testWorkflowUpdate(t)
 
-	testRestOfWorkflow(t)
+	testRestOfWorkflow(t, "")
 	// Create our primary intra-keyspace materialization.
 	materialize(t, materializeCustomerNameSpec)
 	// Create a second one to confirm that multiple ones get migrated correctly.
@@ -650,7 +653,7 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	require.True(t, listOutputContainsWorkflow(output, "customer_name") && listOutputContainsWorkflow(output, "enterprise_customer") && !listOutputContainsWorkflow(output, "wf1"))
 }
 
-func testPartialSwitches(t *testing.T) {
+func testPartialSwitches(t *testing.T, runningOnlineDDLUUID string) {
 	// nothing switched
 	require.Contains(t, getCurrentStatus(t), wrangler.WorkflowStateNotSwitched)
 	tstWorkflowSwitchReads(t, "replica,rdonly", "zone1")
@@ -671,7 +674,28 @@ func testPartialSwitches(t *testing.T) {
 	tstWorkflowSwitchReads(t, "", "")
 	checkStates(t, wrangler.WorkflowStateNotSwitched, wrangler.WorkflowStateReadsSwitched)
 
+	if runningOnlineDDLUUID != "" {
+		require.NoError(t, waitForWorkflowState(vc, defaultTargetKs+"."+runningOnlineDDLUUID, binlogdatapb.VReplicationWorkflowState_Running.String()))
+		migrations := onlineDDLShow(t, defaultTargetKs, runningOnlineDDLUUID).Migrations
+		require.Len(t, migrations, 2)
+		for _, migration := range migrations {
+			require.Equal(t, vtctldatapb.SchemaMigration_RUNNING, migration.Status)
+		}
+	}
+
 	tstWorkflowSwitchWrites(t)
+	if runningOnlineDDLUUID != "" {
+		keyspace := vc.Cells[vc.CellNames[0]].Keyspaces[defaultTargetKs]
+		for shard, tabletName := range map[string]string{"-40": "zone1-400", "40-80": "zone1-500", "80-c0": "zone1-600", "c0-": "zone1-700"} {
+			tablet := keyspace.Shards[shard].Tablets[tabletName].Vttablet
+			result, err := tablet.QueryTablet(fmt.Sprintf("select count(*) from %s.vreplication where workflow = '%s' and state = 'Running'", sidecarDBIdentifier, runningOnlineDDLUUID), "", false)
+			require.NoError(t, err)
+			require.Len(t, result.Rows, 1)
+			count, err := result.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			require.Equal(t, int64(1), count, "shard %s", shard)
+		}
+	}
 	currentState = nextState
 	nextState = wrangler.WorkflowStateAllSwitched
 	checkStates(t, currentState, nextState)
@@ -700,7 +724,7 @@ func testPartialSwitches(t *testing.T) {
 	checkStates(t, currentState, nextState)
 }
 
-func testRestOfWorkflow(t *testing.T) {
+func testRestOfWorkflow(t *testing.T, runningOnlineDDLUUID string) {
 	// Relax the throttler so that it does not cause switches to fail because it can block
 	// the catchup for the intra-keyspace materialization.
 	req := &vtctldatapb.UpdateThrottlerConfigRequest{
@@ -711,7 +735,7 @@ func testRestOfWorkflow(t *testing.T) {
 	res, err := throttler.UpdateThrottlerTopoConfigRaw(vc.VtctldClient, defaultTargetKs, req, nil, nil)
 	require.NoError(t, err, res)
 
-	testPartialSwitches(t)
+	testPartialSwitches(t, runningOnlineDDLUUID)
 
 	// test basic forward and reverse flows
 	waitForLowLag(t, defaultTargetKs, "wf1")
