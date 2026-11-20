@@ -17,12 +17,46 @@ limitations under the License.
 package http
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// TestAdaptRequestCancellation checks that a client disconnect cancels reads
+// but not writes.
+func TestAdaptRequestCancellation(t *testing.T) {
+	for method, wantErr := range map[string]error{
+		http.MethodGet:    context.Canceled,
+		http.MethodPost:   nil,
+		http.MethodPut:    nil,
+		http.MethodDelete: nil,
+	} {
+		t.Run(method, func(t *testing.T) {
+			request := httptest.NewRequest(method, "/", nil)
+			ctx, cancel := context.WithCancel(request.Context())
+			cancel()
+			request = request.WithContext(ctx)
+
+			var handlerErr error
+			handler := NewAPI(nil, Options{}).Adapt(func(ctx context.Context, _ Request, _ *API) *JSONResponse {
+				handlerErr = ctx.Err()
+				return NewJSONResponse(nil, nil)
+			})
+
+			handler.ServeHTTP(httptest.NewRecorder(), request)
+			if wantErr != nil {
+				require.ErrorIs(t, handlerErr, wantErr)
+			} else {
+				require.NoError(t, handlerErr)
+			}
+		})
+	}
+}
 
 func TestDeprecateQueryParam(t *testing.T) {
 	t.Parallel()

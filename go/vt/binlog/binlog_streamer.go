@@ -177,6 +177,7 @@ func NewStreamer(cp dbconfigs.Connector, se *schema.Engine, clientCharset *binlo
 func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
+	//nolint:contextcheck,nolintlint // The schema engine owns its pool lifecycle.
 	if err := bls.se.Open(); err != nil {
 		return err
 	}
@@ -192,7 +193,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		log.Info("stream ended", attrs...)
 	}()
 
-	if bls.conn, err = NewBinlogConnection(bls.cp); err != nil {
+	if bls.conn, err = NewBinlogConnectionContext(ctx, bls.cp); err != nil {
 		return err
 	}
 	defer bls.conn.Close()

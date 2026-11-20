@@ -17,6 +17,7 @@ limitations under the License.
 package dynamic
 
 import (
+	"context"
 	"net/http"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -28,6 +29,6 @@ import (
 // It is implemented by vtadmin.API.
 type API interface {
 	vtadminpb.VTAdminServer
-	WithCluster(c *cluster.Cluster, id string) (API, error)
+	WithCluster(ctx context.Context, c *cluster.Cluster, id string) (API, error)
 	Handler() http.Handler
 }
