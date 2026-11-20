@@ -442,7 +442,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 			sstate.serving = false
 		}
 	}
-	if !th.Serving {
+	if !th.Serving && th.PrimaryTermStartTime != 0 {
 		// Once we have seen a non-serving primary healthcheck, there is no need for us to explicitly wait
 		// for a reparent to happen. We use waitForReparent to ensure that we don't prematurely stop
 		// buffering when we receive a serving healthcheck from the primary that is being demoted.
@@ -451,6 +451,11 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		// stops gracefully because the new candidate couldn't get caught up in time. In this case, we promote
 		// the previous primary back. Without turning off waitForReparent here, we wouldn't be able to stop
 		// buffering for that case.
+		// A not-serving check with no term must not clear the flag: the term is only set from a
+		// received health stream response, so a zero term means this vtgate never reached the tablet.
+		// A dead former primary that is still PRIMARY in topo produces such a check on every failed
+		// health stream retry, and clearing the flag on it would let a stale serving check from the
+		// primary being demoted end buffering before the reparent finishes.
 		sstate.waitForReparent = false
 	}
 
