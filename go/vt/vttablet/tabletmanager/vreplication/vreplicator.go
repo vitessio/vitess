@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/capabilities"
@@ -129,6 +130,24 @@ type vreplicator struct {
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
 	workflowConfig             *vttablet.VReplicationConfig
+
+	// preserveMessage is set by the controller when this vreplicator runs
+	// for a retry. The stream's message then holds the error that made the
+	// previous run fail, so setState with an empty message does not clear it
+	// while the state stays the same. The position saves of the copy phase
+	// (catch-up, fast-forward and copy) keep it too: they do not show that
+	// this run got past the error. The kept error is cleared once the run
+	// makes progress: in the copy phase by
+	// clearPreservedMessageOnCopyProgress after the first copied rows, and
+	// in the replicate phase by the first position save or, on a source
+	// with no writes, by clearPreservedMessageOnIdle on the first idle
+	// heartbeat. It is also cleared once the run is throttled, by
+	// updateTimeThrottled, as the run may then wait without making progress
+	// for as long as the throttling lasts.
+	preserveMessage atomic.Bool
+	// rowsCopiedAtStart is the copy row count when this vreplicator was
+	// created, so the copy phase can tell when this run has copied rows.
+	rowsCopiedAtStart int64
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
@@ -178,6 +197,7 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		workflowConfig:  workflowConfig,
 	}
 	vr.setExistingRowsCopied()
+	vr.rowsCopiedAtStart = vr.stats.CopyRowCount.Get()
 	return vr
 }
 
@@ -393,7 +413,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 				vr.stats.ErrorCounts.Add([]string{"Replicate"}, 1)
 				return err
 			}
-			return newVPlayer(vr, settings, nil, replication.Position{}, "replicate").play(ctx)
+			return newVPlayer(vr, settings, nil, replication.Position{}, replicatePhase).play(ctx)
 		}
 	}
 }
@@ -630,6 +650,13 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	}
 	vr.stats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=left(%v, 1000) where id=%v", encodeString(state.String()), encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	// On a retry, the row is usually already in this state and its message
+	// is the error that made the previous run fail. Keep that error instead
+	// of clearing it before the retry has made any progress. A change to
+	// another state still clears the message.
+	if message == "" && vr.preserveMessage.Load() {
+		query += fmt.Sprintf(" and (state != %v or ifnull(message, '') = '')", encodeString(state.String()))
+	}
 	// If we're batching a transaction, then include the state update
 	// in the current transaction batch.
 	if vr.dbClient.InTransaction && vr.dbClient.maxBatchSize > 0 {
@@ -651,6 +678,48 @@ func (vr *vreplicator) setState(state binlogdatapb.VReplicationWorkflowState, me
 	vr.state = state
 
 	return nil
+}
+
+// generateUpdatePos returns the statement that saves pos for the stream. It
+// clears the message unless keepMessage is set and the message is the error
+// kept from a failed run (preserveMessage).
+func (vr *vreplicator) generateUpdatePos(pos replication.Position, txTimestamp int64, keepMessage bool) string {
+	if keepMessage && vr.preserveMessage.Load() {
+		return binlogplayer.GenerateUpdatePosKeepMessage(vr.id, pos, time.Now().Unix(), txTimestamp, vr.stats.CopyRowCount.Get(), vr.workflowConfig.StoreCompressedGTID)
+	}
+	return binlogplayer.GenerateUpdatePos(vr.id, pos, time.Now().Unix(), txTimestamp, vr.stats.CopyRowCount.Get(), vr.workflowConfig.StoreCompressedGTID)
+}
+
+// clearPreservedMessageOnCopyProgress clears the message kept from a failed
+// run once this run has copied rows. The position saves of the copy phase
+// keep the message, so without it, a retry that recovers in the copy phase
+// keeps showing the old error until the copy phase ends.
+func (vr *vreplicator) clearPreservedMessageOnCopyProgress() {
+	if !vr.preserveMessage.Load() || vr.stats.CopyRowCount.Get() <= vr.rowsCopiedAtStart {
+		return
+	}
+	vr.clearPreservedMessage()
+}
+
+// clearPreservedMessageOnIdle clears the message kept from a failed run when
+// the vplayer of the replicate phase receives a heartbeat with no transaction
+// open: the source is idle and every event it sent has been applied. Without
+// it, a retry that recovers while replicating, on a source with no writes,
+// keeps showing the old error until the first position save.
+func (vr *vreplicator) clearPreservedMessageOnIdle() {
+	if !vr.preserveMessage.Load() {
+		return
+	}
+	vr.clearPreservedMessage()
+}
+
+func (vr *vreplicator) clearPreservedMessage() {
+	query := fmt.Sprintf("update _vt.vreplication set message='' where id=%v", vr.id)
+	if _, err := vr.dbClient.Execute(query); err != nil {
+		log.Warn("Unable to clear the message kept from the previous run", vr.logAttrs(slog.Any("error", err))...)
+		return
+	}
+	vr.preserveMessage.Store(false)
 }
 
 func encodeString(in string) string {
@@ -779,6 +848,10 @@ func (vr *vreplicator) throttlerAppName() string {
 // tablet throttler over time. It also increments the global throttled count to keep
 // track of how many times in total vreplication has been throttled across all workflows
 // (both ones that currently exist and ones that no longer do).
+// Once time_throttled is saved, it also clears the message kept from a failed
+// run (preserveMessage): time_throttled and component_throttled then explain
+// why the stream is not progressing, whereas the kept error would stay for as
+// long as the throttling lasts.
 func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reasonThrottled string) error {
 	appName := appThrottled.String()
 	vr.stats.ThrottledCounts.Add([]string{"tablet", appName}, 1)
@@ -791,6 +864,9 @@ func (vr *vreplicator) updateTimeThrottled(appThrottled throttlerapp.Name, reaso
 		}
 		if _, err := vr.dbClient.ExecuteFetch(update, maxRows); err != nil {
 			return fmt.Errorf("error %v updating time throttled", err)
+		}
+		if vr.preserveMessage.Load() {
+			vr.clearPreservedMessage()
 		}
 		return nil
 	})

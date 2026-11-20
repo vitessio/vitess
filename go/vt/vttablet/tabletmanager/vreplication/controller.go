@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -69,6 +70,20 @@ const (
 	RetriesExhaustedIndicator = "retries exhausted"
 )
 
+// pickedTabletMessagePrefix starts the notice written after the tablet picker
+// selected a source tablet.
+const pickedTabletMessagePrefix = "Picked source tablet: "
+
+// retryKeepsMessagePredicate limits the "Picked source tablet" notice on a
+// retry to rows whose message is empty (or NULL) or is itself a tablet picker
+// message. On a retry, the message holds the error that made the previous
+// run fail, and the notice must not hide it. A NULL message counts as empty:
+// a new row's message is NULL until something writes it.
+var retryKeepsMessagePredicate = "(ifnull(message, '') = '' or message like " +
+	encodeString(pickedTabletMessagePrefix+"%") + " or message like " +
+	encodeString("Error picking tablet%") + " or message like " +
+	encodeString("Error creating tablet picker%") + ")"
+
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
@@ -98,6 +113,16 @@ type controller struct {
 
 	// Stores the last picked tablet so that it can be ignored if a non-transient error occurs.
 	lastPickedTablet *topodatapb.TabletAlias
+
+	// retrying is true when runBlp runs again after a failed run, so the
+	// stream's message holds the error that made the previous run fail.
+	// It is false for the first run of a controller, which the engine
+	// creates on open, on Exec (for example Workflow start or update), and
+	// on tablet restart. It is also false after a run that ended because
+	// the source vstreamer gave up while fully throttled (see
+	// isVStreamerThrottleGiveUp): the retry then clears the message as for
+	// a first run. Only the run goroutine reads or writes it.
+	retrying bool
 
 	// Tablet picker parameters used when creating a tablet picker with ignoreTablets.
 	tpTs             *topo.Server
@@ -273,7 +298,20 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
+		ct.retrying = !isVStreamerThrottleGiveUp(err)
 	}
+}
+
+// isVStreamerThrottleGiveUp reports whether a run ended because the source
+// vstreamer had been fully throttled for too long and gave up so that the
+// stream is retried. The stream is then only waiting on the throttler, and
+// its message must not keep reporting that as an error across retries.
+// Only the error text reaches us from a remote source tablet, as
+// "vttablet: rpc error: code = Internal desc = stream (at source tablet)
+// error @ <position>: vstreamer has been fully throttled for more than ...",
+// so this matches the text rather than an error value or code.
+func isVStreamerThrottleGiveUp(err error) bool {
+	return err != nil && strings.Contains(err.Error(), vstreamer.FullyThrottledErrorPrefix)
 }
 
 func setDBClientSettings(dbClient binlogplayer.DBClient, workflowConfig *vttablet.VReplicationConfig) error {
@@ -371,6 +409,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		defer vsClient.Close(ctx)
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
+		// On a retry, keep the previous run's error visible until this run
+		// makes progress. A first run clears the message as before.
+		vr.preserveMessage.Store(ct.retrying)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
 
@@ -410,11 +451,28 @@ func terminalVReplicationError(err error, unrecoverable bool, maxTimeToRetry tim
 }
 
 func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string) error {
+	return ct.setMessageWhere(dbClient, message, "")
+}
+
+// setPickedTabletMessage writes the "Picked source tablet" notice. On a
+// retry, it does not replace the error that made the previous run fail.
+func (ct *controller) setPickedTabletMessage(dbClient binlogplayer.DBClient, alias *topodatapb.TabletAlias) error {
+	predicate := ""
+	if ct.retrying {
+		predicate = retryKeepsMessagePredicate
+	}
+	return ct.setMessageWhere(dbClient, pickedTabletMessagePrefix+alias.String(), predicate)
+}
+
+func (ct *controller) setMessageWhere(dbClient binlogplayer.DBClient, message, predicate string) error {
 	ct.blpStats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,
 	})
 	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	if predicate != "" {
+		query += " and " + predicate
+	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		// Wrap the real failure, not the query: the query quotes the message,
 		// which may quote an earlier MySQL error carrying its own "(errno N)
@@ -451,7 +509,7 @@ func (ct *controller) pickSourceTablet(ctx context.Context, dbClient binlogplaye
 	if err != nil {
 		return tablet, err
 	}
-	ct.setMessage(dbClient, "Picked source tablet: "+tablet.Alias.String())
+	ct.setPickedTabletMessage(dbClient, tablet.Alias)
 	log.Info("found eligible source tablet", ct.logAttrs(slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))...)
 	ct.sourceTablet.Store(tablet.Alias)
 	ct.lastPickedTablet = tablet.Alias

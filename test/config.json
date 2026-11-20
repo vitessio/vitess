@@ -2185,6 +2185,25 @@
         "binlog-compression"
       ]
     },
+    "vreplication_message_overwrite": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/vreplication"
+      ],
+      "Args": [
+        "-run",
+        "TestVReplicationMessageOverwrite"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vreplication_cellalias",
+      "Tags": [],
+      "Needs": [
+        "larger-runner",
+        "limit-resources",
+        "binlog-compression"
+      ]
+    },
     "sidecardb": {
       "File": "unused.go",
       "Packages": [

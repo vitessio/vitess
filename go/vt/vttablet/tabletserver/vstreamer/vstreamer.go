@@ -72,6 +72,12 @@ var HeartbeatTime = 900 * time.Millisecond
 // us a natural backoff period.
 var fullyThrottledTimeout = 10 * time.Minute
 
+// FullyThrottledErrorPrefix starts the error a vstreamer returns when it has
+// been fully throttled for longer than fullyThrottledTimeout. VReplication
+// matches it in the error text, the only part of the error that reaches it
+// from a remote source tablet.
+const FullyThrottledErrorPrefix = "vstreamer has been fully throttled for more than"
+
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
 	ctx    context.Context
@@ -424,7 +430,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				curtime := time.Now().Unix()
 				if !throttledTime.CompareAndSwap(0, curtime) {
 					if curtime-throttledTime.Load() > int64(fullyThrottledTimeout.Seconds()) {
-						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vstreamer has been fully throttled for more than %v, giving up so that we can retry", fullyThrottledTimeout)
+						throttlerErrs <- vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s %v, giving up so that we can retry", FullyThrottledErrorPrefix, fullyThrottledTimeout)
 						return
 					}
 				}

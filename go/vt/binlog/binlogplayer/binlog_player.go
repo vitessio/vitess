@@ -695,17 +695,27 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
 func GenerateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
+	return generateUpdatePos(uid, pos, timeUpdated, txTimestamp, rowsCopied, compress, ", message=''")
+}
+
+// GenerateUpdatePosKeepMessage returns the statement GenerateUpdatePos
+// returns, without clearing the message.
+func GenerateUpdatePosKeepMessage(uid int32, pos replication.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
+	return generateUpdatePos(uid, pos, timeUpdated, txTimestamp, rowsCopied, compress, "")
+}
+
+func generateUpdatePos(uid int32, pos replication.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool, setMessage string) string {
 	strGTID := encodeString(replication.EncodePosition(pos))
 	if compress {
 		strGTID = fmt.Sprintf("compress(%s)", strGTID)
 	}
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, rows_copied=%v, message='' where id=%v",
-			strGTID, timeUpdated, txTimestamp, rowsCopied, uid)
+			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, rows_copied=%v%s where id=%v",
+			strGTID, timeUpdated, txTimestamp, rowsCopied, setMessage, uid)
 	}
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
+		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v%s where id=%v", strGTID, timeUpdated, rowsCopied, setMessage, uid)
 }
 
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
