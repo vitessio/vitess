@@ -140,3 +140,32 @@ func TestSuspendableTickerTick(t *testing.T) {
 		assert.Equal(t, int64(1), after-before)
 	})
 }
+
+// TestSuspendableTickerStopUnblocksTickNow checks that a TickNow whose tick nothing reads returns once the
+// ticker is stopped, whether it was called before or after Stop, so that a goroutine that ticks the ticker
+// doesn't outlive it.
+func TestSuspendableTickerStopUnblocksTickNow(t *testing.T) {
+	tickNow := func(ticker *SuspendableTicker) *atomic.Bool {
+		returned := &atomic.Bool{}
+		go func() {
+			ticker.TickNow()
+			returned.Store(true)
+		}()
+		return returned
+	}
+
+	t.Run("before Stop", func(t *testing.T) {
+		ticker := NewSuspendableTicker(time.Hour, false)
+		t.Cleanup(ticker.Stop)
+		returned := tickNow(ticker)
+		assert.Never(t, returned.Load, time.Second, 10*time.Millisecond, "TickNow returned while nothing read the tick")
+		ticker.Stop()
+		assert.Eventually(t, returned.Load, 30*time.Second, 10*time.Millisecond, "TickNow is still blocked after Stop")
+	})
+	t.Run("after Stop", func(t *testing.T) {
+		ticker := NewSuspendableTicker(time.Hour, false)
+		ticker.Stop()
+		returned := tickNow(ticker)
+		assert.Eventually(t, returned.Load, 30*time.Second, 10*time.Millisecond, "TickNow blocked after Stop")
+	})
+}
