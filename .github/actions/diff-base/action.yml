@@ -1,0 +1,50 @@
+name: "Find the commit to diff against"
+description: >-
+  Find the commit that dorny/paths-filter should diff the checked-out commit
+  against, for its `base` input. Needs a checkout with fetch-depth: 2.
+outputs:
+  sha:
+    description: "The commit to diff against"
+    value: ${{ steps.diff-base.outputs.sha }}
+runs:
+  using: "composite"
+  steps:
+    # On pull requests, the merge commit's first parent:
+    # github.event.pull_request.base.sha is not updated when the base branch
+    # moves, so paths-filter would also count the base branch's newer commits.
+    # With token: '', paths-filter diffs against `base` on pull_request events
+    # too (see its README); action.yml's input description is stale.
+    #
+    # On pushes, the commit before the push. Without a base, paths-filter diffs
+    # against the merge base with the default branch: on release branches that
+    # fetches hundreds of commits, and in vitess-security, whose default branch
+    # is `default`, the fetch fails for lack of credentials. A push of several
+    # commits leaves that commit outside the shallow clone, so it is fetched
+    # here with the job's token.
+    #
+    # The first push of a branch or tag has no commit before it. It is diffed
+    # against a local commit with an empty tree, so every file counts as added
+    # and every filter matches.
+    - name: Find the commit to diff against
+      id: diff-base
+      shell: bash
+      env:
+        BEFORE: ${{ github.event.before }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+          echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+        elif [[ "${BEFORE}" =~ ^[0-9a-f]{40}$ && ! "${BEFORE}" =~ ^0+$ ]]; then
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+            echo "::add-mask::${auth}"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+              fetch --no-tags --depth=1 origin "${BEFORE}"
+          fi
+          echo "sha=${BEFORE}" >> "$GITHUB_OUTPUT"
+        else
+          empty_tree="$(git hash-object -t tree -w /dev/null)"
+          empty_commit="$(git -c user.name=diff-base -c user.email=diff-base@localhost \
+            commit-tree "${empty_tree}" -m "Empty tree")"
+          echo "sha=${empty_commit}" >> "$GITHUB_OUTPUT"
+        fi
