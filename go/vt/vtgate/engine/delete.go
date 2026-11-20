@@ -125,7 +125,6 @@ func (del *Delete) description() PrimitiveDescription {
 		"Query":                del.Query,
 		"OwnedVindexQuery":     del.OwnedVindexQuery,
 		"MultiShardAutocommit": del.MultiShardAutocommit,
-		"QueryTimeout":         del.QueryTimeout,
 		"NoAutoCommit":         del.PreventAutoCommit,
 	}
 

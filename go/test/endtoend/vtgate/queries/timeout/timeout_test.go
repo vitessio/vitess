@@ -179,6 +179,28 @@ func TestQueryTimeoutWithoutVTGateDefault(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestQueryTimeoutStreaming checks that a streaming query times out after its
+// QUERY_TIMEOUT_MS, and ignores a negative value, as a query that isn't
+// streamed does. A query that ignores it gets the session's timeout.
+func TestQueryTimeoutStreaming(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, mcmp.VtConn, "insert into t1(id1, id2) values (1,2)")
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	// Set the session's timeout rather than rely on VTGate's default, which
+	// TestQueryTimeoutWithoutVTGateDefault turns off.
+	utils.Exec(t, mcmp.VtConn, "set query_timeout = 100")
+
+	// sleep take in seconds, so 0.1 is 100ms
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=500 */ sleep(0.2) from t1 where id1 = 1")
+	_, err := utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=20 */ sleep(0.1) from t1 where id1 = 1")
+	require.ErrorContains(t, err, "DeadlineExceeded")
+	utils.Exec(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=-1 */ sleep(0) from t1 where id1 = 1")
+	_, err = utils.ExecAllowError(t, mcmp.VtConn, "select /*vt+ QUERY_TIMEOUT_MS=-1 */ sleep(0.24) from t1 where id1 = 1")
+	require.ErrorContains(t, err, "DeadlineExceeded")
+}
+
 // TestOverallQueryTimeout tests that the query timeout is applied to the overall execution of a query
 // and not just individual routes.
 func TestOverallQueryTimeout(t *testing.T) {

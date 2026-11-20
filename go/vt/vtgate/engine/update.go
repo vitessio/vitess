@@ -197,7 +197,6 @@ func (upd *Update) description() PrimitiveDescription {
 		"Query":                upd.Query,
 		"OwnedVindexQuery":     upd.OwnedVindexQuery,
 		"MultiShardAutocommit": upd.MultiShardAutocommit,
-		"QueryTimeout":         upd.QueryTimeout,
 		"NoAutoCommit":         upd.PreventAutoCommit,
 	}
 
