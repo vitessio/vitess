@@ -37,8 +37,15 @@ type (
 		Run     Runner
 		Schema  []*querypb.Field
 		Compare *Comparison
+		// SQLMode is the sql_mode the case runs under, in MySQL and in the
+		// evalengine. Empty means the default.
+		SQLMode string
 	}
 )
+
+// SQLModeZeroDates is MySQL's default sql_mode without NO_ZERO_DATE and
+// NO_ZERO_IN_DATE, so that MySQL accepts zero dates.
+const SQLModeZeroDates = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 
 func (tc TestCase) Name() string {
 	ptr := reflect.ValueOf(tc.Run).Pointer()
