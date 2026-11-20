@@ -15106,6 +15106,63 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		},
 	}
 
+	// With IncludeVschema, the tables that are missing from the vschema must be
+	// reported for the shard they were found on as well as for the keyspace.
+	// ks3 has a primary in each of its two shards; only -80 has a table that is
+	// not in the vschema, so 80- must not get that finding.
+	t.Run("include vschema: table not in vschema on one of two shards", func(t *testing.T) {
+		testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+			Name: "ks3",
+			Keyspace: &topodatapb.Keyspace{
+				KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+			},
+		})
+		testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+			AlsoSetShardPrimary:  true,
+			ForceSetShardPrimary: true,
+		}, &topodatapb.Tablet{
+			Keyspace: "ks3",
+			Shard:    "-80",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 300},
+			Hostname: "ks3-00-80-primary",
+		}, &topodatapb.Tablet{
+			Keyspace: "ks3",
+			Shard:    "80-",
+			Type:     topodatapb.TabletType_PRIMARY,
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 301},
+			Hostname: "ks3-80-00-primary",
+		})
+		require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name: "ks3",
+			Keyspace: &vschemapb.Keyspace{
+				Tables: map[string]*vschemapb.Table{"in_vschema": {}},
+			},
+		}))
+		setupSchema(&topodatapb.TabletAlias{Cell: "zone1", Uid: 300}, schema1)
+		setupSchema(&topodatapb.TabletAlias{Cell: "zone1", Uid: 301}, &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:    "in_vschema",
+				Columns: []string{"c1"},
+			}},
+		})
+
+		resp, err := vtctld.ValidateSchemaKeyspace(ctx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
+			Keyspace:       "ks3",
+			IncludeVschema: true,
+		})
+		require.NoError(t, err)
+
+		expected := "ks3/-80 has tables that are not in the vschema: [not_in_vschema]"
+		utils.MustMatch(t, &vtctldatapb.ValidateSchemaKeyspaceResponse{
+			Results: []string{expected},
+			ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+				"-80": {Results: []string{expected}},
+				"80-": {},
+			},
+		}, resp)
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
