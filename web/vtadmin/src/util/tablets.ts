@@ -32,19 +32,12 @@ export const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce
 );
 
 /**
- * formatAlias formats a tablet.alias object as a single string, The Vitess Way™.
+ * formatAlias formats a tablet.alias object as a single string, The Vitess Way™:
+ * the cell, a hyphen, and the uid left-padded with zeroes to 10 digits
+ * (e.g., "zone1-0000000100"). This matches topoproto.TabletAliasString.
  */
 export const formatAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
-    alias?.uid ? `${alias.cell}-${alias.uid}` : null;
-
-/**
- * formatAlias formats a tablet.alias object as a single string,
- * with the uid left-padded with zeroes.
- *
- * This function can be removed once https://github.com/vitessio/vitess/issues/8751 is complete.
- */
-export const formatPaddedAlias = <A extends topodata.ITabletAlias>(alias: A | null | undefined) =>
-    alias?.cell && alias?.uid ? `${alias.cell}-${padStart(alias.uid.toString(), 10, '0')}` : null;
+    alias?.cell && alias.uid != null ? `${alias.cell}-${padStart(alias.uid.toString(), 10, '0')}` : null;
 
 export const formatType = (t: pb.Tablet) => t.tablet?.type && TABLET_TYPES[t.tablet?.type];
 
