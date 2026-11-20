@@ -370,3 +370,22 @@ ORDER BY
 	res := utils.Exec(t, mcmp.VtConn, query)
 	require.NotEmpty(t, res.Rows)
 }
+
+// The subquery delays route merging until an ApplyJoin rewrite, which resets
+// info-schema routing. Its generated bind variables must survive that reset.
+func TestInfoSchemaJoinAfterSubqueryPreservesRouting(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	query := fmt.Sprintf(`SELECT t.table_name, c.column_name
+FROM information_schema.tables AS t
+JOIN (
+ SELECT table_name, column_name
+ FROM information_schema.columns
+ WHERE table_schema = '%s' AND EXISTS (SELECT 1)
+) AS c ON t.table_name = c.table_name
+WHERE t.table_schema = '%s' AND t.table_name = 't1'
+ORDER BY c.column_name`, keyspaceName, keyspaceName)
+	res := utils.Exec(t, conn, query)
+	assert.Equal(t, `[[VARCHAR("t1") VARCHAR("id1")] [VARCHAR("t1") VARCHAR("id2")]]`, fmt.Sprint(res.Rows))
+}
