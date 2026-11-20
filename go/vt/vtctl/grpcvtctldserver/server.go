@@ -2395,22 +2395,25 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		var truePrimaryTimestamp time.Time
-		for _, ti := range tabletMap {
-			if ti.Type == topodatapb.TabletType_PRIMARY {
-				primaryTimestamp := ti.GetPrimaryTermStartTime()
-				if primaryTimestamp.After(truePrimaryTimestamp) {
-					truePrimaryTimestamp = primaryTimestamp
-				}
+		fetched := slices.Collect(maps.Values(tabletMap))
+		terms := latestPrimaryTerms(fetched)
+
+		// A tablet alias filter can leave out a shard's current primary, so
+		// the fetched tablets alone can make a stale primary look current.
+		if len(req.TabletAliases) > 0 && mayReturnPrimaries(req.TabletType) {
+			if err := s.addShardRecordPrimaryTerms(ctx, fetched, terms, req.Strict); err != nil {
+				return nil, err
 			}
 		}
 
 		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
-		for _, ti := range tabletMap {
+		for _, ti := range fetched {
+			// Relabel stale primaries before filtering by tablet type, so the
+			// filter matches the type we report.
+			adjustTypeForStalePrimary(ti, terms[topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)])
 			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
 				continue
 			}
-			adjustTypeForStalePrimary(ti, truePrimaryTimestamp)
 			tablets = append(tablets, ti.Tablet)
 		}
 
@@ -2514,6 +2517,74 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	return &vtctldatapb.GetTabletsResponse{
 		Tablets: adjustedTablets,
 	}, nil
+}
+
+// mayReturnPrimaries reports whether a request filtered by tabletType can
+// include PRIMARY tablets in its response. Only then does it matter whether a
+// primary is stale.
+func mayReturnPrimaries(tabletType topodatapb.TabletType) bool {
+	return tabletType == topodatapb.TabletType_UNKNOWN || tabletType == topodatapb.TabletType_PRIMARY
+}
+
+// latestPrimaryTerms returns the newest primary term start time among the
+// PRIMARY tablets of each shard in tablets, keyed by keyspace/shard.
+func latestPrimaryTerms(tablets []*topo.TabletInfo) map[string]time.Time {
+	terms := make(map[string]time.Time)
+	for _, ti := range tablets {
+		if ti.Type != topodatapb.TabletType_PRIMARY {
+			continue
+		}
+		key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
+		if term := ti.GetPrimaryTermStartTime(); term.After(terms[key]) {
+			terms[key] = term
+		}
+	}
+	return terms
+}
+
+// addShardRecordPrimaryTerms raises each shard's entry in terms to the primary
+// term start time in the shard's topo record, when that one is newer. A
+// filtered request may not have fetched a shard's current primary, so the
+// fetched tablets alone can make a stale primary look current. Only shards
+// with a PRIMARY tablet in tablets are read. If a shard record can't be read,
+// the error is returned when strict is set; otherwise that shard keeps the
+// terms seen in tablets.
+func (s *VtctldServer) addShardRecordPrimaryTerms(ctx context.Context, tablets []*topo.TabletInfo, terms map[string]time.Time, strict bool) error {
+	shards := make(map[string]*topo.TabletInfo)
+	for _, ti := range tablets {
+		if ti.Type == topodatapb.TabletType_PRIMARY {
+			shards[topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)] = ti
+		}
+	}
+
+	var (
+		mu sync.Mutex
+		eg errgroup.Group
+	)
+	eg.SetLimit(int(topo.DefaultReadConcurrency))
+	for key, ti := range shards {
+		eg.Go(func() error {
+			si, err := s.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+			if err != nil {
+				return topoErrorf(err, "GetShard(%s) failed", key)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if term := si.GetPrimaryTermStartTime(); term.After(terms[key]) {
+				terms[key] = term
+			}
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		if strict {
+			return err
+		}
+		log.Warn("GetTablets could not read some shard records; judging stale primaries in those shards by the fetched tablets only", slog.Any("error", err))
+	}
+	return nil
 }
 
 // GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
