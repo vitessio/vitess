@@ -424,6 +424,25 @@ func TestExecutorSetOp(t *testing.T) {
 		result: returnNoResult("character_set_client", "varchar"),
 		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4",
 	}, {
+		// only character_set_results may be NULL
+		in:     "set character_set_client = null",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set null for character_set_client: use utf8mb4",
+	}, {
+		// DEFAULT takes the server's global value, which cannot be judged here
+		in:     "set character_set_client = default",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set default for character_set_client: use utf8mb4",
+	}, {
+		// a non-constant value cannot be judged, so it is refused, not ignored
+		in:     "set character_set_connection = concat('sj', 'is')",
+		result: returnNoResult("character_set_connection", "varchar"),
+		err:    "unsupported connection character set concat('sj', 'is') for character_set_connection: use utf8mb4",
+	}, {
+		// except a user variable, which mysqldump output restores the character set from
+		in:     "set character_set_client = @old_character_set_client",
+		result: returnNoResult("character_set_client", "varchar"),
+	}, {
 		in:     "set collation_connection = 255",
 		result: returnNoResult("collation_connection", "varchar"),
 	}, {
