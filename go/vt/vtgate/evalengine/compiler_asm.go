@@ -4868,11 +4868,12 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset.Charset, offset int) {
+func (asm *assembler) Fn_REGEXP_LIKE(matchers *regexpMatchers, negate bool, c charset.Charset, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
-		m.Reset(charset.Expand(nil, input.bytes, c))
+		m := matchers.get(charset.Expand(nil, input.bytes, c))
+		defer matchers.put(m)
 
 		ok, err := m.Find()
 		if err != nil {
@@ -4931,7 +4932,7 @@ func (asm *assembler) Fn_REGEXP_LIKE_slow(negate bool, c colldata.Charset, flags
 	}, "FN REGEXP_LIKE_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_INSTR(m *icuregex.Matcher, c charset.Charset, offset int) {
+func (asm *assembler) Fn_REGEXP_INSTR(matchers *regexpMatchers, c charset.Charset, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
@@ -4966,7 +4967,8 @@ func (asm *assembler) Fn_REGEXP_INSTR(m *icuregex.Matcher, c charset.Charset, of
 			}
 		}
 
-		m.Reset(runes[pos-1:])
+		m := matchers.get(runes[pos-1:])
+		defer matchers.put(m)
 
 		found := false
 		for i := int64(0); i < occ; i++ {
@@ -5069,7 +5071,7 @@ func (asm *assembler) Fn_REGEXP_INSTR_slow(c colldata.Charset, flags icuregex.Re
 	}, "FN REGEXP_INSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_SUBSTR(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+func (asm *assembler) Fn_REGEXP_SUBSTR(matchers *regexpMatchers, merged collations.TypedCollation, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
@@ -5096,7 +5098,8 @@ func (asm *assembler) Fn_REGEXP_SUBSTR(m *icuregex.Matcher, merged collations.Ty
 			occ = occurrence(env.vm.stack[env.vm.sp-offset+2].(*evalInt64), occ)
 		}
 
-		m.Reset(runes[pos-1:])
+		m := matchers.get(runes[pos-1:])
+		defer matchers.put(m)
 
 		found := false
 		for i := int64(0); i < occ; i++ {
@@ -5193,7 +5196,7 @@ func (asm *assembler) Fn_REGEXP_SUBSTR_slow(merged collations.TypedCollation, fl
 	}, "FN REGEXP_SUBSTR_SLOW VARCHAR(SP-2), VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.TypedCollation, offset int) {
+func (asm *assembler) Fn_REGEXP_REPLACE(matchers *regexpMatchers, merged collations.TypedCollation, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {
 		input := env.vm.stack[env.vm.sp-offset-1].(*evalBytes)
@@ -5223,7 +5226,8 @@ func (asm *assembler) Fn_REGEXP_REPLACE(m *icuregex.Matcher, merged collations.T
 			occ = occurrence(env.vm.stack[env.vm.sp-offset+3].(*evalInt64), occ)
 		}
 
-		m.Reset(inputRunes[pos-1:])
+		m := matchers.get(inputRunes[pos-1:])
+		defer matchers.put(m)
 
 		cs := colldata.Lookup(merged.Collation).Charset()
 		b, replaced, err := regexpReplace(m, inputRunes, replRunes, pos, occ, cs)
