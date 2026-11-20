@@ -224,6 +224,13 @@ func backupPosition(t *testing.T, backup string) replication.Position {
 // 15s), so the promotion fails and the shard record keeps naming the repointed old
 // primary.
 func testERSWithReachablePrimary(t *testing.T) {
+	// ERS cancels the repoint when the promotion fails. A vttablet without
+	// #21667 is then still closing its semi-sync monitor, which waits for the
+	// monitor's blocked writes until the pool's close timeout (10s), so the
+	// repoint never disables primary-side semi-sync and the write never commits.
+	// The subtest starts and ends with the same shard state, so the next
+	// subtests run without it.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 	const msg = "released-by-repoint"
 	backups := listBackups(t)
 	run := startVtbackup(t, initSQLWindow()...)
@@ -279,10 +286,7 @@ func testERSWithReachablePrimary(t *testing.T) {
 	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 	require.Equal(t, topodatapb.TabletType_REPLICA, oldPrimary.Type, "ERS didn't repoint %s, so the scenario is invalid", primary.Alias)
-	// ERS doesn't wait for the repoint, which can still be running. A vttablet
-	// without #21667 disables primary-side semi-sync only after closing its
-	// semi-sync monitor, which waits for the monitor's blocked write until the
-	// pool's close timeout (10s), so it can commit the write after ERS returns.
+	// The repoint disables primary-side semi-sync, which commits the write.
 	require.Eventually(t, func() bool {
 		qr, err := vtbackupQuery(t, tabletSocketPath(primary), fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
 		return err == nil && qr.Rows[0][0].ToString() == "1"
