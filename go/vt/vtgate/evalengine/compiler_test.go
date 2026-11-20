@@ -914,6 +914,16 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `VARCHAR("{}")`,
 		},
 		{
+			expression: `LOWER(UPPER(JSON_ARRAY('a')))`,
+			result:     `VARCHAR("[\"a\"]")`,
+			collation:  collations.CollationUtf8mb4BinID,
+		},
+		{
+			expression: `UPPER(LOWER(JSON_ARRAY('A')))`,
+			result:     `VARCHAR("[\"A\"]")`,
+			collation:  collations.CollationUtf8mb4BinID,
+		},
+		{
 			// TRIM with a remstr removes every repeated occurrence, not only one.
 			expression: `TRIM(BOTH 'x' FROM 'xxxbarxxx')`,
 			result:     `VARCHAR("bar")`,

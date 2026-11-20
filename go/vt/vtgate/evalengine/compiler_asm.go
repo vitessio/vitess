@@ -2676,12 +2676,11 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-			coll := colldata.Lookup(str.col.Collation)
-			csa, ok := coll.(colldata.CaseAwareCollation)
+			newcase, ok := changeCase(str.bytes, str.col.Collation, true)
 			if !ok {
 				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 			} else {
-				str.bytes = csa.ToUpper(nil, str.bytes)
+				str.bytes = newcase
 			}
 			str.tt = int16(sqltypes.VarChar)
 			return 1
@@ -2690,17 +2689,24 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-			coll := colldata.Lookup(str.col.Collation)
-			csa, ok := coll.(colldata.CaseAwareCollation)
+			newcase, ok := changeCase(str.bytes, str.col.Collation, false)
 			if !ok {
 				env.vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 			} else {
-				str.bytes = csa.ToLower(nil, str.bytes)
+				str.bytes = newcase
 			}
 			str.tt = int16(sqltypes.VarChar)
 			return 1
 		}, "FN LOWER VARCHAR(SP-1)")
 	}
+}
+
+func (asm *assembler) Fn_LUCASE_j(upcase bool) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-1].(*evalJSON)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(changeCaseJSON(arg, upcase), collationJSON)
+		return 1
+	}, "FN LUCASE JSON(SP-1)")
 }
 
 func (asm *assembler) Fn_MULTICMP_b(args int, lessThan bool) {
