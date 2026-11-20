@@ -226,7 +226,7 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 			return false, nil
 		}
 		for _, column := range opt.Columns {
-			if (column.Type.Options != nil && column.Type.Options.Autoincrement) || strings.EqualFold(column.Type.Type, "serial") {
+			if (column.Type.Options != nil && (column.Type.Options.Autoincrement || column.Type.Options.SerialDefaultValue)) || strings.EqualFold(column.Type.Type, "serial") {
 				log.Info("ALTER is not eligible for INSTANT DDL because the column is AUTO_INCREMENT",
 					slog.String("alter", sqlparser.CanonicalString(alterOption)))
 				return false, nil

@@ -132,6 +132,16 @@ const (
 	ColKey
 )
 
+// withInlineKey returns the key option after next follows k. A UNIQUE after
+// PRIMARY KEY or KEY keeps k. A column holds one key option, so the separate
+// unique key MySQL also creates is still dropped.
+func (k ColumnKeyOption) withInlineKey(next ColumnKeyOption) ColumnKeyOption {
+	if (k == ColKeyPrimary || k == ColKey) && (next == ColKeyUnique || next == ColKeyUniqueKey) {
+		return k
+	}
+	return next
+}
+
 // ReferenceAction indicates the action takes by a referential constraint e.g.
 // the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
 type ReferenceAction int
@@ -193,7 +203,38 @@ const queryOptimizerPrefix = "/*+"
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
+	for _, idx := range ts.Indexes {
+		if idx._beforeColumn == "" {
+			idx._beforeColumn = cd.Name.Lowered()
+		}
+	}
+	for _, c := range ts.Constraints {
+		if _, isForeignKey := c.Details.(*ForeignKeyDefinition); isForeignKey && c._beforeColumn == "" {
+			c._beforeColumn = cd.Name.Lowered()
+		}
+	}
 	ts.Columns = append(ts.Columns, cd)
+}
+
+// indexesBefore returns how many indexes Format writes before col: every index
+// up to the last one written before it, so that indexes keep their order.
+func (ts *TableSpec) indexesBefore(col *ColumnDefinition) int {
+	for i, idx := range slices.Backward(ts.Indexes) {
+		if idx._beforeColumn == col.Name.Lowered() {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+// constraintsBefore is the same as indexesBefore, for constraints.
+func (ts *TableSpec) constraintsBefore(col *ColumnDefinition) int {
+	for i, c := range slices.Backward(ts.Constraints) {
+		if c._beforeColumn == col.Name.Lowered() {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // AddIndex appends the given index to the list in the spec

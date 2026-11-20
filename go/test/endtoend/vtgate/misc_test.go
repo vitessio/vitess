@@ -587,6 +587,115 @@ func TestCreateIndex(t *testing.T) {
 	utils.Exec(t, conn, `create index i2 on ks.t1000 (id1)`)
 }
 
+// TestSerialDefaultValue tests that SERIAL DEFAULT VALUE columns keep their meaning through VTGate.
+func TestSerialDefaultValue(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+	t.Cleanup(func() {
+		_, _ = utils.ExecAllowError(t, conn, "drop table if exists serial_default_value")
+	})
+
+	testcases := []struct {
+		name     string
+		column   string
+		nullable string
+		keys     []string
+	}{{
+		name:     "attribute",
+		column:   "int serial default value",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "null before the attribute",
+		column:   "int null serial default value",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "null after the attribute",
+		column:   "int serial default value null",
+		nullable: "YES",
+		keys:     []string{"id"},
+	}, {
+		name:     "not null after the attribute",
+		column:   "int serial default value not null",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "primary key",
+		column:   "int serial default value primary key",
+		nullable: "NO",
+		keys:     []string{"PRIMARY", "id"},
+	}, {
+		name:     "unique after primary key",
+		column:   "int serial default value primary key unique",
+		nullable: "NO",
+		keys:     []string{"PRIMARY", "id"},
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			utils.Exec(t, conn, "drop table if exists serial_default_value")
+			utils.Exec(t, conn, "create table serial_default_value (id "+tc.column+")")
+
+			qr := utils.Exec(t, conn, "select is_nullable, extra from information_schema.columns where table_name = 'serial_default_value' and column_name = 'id'")
+			require.Len(t, qr.Rows, 1)
+			assert.Equal(t, tc.nullable, qr.Rows[0][0].ToString())
+			assert.Equal(t, "auto_increment", qr.Rows[0][1].ToString())
+
+			qr = utils.Exec(t, conn, "select index_name, non_unique from information_schema.statistics where table_name = 'serial_default_value'")
+			var keys []string
+			for _, row := range qr.Rows {
+				// every key is unique
+				assert.Equal(t, "0", row[1].ToString())
+				keys = append(keys, row[0].ToString())
+			}
+			assert.ElementsMatch(t, tc.keys, keys)
+		})
+	}
+
+	// MySQL still rejects these once VTGate regenerates them
+	rejected := []struct {
+		column string
+		err    string
+	}{{
+		column: "id int null serial default value primary key",
+		err:    "(errno 1171)",
+	}, {
+		column: "id int serial default value, unique key id (id)",
+		err:    "(errno 1061)",
+	}}
+	for _, tc := range rejected {
+		t.Run(tc.column, func(t *testing.T) {
+			utils.Exec(t, conn, "drop table if exists serial_default_value")
+			_, err := utils.ExecAllowError(t, conn, "create table serial_default_value ("+tc.column+")")
+			require.ErrorContains(t, err, tc.err)
+		})
+	}
+}
+
+// TestColumnKeyAfterIndex tests that VTGate keeps an index before a column with
+// an inline unique key, so MySQL names the column's key after the index.
+func TestColumnKeyAfterIndex(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+	t.Cleanup(func() {
+		_, _ = utils.ExecAllowError(t, conn, "drop table if exists column_key_after_index")
+	})
+
+	for _, column := range []string{"id int unique", "id serial", "id int serial default value"} {
+		t.Run(column, func(t *testing.T) {
+			utils.Exec(t, conn, "drop table if exists column_key_after_index")
+			utils.Exec(t, conn, "create table column_key_after_index (x int, unique key id (x), "+column+")")
+
+			qr := utils.Exec(t, conn, "select index_name, column_name from information_schema.statistics where table_name = 'column_key_after_index' order by index_name")
+			var keys []string
+			for _, row := range qr.Rows {
+				keys = append(keys, row[0].ToString()+" ("+row[1].ToString()+")")
+			}
+			assert.Equal(t, []string{"id (x)", "id_2 (id)"}, keys)
+		})
+	}
+}
+
 func TestVersions(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

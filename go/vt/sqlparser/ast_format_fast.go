@@ -1125,20 +1125,29 @@ func (node *SubPartition) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
+	indexes, constraints := 0, 0
 	for i, col := range ts.Columns {
 		if i == 0 {
 			buf.WriteByte('\t')
 			col.FormatFast(buf)
-		} else {
-			buf.WriteString(",\n\t")
-			col.FormatFast(buf)
+			continue
 		}
+		for end := ts.indexesBefore(col); indexes < end; indexes++ {
+			buf.WriteString(",\n\t")
+			ts.Indexes[indexes].FormatFast(buf)
+		}
+		for end := ts.constraintsBefore(col); constraints < end; constraints++ {
+			buf.WriteString(",\n\t")
+			ts.Constraints[constraints].FormatFast(buf)
+		}
+		buf.WriteString(",\n\t")
+		col.FormatFast(buf)
 	}
-	for _, idx := range ts.Indexes {
+	for _, idx := range ts.Indexes[indexes:] {
 		buf.WriteString(",\n\t")
 		idx.FormatFast(buf)
 	}
-	for _, c := range ts.Constraints {
+	for _, c := range ts.Constraints[constraints:] {
 		buf.WriteString(",\n\t")
 		c.FormatFast(buf)
 	}
@@ -1233,6 +1242,18 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteString(keywordStrings[COLLATE])
 			buf.WriteByte(' ')
 			buf.WriteString(encodeSQLName(ct.Options.Collate))
+		}
+		if ct.Options.NullBeforeSerialDefaultValue {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NULL])
+		}
+		if ct.Options.SerialDefaultValue {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SERIAL])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[DEFAULT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VALUE])
 		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
