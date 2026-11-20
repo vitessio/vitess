@@ -477,6 +477,34 @@ func TestOnHealthCheck(t *testing.T) {
 			wantExternallyReparented: 20,
 			wantUID:                  2,
 		}, {
+			name: "Serving former primary with an older term seen in non-serving shard",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      false,
+				externallyReparented: 20,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  2,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              true,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      false,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
 			name: "New serving primary seen while waiting for reparent",
 			ss: &shardState{
 				serving:              false,
@@ -561,6 +589,34 @@ func TestOnHealthCheck(t *testing.T) {
 			wantExternallyReparented: 10,
 			wantUID:                  1,
 		}, {
+			name: "Non-serving former primary with an older term seen while waiting for reparent",
+			ss: &shardState{
+				serving:              false,
+				waitForReparent:      true,
+				externallyReparented: 20,
+				currentPrimary: &topodatapb.TabletAlias{
+					Cell: testCell,
+					Uid:  2,
+				},
+			},
+			th: &TabletHealth{
+				Target: &querypb.Target{
+					TabletType: topodatapb.TabletType_PRIMARY,
+				},
+				Serving:              false,
+				PrimaryTermStartTime: 10,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: testCell,
+						Uid:  1,
+					},
+				},
+			},
+			wantServing:              false,
+			wantWaitForReparent:      true,
+			wantExternallyReparented: 20,
+			wantUID:                  2,
+		}, {
 			name: "New serving primary while already serving",
 			ss: &shardState{
 				serving:              true,
@@ -643,6 +699,113 @@ func TestOnHealthCheck(t *testing.T) {
 			require.Equal(t, tt.wantUID, tt.ss.currentPrimary.Uid)
 		})
 	}
+}
+
+// TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent verifies that a
+// primary recovering without a reparent or after a graceful restart resolves
+// the keyspace event, and that a reparent still waits for a primary with a
+// newer term, even after a former primary reports not serving.
+func TestPrimaryRecoveryWithoutReparentResolvesKeyspaceEvent(t *testing.T) {
+	ctx := t.Context()
+
+	kss := &keyspaceState{
+		keyspace: "ks",
+		shards:   make(map[string]*shardState),
+		lastKeyspace: &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+				ServedType:      topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{{Name: "0"}},
+			}},
+		},
+	}
+
+	kew := &KeyspaceEventWatcher{
+		ts:               &fakeTopoServer{},
+		localCell:        "cell",
+		keyspaces:        map[string]*keyspaceState{"ks": kss},
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
+	}
+	kss.kew = kew
+
+	events := kew.Subscribe()
+
+	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
+
+	// primaryHealth builds a PRIMARY healthcheck for tablet uid.
+	primaryHealth := func(uid uint32, serving bool, termStart int64) *TabletHealth {
+		return &TabletHealth{
+			Tablet:               &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell", Uid: uid}},
+			Target:               target,
+			Serving:              serving,
+			PrimaryTermStartTime: termStart,
+		}
+	}
+
+	// requireResolved checks without blocking whether a keyspace event was
+	// broadcast. It relies on onHealthCheck broadcasting before it returns.
+	requireResolved := func(want bool, msg string) {
+		t.Helper()
+
+		got := false
+		select {
+		case <-events:
+			got = true
+		default:
+		}
+
+		require.Equal(t, want, got, "keyspace event broadcast after %s", msg)
+	}
+
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "initial healthy primary")
+
+	// Fail the primary healthcheck and start buffering.
+	kss.onHealthCheck(primaryHealth(100, false, 10))
+	_, shouldBuffer := kew.ShouldStartBufferingForTarget(ctx, target)
+	require.True(t, shouldBuffer)
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+
+	// Recover the same primary with the same term.
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "same primary recovered without a reparent")
+
+	// Stop the primary gracefully and start buffering. A stopping primary
+	// reports a negative term.
+	kss.onHealthCheck(primaryHealth(100, false, time.Time{}.Unix()))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(true, "same primary restarted gracefully")
+
+	// Start a reparent while the old primary still reports serving.
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(100, true, 10))
+	requireResolved(false, "stale serving healthcheck from the demoted primary")
+
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	requireResolved(true, "new primary with a newer term")
+
+	// Fail a healthcheck retry to a dead former primary this vtgate never
+	// reached, then start another reparent while the current primary still
+	// reports serving. An unreached tablet reports no term.
+	kss.onHealthCheck(primaryHealth(99, false, 0))
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	requireResolved(false, "stale serving healthcheck from the demoted primary after a former primary failed")
+
+	kss.onHealthCheck(primaryHealth(102, true, 30))
+	requireResolved(true, "new primary with a newer term after a former primary failed")
+
+	// Fail the current primary and fail over to a new one, then start a
+	// reparent while the new primary still reports serving.
+	kss.onHealthCheck(primaryHealth(102, false, 30))
+	kss.onHealthCheck(primaryHealth(103, true, 40))
+	requireResolved(true, "new primary after the current primary failed")
+
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+	kss.onHealthCheck(primaryHealth(103, true, 40))
+	requireResolved(false, "stale serving healthcheck from the demoted primary after a failover")
 }
 
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
