@@ -1920,6 +1920,56 @@ var validSQL = []struct {
 }, {
 	input: "alter table t add column s serial",
 }, {
+	input:  "create table t (id int serial default value)",
+	output: "create table t (\n\tid int serial default value\n)",
+}, {
+	// SERIAL DEFAULT VALUE is kept apart from an inline key
+	input:  "create table t (id int unsigned not null serial default value primary key)",
+	output: "create table t (\n\tid int unsigned serial default value not null primary key\n)",
+}, {
+	// a NULL after SERIAL DEFAULT VALUE makes the column nullable
+	input:  "create table t (id int serial default value null)",
+	output: "create table t (\n\tid int serial default value null\n)",
+}, {
+	// an earlier NULL is kept, since MySQL rejects it in a primary key
+	input:  "create table t (id int null serial default value primary key)",
+	output: "create table t (\n\tid int null serial default value primary key\n)",
+}, {
+	// a UNIQUE after PRIMARY KEY keeps the primary key
+	input:  "create table t (id int serial default value primary key unique)",
+	output: "create table t (\n\tid int serial default value primary key\n)",
+}, {
+	input:  "create table t (id int primary key unique key)",
+	output: "create table t (\n\tid int primary key\n)",
+}, {
+	input:  "create table t (id int key unique)",
+	output: "create table t (\n\tid int key\n)",
+}, {
+	// a PRIMARY KEY after UNIQUE replaces the unique key
+	input:  "create table t (id int unique primary key)",
+	output: "create table t (\n\tid int primary key\n)",
+}, {
+	// a UNIQUE after PRIMARY KEY keeps the primary key of a generated column
+	input:  "create table t (a int, b int as (a) stored primary key unique)",
+	output: "create table t (\n\ta int,\n\tb int as (a) stored primary key\n)",
+}, {
+	// a key before a column keeps its place
+	input:  "create table t (x int, unique key id (x), id int serial default value)",
+	output: "create table t (\n\tx int,\n\tunique key id (x),\n\tid int serial default value\n)",
+}, {
+	input:  "create table t (x int, unique key id (x), id int unique, y int, key y (y), z serial)",
+	output: "create table t (\n\tx int,\n\tunique key id (x),\n\tid int unique,\n\ty int,\n\tkey y (y),\n\tz serial\n)",
+}, {
+	// so does a foreign key, which adds a key
+	input:  "create table t (x int, constraint id foreign key (x) references p (id), id int unique)",
+	output: "create table t (\n\tx int,\n\tconstraint id foreign key (x) references p (id),\n\tid int unique\n)",
+}, {
+	// keys keep their order
+	input:  "create table t (check (a > 0), key (a), a int, b int, unique key k (b), c int unique)",
+	output: "create table t (\n\ta int,\n\tb int,\n\tkey (a),\n\tunique key k (b),\n\tc int unique,\n\tcheck (a > 0)\n)",
+}, {
+	input: "alter table t add column id bigint serial default value",
+}, {
 	input: "alter table t modify column id serial first",
 }, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",

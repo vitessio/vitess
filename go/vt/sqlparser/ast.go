@@ -2306,6 +2306,12 @@ type ColumnTypeOptions struct {
 	// Key specification
 	KeyOpt ColumnKeyOption
 
+	// SerialDefaultValue is the SERIAL DEFAULT VALUE attribute, an alias for
+	// NOT NULL AUTO_INCREMENT UNIQUE.
+	SerialDefaultValue bool
+	// NullBeforeSerialDefaultValue is set when NULL comes before SERIAL DEFAULT VALUE.
+	NullBeforeSerialDefaultValue bool
+
 	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
 	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
 	// and only when INVISIBLE is set does the pointer value return true.
@@ -2335,6 +2341,11 @@ type IndexDefinition struct {
 	Info    *IndexInfo
 	Columns []*IndexColumn
 	Options []*IndexOption
+
+	// _beforeColumn is the lowered name of the column this index is written
+	// before, if any. MySQL names keys in the order they are written, so Format
+	// keeps it there.
+	_beforeColumn string
 }
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
@@ -2376,6 +2387,9 @@ type VindexParam struct {
 type ConstraintDefinition struct {
 	Name    IdentifierCI
 	Details ConstraintInfo
+
+	// _beforeColumn is as in IndexDefinition, since a foreign key adds a key.
+	_beforeColumn string
 }
 
 type (
