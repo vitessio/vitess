@@ -42,3 +42,8 @@ var defaultHash256Key = [32]byte{}
 func New256() *Hasher256 {
 	return highway.New(defaultHash256Key)
 }
+
+// New256Value returns a 256-bit hasher by value.
+func New256Value() Hasher256 {
+	return highway.New256Value(defaultHash256Key)
+}
