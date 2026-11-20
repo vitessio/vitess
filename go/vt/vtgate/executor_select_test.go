@@ -34,6 +34,7 @@ import (
 
 	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
@@ -4656,6 +4657,47 @@ func TestSelectHexAndBit(t *testing.T) {
 	qr, err = executor.Execute(t.Context(), nil, "TestSelectHexAndBit", session, "select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil, false)
 	require.NoError(t, err)
 	require.Equal(t, `[[INT64(10) INT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestSelectInvalidIntroducedHexAndBit checks that a hex or bit literal that is
+// not well-formed in the character set of its introducer fails with
+// ER_INVALID_CHARACTER_STRING after the normalizer has turned it into a bind
+// variable, which is the path that real queries take.
+func TestSelectInvalidIntroducedHexAndBit(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{})
+
+	testCases := []struct {
+		query string
+		err   string
+	}{
+		{
+			query: "select cast(_utf16 X'D800' as decimal(20,6))",
+			err:   "Invalid utf16 character string: 'D800'",
+		},
+		{
+			query: "select convert(_utf16 x'D800' using latin1)",
+			err:   "Invalid utf16 character string: 'D800'",
+		},
+		{
+			query: "select _utf8mb4 0xC2",
+			err:   "Invalid utf8mb4 character string: 'C2'",
+		},
+		{
+			query: "select _utf8mb4 b'11000010'",
+			err:   "Invalid utf8mb4 character string: 'C2'",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.query, func(t *testing.T) {
+			_, err := executor.Execute(t.Context(), nil, "TestSelectInvalidIntroducedHexAndBit", session, tc.query, nil, false)
+			require.ErrorContains(t, err, tc.err)
+			var sqlErr *sqlerror.SQLError
+			require.ErrorAs(t, sqlerror.NewSQLErrorFromError(err), &sqlErr)
+			assert.Equal(t, sqlerror.ERInvalidCharacterString, sqlErr.Number())
+		})
+	}
 }
 
 // TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.

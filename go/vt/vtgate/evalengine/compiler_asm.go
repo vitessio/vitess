@@ -5312,6 +5312,9 @@ func (asm *assembler) Introduce(offset int, t sqltypes.Type, col collations.Type
 	asm.emit(func(env *ExpressionEnv) int {
 		var arg *evalBytes
 		arg, env.vm.err = introducerCast(env.vm.stack[env.vm.sp-offset], col.Collation)
+		if env.vm.err != nil {
+			return 0
+		}
 		arg.tt = int16(t)
 		arg.col = col
 		env.vm.stack[env.vm.sp-offset] = arg
