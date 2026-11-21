@@ -556,8 +556,9 @@ func mathIntDiv_ii(v1, v2 *evalInt64) (eval, error) {
 
 func mathIntDiv_ii0(v1, v2 int64) (int64, error) {
 	// -2^63 / -1 is 2^63, which does not fit in BIGINT; Go wraps it back to
-	// -2^63 instead of failing, MySQL reports the value as out of range.
-	if v1 == math.MinInt64 && v2 == -1 {
+	// -2^63 instead of failing. MySQL also rejects -2^63 DIV 1, because it
+	// divides the magnitudes and rejects any result above 2^63-1.
+	if v1 == math.MinInt64 && (v2 == -1 || v2 == 1) {
 		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "DIV")
 	}
 	return v1 / v2, nil

@@ -39,7 +39,8 @@ func TestMathIntDivBoundary(t *testing.T) {
 			wantErr bool
 		}{
 			{math.MinInt64, -1, 0, true}, // 2^63 does not fit
-			{math.MinInt64, 1, math.MinInt64, false},
+			{math.MinInt64, 1, 0, true},  // MySQL rejects this as well
+			{math.MinInt64, 2, -(1 << 62), false},
 			{math.MinInt64, math.MinInt64, 1, false},
 			{math.MaxInt64, -1, -math.MaxInt64, false},
 			{-math.MaxInt64, -1, math.MaxInt64, false},
