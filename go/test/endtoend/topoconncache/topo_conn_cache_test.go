@@ -241,19 +241,20 @@ func getAllTablets() []string {
 	return tablets
 }
 
-// enableThrottler enables the tablet throttler while zone2 is at its original root, and waits until shard1's
-// primary has probed the shard's replicas there, so that its CellInfo cache holds zone2's old location when
-// the cell is deleted and added back.
+// enableThrottler enables the tablet throttler while zone2 is at its original root, and makes sure shard1's
+// primary probes the shard's replica there, by stopping the replica's replication until the primary sees its
+// lag, so that the primary's CellInfo cache holds zone2's old location when the cell is deleted and added back.
+// VTOrc's recoveries stay disabled for the rest of the test, so that it doesn't start replication again.
 func enableThrottler(t *testing.T) {
+	vtctld := &clusterInstance.VtctldClientProcess
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
-	require.Eventually(t, func() bool {
-		status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, shard1Primary)
-		if err != nil {
-			return false
-		}
-		lag, ok := status.AggregatedMetrics["shard/lag"]
-		return ok && lag.Error == ""
-	}, 30*time.Second, time.Second, "shard1's primary did not probe its replicas' lag")
+
+	vtorc := clusterInstance.VTOrcProcesses[0]
+	vtorc.DisableGlobalRecoveries(t)
+	t.Cleanup(func() { vtorc.EnableGlobalRecoveries(t) })
+	require.NoError(t, vtctld.ExecuteCommand("StopReplication", shard1Replica.Alias))
+	waitForShardLag(t, shard1Primary, true, 30*time.Second, "shard1's primary did not see the lag of its replica in zone2")
+	require.NoError(t, vtctld.ExecuteCommand("StartReplication", shard1Replica.Alias))
 }
 
 // testThrottlerFollowsReAddedCell stops replication on shard1's replica in the re-added zone2. Shard1's
@@ -265,30 +266,21 @@ func testThrottlerFollowsReAddedCell(t *testing.T) {
 	vtctld := &clusterInstance.VtctldClientProcess
 	// The tablets in the re-added cell start with the throttler enabled too.
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	// The lag the primary saw before the cell was deleted is gone with that replica.
+	waitForShardLag(t, shard1Primary, false, 30*time.Second, "shard1's primary still reports the lag of the deleted replica")
 
 	cachedBefore := globalTopoGets(t, shard1Primary)
 	uncachedBefore := globalTopoGets(t, shard2Primary)
 	countFrom := time.Now()
 
-	// Keep VTOrc from starting replication again.
-	vtorc := clusterInstance.VTOrcProcesses[0]
-	vtorc.DisableGlobalRecoveries(t)
 	require.NoError(t, vtctld.ExecuteCommand("StopReplication", shard1Replica.Alias))
 	t.Cleanup(func() {
 		_ = vtctld.ExecuteCommand("StartReplication", shard1Replica.Alias)
-		vtorc.EnableGlobalRecoveries(t)
 	})
 	// The TTL, an inventory refresh, the replica's lag growing past the threshold, and time for the probes.
 	timeout := cellInfoCacheTTL + 10*time.Second + 5*time.Second + 20*time.Second
 	stopped := time.Now()
-	require.Eventually(t, func() bool {
-		status, err := throttler.GetThrottlerStatus(vtctld, shard1Primary)
-		if err != nil {
-			return false
-		}
-		lag, ok := status.AggregatedMetrics["shard/lag"]
-		return ok && lag.Value > status.DefaultThreshold
-	}, timeout, time.Second, "shard1's primary did not see the lag of the replica in the re-added cell")
+	waitForShardLag(t, shard1Primary, true, timeout, "shard1's primary did not see the lag of the replica in the re-added cell")
 	t.Logf("shard1's primary saw the replica's lag %s after replication stopped", time.Since(stopped).Round(time.Second))
 
 	// Compare the primaries' global topo reads over a few inventory refreshes.
@@ -297,6 +289,23 @@ func testThrottlerFollowsReAddedCell(t *testing.T) {
 	uncached := globalTopoGets(t, shard2Primary) - uncachedBefore
 	t.Logf("global topo Gets with the throttler on: %d with the CellInfo cache, %d without", cached, uncached)
 	assert.Less(t, cached, uncached, "the primary with the CellInfo cache did not read the global topo less than the one without")
+}
+
+// waitForShardLag waits until the tablet's throttler reports the shard's lag above its threshold, or below it
+// if lagging is false. On a primary, whose own lag is 0, lag above the threshold can only come from a replica
+// it probes.
+func waitForShardLag(t *testing.T, tablet *cluster.Vttablet, lagging bool, timeout time.Duration, msg string) {
+	require.Eventually(t, func() bool {
+		status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, tablet)
+		if err != nil {
+			return false
+		}
+		lag, ok := status.AggregatedMetrics["shard/lag"]
+		if !ok || lag.Error != "" {
+			return false
+		}
+		return (lag.Value > status.DefaultThreshold) == lagging
+	}, timeout, time.Second, msg)
 }
 
 // globalTopoGets returns how many Get calls the tablet has made to the global topo.
