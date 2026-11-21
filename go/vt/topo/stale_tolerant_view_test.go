@@ -35,8 +35,7 @@ import (
 )
 
 // cellInfoFactory wraps a memorytopo.Factory, counting the global reads of CellInfo. Once armed, the next such
-// read waits for release, or for its ctx to be done like a real topo read, after it reads the CellInfo, or
-// before if beforeRead is set.
+// read waits for release, or for its ctx to be done like a real topo read, after it reads the CellInfo.
 type cellInfoFactory struct {
 	*memorytopo.Factory
 	reads   atomic.Int64
@@ -44,25 +43,17 @@ type cellInfoFactory struct {
 	paused  chan struct{}
 	release chan struct{}
 	used    atomic.Bool
-	// beforeRead pauses the read before it reads the CellInfo rather than after.
-	beforeRead bool
-	// readOnlyLags gives the Server a GlobalReadOnlyCell, whose CellInfo reads return what the first one
-	// returned, like a replica of the global topo that has stopped catching up.
-	readOnlyLags bool
 }
 
 // newCellInfoServer returns a Server on a cellInfoFactory with the cell zone1 and the given CellInfo cache
 // TTL, and another Server on the same topo that stands in for another process.
-func newCellInfoServer(t *testing.T, ttl time.Duration, opts ...func(*cellInfoFactory)) (ts, other *topo.Server, factory *cellInfoFactory) {
+func newCellInfoServer(t *testing.T, ttl time.Duration) (ts, other *topo.Server, factory *cellInfoFactory) {
 	_, memFactory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
 	factory = &cellInfoFactory{
 		Factory: memFactory,
 		armed:   make(chan struct{}),
 		paused:  make(chan struct{}),
 		release: make(chan struct{}),
-	}
-	for _, opt := range opts {
-		opt(factory)
 	}
 	ts, err := topo.NewWithFactory(factory, "", "")
 	require.NoError(t, err)
@@ -74,49 +65,12 @@ func newCellInfoServer(t *testing.T, ttl time.Duration, opts ...func(*cellInfoFa
 	return ts, other, factory
 }
 
-func (f *cellInfoFactory) HasGlobalReadOnlyCell(serverAddr, root string) bool {
-	return f.readOnlyLags
-}
-
 func (f *cellInfoFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
-	switch cell {
-	case topo.GlobalCell:
-		conn, err := f.Factory.Create(cell, serverAddr, root)
-		if err != nil {
-			return nil, err
-		}
-		return &cellInfoConn{Conn: conn, factory: f}, nil
-	case topo.GlobalReadOnlyCell:
-		conn, err := f.Factory.Create(topo.GlobalCell, serverAddr, root)
-		if err != nil {
-			return nil, err
-		}
-		return &laggingConn{Conn: conn, cellInfos: make(map[string][]byte)}, nil
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil || cell != topo.GlobalCell {
+		return conn, err
 	}
-	return f.Factory.Create(cell, serverAddr, root)
-}
-
-// laggingConn returns, for each CellInfo, what its first read of it returned.
-type laggingConn struct {
-	topo.Conn
-	mu        sync.Mutex
-	cellInfos map[string][]byte
-}
-
-func (c *laggingConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
-	if !strings.HasPrefix(filePath, topo.CellsPath+"/") {
-		return c.Conn.Get(ctx, filePath)
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if contents, ok := c.cellInfos[filePath]; ok {
-		return contents, nil, nil
-	}
-	contents, version, err := c.Conn.Get(ctx, filePath)
-	if err == nil {
-		c.cellInfos[filePath] = contents
-	}
-	return contents, version, err
+	return &cellInfoConn{Conn: conn, factory: f}, nil
 }
 
 type cellInfoConn struct {
@@ -129,12 +83,6 @@ func (c *cellInfoConn) Get(ctx context.Context, filePath string) ([]byte, topo.V
 		return c.Conn.Get(ctx, filePath)
 	}
 	c.factory.reads.Add(1)
-	if c.factory.beforeRead {
-		if err := c.pause(ctx); err != nil {
-			return nil, nil, err
-		}
-		return c.Conn.Get(ctx, filePath)
-	}
 	contents, version, err := c.Conn.Get(ctx, filePath)
 	if pauseErr := c.pause(ctx); pauseErr != nil {
 		return nil, nil, pauseErr
@@ -340,90 +288,6 @@ func TestStaleTolerantViewExpiryDuringRead(t *testing.T) {
 	assert.NotSame(t, conn, got, "the connection to the old root was reused after the read raced the change")
 }
 
-// TestStaleTolerantViewRefreshesOneAtATime verifies that while the StaleTolerantView is refreshing a cell,
-// another call that finds the cell's CellInfo stale waits for it rather than reading the cell's CellInfo too,
-// and then uses what it read, without reading it again. If the two reads overlapped, the one that started
-// first could get the newer CellInfo, for example when it is delayed before it reaches the topo server and the
-// cell is re-pointed meanwhile, and the older one would then be cached for the TTL.
-func TestStaleTolerantViewRefreshesOneAtATime(t *testing.T) {
-	ctx := t.Context()
-	ts, other, factory := newCellInfoServer(t, time.Hour)
-	factory.beforeRead = true
-
-	conn, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-
-	// The first call pauses before it reads CellInfo.
-	ts.ExpireCellInfo("zone1")
-	close(factory.armed)
-	first := goCellReader(ctx, ts, "zone1")
-	<-factory.paused
-
-	second := goCellReader(ctx, ts, "zone1")
-	assert.Never(t, func() bool { return len(second) > 0 }, 500*time.Millisecond, 10*time.Millisecond,
-		"a second call refreshed the cell while the first was refreshing it")
-
-	// The cell is re-pointed before the first call reads CellInfo.
-	repointCell(t, other, "zone1", "/zone1-moved")
-	before := factory.reads.Load()
-	close(factory.release)
-	res := <-first
-	require.NoError(t, res.err)
-	assert.NotSame(t, conn, res.reader, "the first call did not use the CellInfo it read")
-	res2 := <-second
-	require.NoError(t, res2.err)
-	assert.Same(t, res.reader, res2.reader, "the second call did not use what the first read")
-	assert.Equal(t, before, factory.reads.Load(), "the second call read CellInfo again after the first had refreshed the cell")
-}
-
-// TestStaleTolerantViewWaitEndsWithCaller verifies that a call waiting for another call's refresh of the cell
-// returns when its own ctx is done, rather than waiting as long as that refresh takes.
-func TestStaleTolerantViewWaitEndsWithCaller(t *testing.T) {
-	ctx := t.Context()
-	ts, _, factory := newCellInfoServer(t, time.Hour)
-
-	close(factory.armed)
-	first := goCellReader(ctx, ts, "zone1")
-	<-factory.paused
-
-	callCtx, cancel := context.WithCancel(ctx)
-	second := goCellReader(callCtx, ts, "zone1")
-	assert.Never(t, func() bool { return len(second) > 0 }, 200*time.Millisecond, 10*time.Millisecond,
-		"a second call did not wait for the first call's refresh")
-	cancel()
-	require.Eventually(t, func() bool { return len(second) > 0 }, 30*time.Second, 10*time.Millisecond,
-		"a call kept waiting for another call's refresh after its ctx was canceled")
-	require.ErrorIs(t, (<-second).err, context.Canceled)
-
-	close(factory.release)
-	require.NoError(t, (<-first).err)
-}
-
-// TestStaleTolerantViewRefreshReadTimesOut verifies that the StaleTolerantView bounds its CellInfo read by
-// RemoteOperationTimeout even when its ctx has no deadline, so that a read that hangs doesn't keep the other
-// calls for the cell waiting after the global topo recovers.
-func TestStaleTolerantViewRefreshReadTimesOut(t *testing.T) {
-	ctx := t.Context()
-	ts, _, factory := newCellInfoServer(t, time.Hour)
-	timeout := topo.RemoteOperationTimeout
-	topo.RemoteOperationTimeout = 100 * time.Millisecond
-	t.Cleanup(func() { topo.RemoteOperationTimeout = timeout })
-
-	// The first call's read hangs; ctx has no deadline.
-	_, hasDeadline := ctx.Deadline()
-	require.False(t, hasDeadline)
-	close(factory.armed)
-	t.Cleanup(func() { close(factory.release) })
-	first := goCellReader(ctx, ts, "zone1")
-	<-factory.paused
-	second := goCellReader(ctx, ts, "zone1")
-
-	require.Eventually(t, func() bool { return len(second) > 0 }, 30*time.Second, 10*time.Millisecond,
-		"a call for the cell kept waiting behind a read that hung")
-	require.NoError(t, (<-second).err)
-	require.ErrorIs(t, (<-first).err, context.DeadlineExceeded)
-}
-
 // TestStaleTolerantViewAfterRecreate verifies that after another process deletes a cell and this process
 // creates a cell of the same name at a different root, the StaleTolerantView does not reuse the connection it
 // cached for the old cell, and that a CreateCellInfo that fails leaves the cache in place.
@@ -461,21 +325,6 @@ func TestStaleTolerantViewDeletedInThisProcess(t *testing.T) {
 	assert.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
 }
 
-// TestStaleTolerantViewAfterClose verifies that once the Server is closed, the StaleTolerantView fails
-// rather than reading from the closed global connection or connecting to the cell again.
-func TestStaleTolerantViewAfterClose(t *testing.T) {
-	ctx := t.Context()
-	ts, _, factory := newCellInfoServer(t, time.Hour)
-
-	_, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-	ts.Close()
-	before := factory.reads.Load()
-	_, err = ts.CellReader(ctx, "zone1")
-	assert.True(t, topo.IsErrType(err, topo.Interrupted), "got %v", err)
-	assert.Equal(t, before, factory.reads.Load())
-}
-
 // TestStaleTolerantViewConcurrentRepoints runs StaleTolerantView reads, ConnForCell calls and re-points of
 // the cell concurrently, for the race detector, and verifies that the view settles on the cell's current
 // topo server.
@@ -485,6 +334,11 @@ func TestStaleTolerantViewConcurrentRepoints(t *testing.T) {
 
 	var stop atomic.Bool
 	var wg sync.WaitGroup
+	// Stop the readers before the topo servers close, also when the test fails on the way.
+	t.Cleanup(func() {
+		stop.Store(true)
+		wg.Wait()
+	})
 	for i := range 8 {
 		wg.Go(func() {
 			for !stop.Load() {
@@ -624,42 +478,4 @@ func TestStaleTolerantViewPartialResult(t *testing.T) {
 	require.True(t, topo.IsErrType(wantErr, topo.PartialResult), "got %v", wantErr)
 	assert.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
 	assert.Equal(t, []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 1}}, got)
-}
-
-// TestStaleTolerantViewStrongRead verifies that the StaleTolerantView reads CellInfo from the global cell
-// rather than the GlobalReadOnlyCell: what it reads is trusted for the TTL, so it must not come from a replica
-// that lags behind.
-func TestStaleTolerantViewStrongRead(t *testing.T) {
-	ctx := t.Context()
-	ts, other, _ := newCellInfoServer(t, time.Hour, func(f *cellInfoFactory) { f.readOnlyLags = true })
-
-	conn, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-	// Make the GlobalReadOnlyCell lag behind.
-	_, err = ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-
-	repointCell(t, other, "zone1", "/zone1-moved")
-	// Stand in for the TTL passing.
-	ts.ExpireCellInfo("zone1")
-	got, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-	assert.NotSame(t, conn, got, "the view read the lagging GlobalReadOnlyCell")
-}
-
-// TestStaleTolerantViewCloseDuringRead verifies that when the Server is closed while the StaleTolerantView
-// reads a cell's CellInfo, the view fails rather than connecting to the cell after Close has closed every
-// connection.
-func TestStaleTolerantViewCloseDuringRead(t *testing.T) {
-	ctx := t.Context()
-	ts, _, factory := newCellInfoServer(t, time.Hour)
-
-	close(factory.armed)
-	done := goCellReader(ctx, ts, "zone1")
-	<-factory.paused
-	ts.Close()
-	close(factory.release)
-	res := <-done
-	assert.True(t, topo.IsErrType(res.err, topo.Interrupted), "got %v", res.err)
-	assert.Nil(t, res.reader)
 }

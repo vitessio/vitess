@@ -158,15 +158,9 @@ type Server struct {
 	// cellInfoReads holds, per cell, the last CellInfo that cellReaderFor read, which it trusts for
 	// cellInfoCacheTTL. ConnForCell does not use it.
 	cellInfoReads map[string]cellInfoRead
-	// cellInfoGenerations counts each cell's expireCellInfo calls, so that a cellReaderFor whose CellInfo read
-	// started before an expiry does not mark its result as fresh.
-	cellInfoGenerations map[string]uint64
-	// cellInfoRefreshes lets one cellReaderFor at a time read each cell's CellInfo, so that each read starts
-	// after the last one was applied and sees a CellInfo at least as new.
-	cellInfoRefreshes map[string]*semaphore.Weighted
-	// closed is set by Close, after which cellReaderFor fails instead of reading from the closed global
-	// connection.
-	closed bool
+	// cellInfoGeneration counts expireCellInfo calls, so that a cellReaderFor whose CellInfo read started before
+	// an expiry does not record its result.
+	cellInfoGeneration uint64
 }
 
 type cellConn struct {
@@ -178,8 +172,6 @@ type cellInfoRead struct {
 	cellInfo *topodata.CellInfo
 	// readStart is when the read of cellInfo started, which the TTL counts from.
 	readStart time.Time
-	// expired makes the next cellReaderFor read the cell's CellInfo again, regardless of readStart.
-	expired bool
 }
 
 type cellsToAliasesMap struct {
@@ -271,14 +263,12 @@ func NewWithFactory(factory Factory, serverAddress, root string) (*Server, error
 	}
 
 	return &Server{
-		globalCell:          conn,
-		globalReadOnlyCell:  connReadOnly,
-		factory:             factory,
-		cellConns:           make(map[string]cellConn),
-		cellInfoCacheTTL:    CellInfoCacheTTL,
-		cellInfoReads:       make(map[string]cellInfoRead),
-		cellInfoGenerations: make(map[string]uint64),
-		cellInfoRefreshes:   make(map[string]*semaphore.Weighted),
+		globalCell:         conn,
+		globalReadOnlyCell: connReadOnly,
+		factory:            factory,
+		cellConns:          make(map[string]cellConn),
+		cellInfoCacheTTL:   CellInfoCacheTTL,
+		cellInfoReads:      make(map[string]cellInfoRead),
 	}, nil
 }
 
@@ -411,9 +401,6 @@ func GetAliasByCell(ctx context.Context, ts *Server, cell string) string {
 // Close will close all connections to underlying topo Server.
 // It will nil all member variables, so any further access will panic.
 func (ts *Server) Close() {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	ts.closed = true
 	if ts.globalCell != nil {
 		ts.globalCell.Close()
 	}
@@ -422,6 +409,8 @@ func (ts *Server) Close() {
 	}
 	ts.globalCell = nil
 	ts.globalReadOnlyCell = nil
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
 	for _, cc := range ts.cellConns {
 		cc.conn.Close()
 	}

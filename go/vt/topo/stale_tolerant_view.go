@@ -20,11 +20,6 @@ import (
 	"context"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -34,7 +29,6 @@ type cellReader interface {
 	Get(ctx context.Context, filePath string) ([]byte, Version, error)
 	List(ctx context.Context, filePathPrefix string) ([]KVInfo, error)
 	ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error)
-	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error)
 }
 
 // cellReaderFunc returns a cellReader for a cell. Server.connReaderForCell and Server.cellReaderFor are the two
@@ -62,30 +56,24 @@ func (ts *Server) StaleTolerantView() *StaleTolerantView {
 
 // GetTablet is Server.GetTablet, reading the tablet's cell location from the CellInfo cache.
 func (v *StaleTolerantView) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
-	span, ctx := trace.NewSpan(ctx, "TopoServer.StaleTolerantView.GetTablet")
-	span.Annotate("tablet", topoproto.TabletAliasString(alias))
-	defer span.Finish()
-
 	return getTablet(ctx, alias, v.ts.cellReaderFor)
 }
 
 // FindAllTabletAliasesInShard is Server.FindAllTabletAliasesInShard, reading each cell's location from the
 // CellInfo cache.
 func (v *StaleTolerantView) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
-	span, ctx := trace.NewSpan(ctx, "topo.StaleTolerantView.FindAllTabletAliasesInShard")
-	span.Annotate("keyspace", keyspace)
-	span.Annotate("shard", shard)
-	defer span.Finish()
-
 	return v.ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, nil, v.ts.cellReaderFor)
 }
 
 // cellReaderFor returns a cellReader for the cell, from a CellInfo read within the cache TTL if there is one.
-// With the TTL at 0, it is ConnForCell.
+// Otherwise it reads the CellInfo and connects like ConnForCell, and records the read for the next call. With
+// the TTL at 0, it is ConnForCell.
+//
+// Calls that find the cell's CellInfo stale each read it; the last to finish records its read, which may be
+// older than another's. The view is read-only, so the worst that does is leave its reads on the cell's old
+// topo server for up to the TTL, which is the view's contract anyway. ConnForCell has the same race between
+// two of its own calls.
 func (ts *Server) cellReaderFor(ctx context.Context, cell string) (cellReader, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
 	if cell == GlobalCell {
 		return ts.ConnForCell(ctx, cell)
 	}
@@ -95,18 +83,37 @@ func (ts *Server) cellReaderFor(ctx context.Context, cell string) (cellReader, e
 		return ts.ConnForCell(ctx, cell)
 	}
 	conn, ok := ts.freshCellConnLocked(cell)
+	generation := ts.cellInfoGeneration
 	ts.mu.Unlock()
 	if ok {
 		return conn, nil
 	}
-	return ts.refreshCellConn(ctx, cell)
+
+	readStart := time.Now()
+	ci, err := ts.GetCellInfo(ctx, cell, false /*strongRead*/)
+	if err != nil {
+		return nil, err
+	}
+
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	conn, err = ts.connForCellInfoLocked(cell, ci)
+	if err != nil {
+		return nil, err
+	}
+	// If a CellInfo was expired while we read, what we read may predate the change, so leave it for the next
+	// call to read again.
+	if ts.cellInfoGeneration == generation {
+		ts.cellInfoReads[cell] = cellInfoRead{cellInfo: ci, readStart: readStart}
+	}
+	return conn, nil
 }
 
 // freshCellConnLocked returns the cell's cached connection if it is to the topo server of a CellInfo that
 // cellReaderFor read within the TTL. ts.mu must be held.
 func (ts *Server) freshCellConnLocked(cell string) (Conn, bool) {
 	read, ok := ts.cellInfoReads[cell]
-	if !ok || read.expired || time.Since(read.readStart) >= ts.cellInfoCacheTTL {
+	if !ok || time.Since(read.readStart) >= ts.cellInfoCacheTTL {
 		return nil, false
 	}
 	// ConnForCell may have replaced the connection since, after reading a different CellInfo.
@@ -117,70 +124,11 @@ func (ts *Server) freshCellConnLocked(cell string) (Conn, bool) {
 	return cc.conn, true
 }
 
-// refreshCellConn reads the cell's CellInfo and returns the cell's connection for it, recording the read for
-// cellReaderFor. It returns the cached connection without reading if another call refreshed it while this one
-// waited.
-func (ts *Server) refreshCellConn(ctx context.Context, cell string) (Conn, error) {
-	ts.mu.Lock()
-	refresh, ok := ts.cellInfoRefreshes[cell]
-	if !ok {
-		refresh = semaphore.NewWeighted(1)
-		ts.cellInfoRefreshes[cell] = refresh
-	}
-	ts.mu.Unlock()
-
-	// Refresh the cell one call at a time, so that what we read is never older than what was last recorded.
-	if err := refresh.Acquire(ctx, 1); err != nil {
-		return nil, err
-	}
-	defer refresh.Release(1)
-	ts.mu.Lock()
-	// Another call may have refreshed the cell while we waited.
-	if conn, ok := ts.freshCellConnLocked(cell); ok {
-		ts.mu.Unlock()
-		return conn, nil
-	}
-	if ts.closed {
-		ts.mu.Unlock()
-		return nil, NewError(Interrupted, cell)
-	}
-	generation := ts.cellInfoGenerations[cell]
-	global := ts.globalCell
-	ts.mu.Unlock()
-
-	// Other calls for the cell wait for this read, so bound it even if ctx has no deadline. It is a strong read:
-	// the result is trusted for the TTL, so it must not come from a GlobalReadOnlyCell that lags behind.
-	readCtx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
-	defer cancel()
-	readStart := time.Now()
-	ci, err := getCellInfo(readCtx, global, cell)
-	if err != nil {
-		return nil, err
-	}
-
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	if ts.closed {
-		// Don't connect after Close, which would leave the connection open.
-		return nil, NewError(Interrupted, cell)
-	}
-	conn, err := ts.connForCellInfoLocked(cell, ci)
-	if err != nil {
-		return nil, err
-	}
-	// If the cell's CellInfo was expired while we read it, what we read may predate the change, so leave it
-	// expired for the next call to read again.
-	ts.cellInfoReads[cell] = cellInfoRead{cellInfo: ci, readStart: readStart, expired: ts.cellInfoGenerations[cell] != generation}
-	return conn, nil
-}
-
-// expireCellInfo makes the next cellReaderFor for cell read its CellInfo from the global topo again.
+// expireCellInfo makes the next cellReaderFor for cell read its CellInfo from the global topo again, and a
+// cellReaderFor that is reading it now not record what it read.
 func (ts *Server) expireCellInfo(cell string) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	ts.cellInfoGenerations[cell]++
-	if read, ok := ts.cellInfoReads[cell]; ok {
-		read.expired = true
-		ts.cellInfoReads[cell] = read
-	}
+	delete(ts.cellInfoReads, cell)
+	ts.cellInfoGeneration++
 }

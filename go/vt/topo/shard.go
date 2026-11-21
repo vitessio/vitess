@@ -586,18 +586,18 @@ func (ts *Server) FindAllTabletAliasesInShard(ctx context.Context, keyspace, sha
 //
 // The tablet aliases are sorted by cell, then by UID.
 func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string) ([]*topodatapb.TabletAlias, error) {
-	span, ctx := trace.NewSpan(ctx, "topo.FindAllTabletAliasesInShardbyCell")
-	span.Annotate("keyspace", keyspace)
-	span.Annotate("shard", shard)
-	span.Annotate("num_cells", len(cells))
-	defer span.Finish()
-
 	return ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells, ts.connReaderForCell)
 }
 
 // findAllTabletAliasesInShardByCell is FindAllTabletAliasesInShardByCell reading each cell's replication graph
 // through the connection connFor returns for the cell.
 func (ts *Server) findAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string, connFor cellReaderFunc) ([]*topodatapb.TabletAlias, error) {
+	span, ctx := trace.NewSpan(ctx, "topo.FindAllTabletAliasesInShardbyCell")
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("shard", shard)
+	span.Annotate("num_cells", len(cells))
+	defer span.Finish()
+
 	var err error
 
 	// The caller intents to all cells

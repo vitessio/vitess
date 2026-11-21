@@ -172,10 +172,6 @@ func NewTabletInfo(tablet *topodatapb.Tablet, version Version) *TabletInfo {
 // GetTablet is a high level function to read tablet data.
 // It generates trace spans.
 func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
-	span, ctx := trace.NewSpan(ctx, "TopoServer.GetTablet")
-	span.Annotate("tablet", topoproto.TabletAliasString(alias))
-	defer span.Finish()
-
 	return getTablet(ctx, alias, ts.connReaderForCell)
 }
 
@@ -186,6 +182,10 @@ func getTablet(ctx context.Context, alias *topodatapb.TabletAlias, connFor cellR
 		log.Error("unable to get connection for cell", slog.String("cell", alias.Cell), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
+
+	span, ctx := trace.NewSpan(ctx, "TopoServer.GetTablet")
+	span.Annotate("tablet", topoproto.TabletAliasString(alias))
+	defer span.Finish()
 
 	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
 	data, version, err := conn.Get(ctx, tabletPath)
