@@ -37,14 +37,16 @@ import (
  2. Now delete 'zone2' and 'ListAllTablets' should return only primary tablets
  3. Add the cell back with same name but at different location in topo.
  4. 'ListAllTablets' should return all the new tablets.
- 5. The tablet throttler on shard1's primary, whose topo reads reuse the cell's CellInfo for
-    --topo-cell-info-cache-ttl, finds the replica in the re-added 'zone2' and sees its lag.
+ 5. The tablet throttler on shard1's primary, enabled before the cell was deleted so that its topo reads
+    cached the cell's old location for --topo-cell-info-cache-ttl, finds the replica in the re-added
+    'zone2' and sees its lag.
 */
 func TestVtctldListAllTablets(t *testing.T) {
 	testURL(t, vtctldHealthCheckURL(), "vtctld health check url")
 
 	testListAllTablets(t)
 	testFailedRepoint(t)
+	enableThrottler(t)
 	deleteCell(t)
 	addCellback(t)
 	testThrottlerFollowsReAddedCell(t)
@@ -239,13 +241,29 @@ func getAllTablets() []string {
 	return tablets
 }
 
-// testThrottlerFollowsReAddedCell enables the tablet throttler and stops replication on shard1's replica in
-// the re-added zone2. Shard1's primary reads tablet records through the CellInfo cache, so until the TTL passes
-// it may look for the shard's tablets at zone2's old root, where there are none; within the TTL and an
-// inventory refresh it must find the replica at the new root and see its lag. Meanwhile it reads CellInfo from
-// the global topo less often than shard2's primary, which reads it on every call.
+// enableThrottler enables the tablet throttler while zone2 is at its original root, and waits until shard1's
+// primary has probed the shard's replicas there, so that its CellInfo cache holds zone2's old location when
+// the cell is deleted and added back.
+func enableThrottler(t *testing.T) {
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	require.Eventually(t, func() bool {
+		status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, shard1Primary)
+		if err != nil {
+			return false
+		}
+		lag, ok := status.AggregatedMetrics["shard/lag"]
+		return ok && lag.Error == ""
+	}, 30*time.Second, time.Second, "shard1's primary did not probe its replicas' lag")
+}
+
+// testThrottlerFollowsReAddedCell stops replication on shard1's replica in the re-added zone2. Shard1's
+// primary reads tablet records through the CellInfo cache, which holds zone2's old root from before the cell
+// was deleted, so until the TTL passes it looks for the shard's tablets there, where there are none; within
+// the TTL and an inventory refresh it must find the replica at the new root and see its lag. Meanwhile it reads
+// CellInfo from the global topo less often than shard2's primary, which reads it on every call.
 func testThrottlerFollowsReAddedCell(t *testing.T) {
 	vtctld := &clusterInstance.VtctldClientProcess
+	// The tablets in the re-added cell start with the throttler enabled too.
 	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
 
 	cachedBefore := globalTopoGets(t, shard1Primary)
