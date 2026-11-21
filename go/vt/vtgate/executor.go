@@ -617,7 +617,7 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 		case sysvars.SkipQueryPlanCache.Name:
 			var v bool
 			ifOptionsExist(session, func(options *querypb.ExecuteOptions) {
-				v = options.ClientFoundRows
+				v = options.SkipQueryPlanCache
 			})
 			bindVars[key] = sqltypes.BoolBindVariable(v)
 		case sysvars.SQLSelectLimit.Name:
