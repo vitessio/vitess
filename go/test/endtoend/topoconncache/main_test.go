@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -57,8 +58,14 @@ var (
 		"--enable-replication-reporter",
 		"--serving-state-grace-period", "1s",
 		"--binlog-player-protocol", "grpc",
+		// The tablet throttler measures replication lag from heartbeats.
+		"--heartbeat-enable",
+		"--heartbeat-interval", "250ms",
 	}
-	vSchema = `
+	// cellInfoCacheTTL is how long the tablet throttler's topo reads reuse a cell's CellInfo on every tablet
+	// but shard2's primary, which reads it on every call, as on main, for comparison.
+	cellInfoCacheTTL = 5 * time.Second
+	vSchema          = `
 		{
 		  "sharded": true,
 		  "vindexes": {
@@ -159,6 +166,7 @@ func TestMain(m *testing.M) {
 				clusterInstance.DefaultCharset,
 			)
 			tablet.VttabletProcess.SupportsBackup = true
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, cellInfoCacheTTLArgs(tablet)...)
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				return 1, err
@@ -254,4 +262,14 @@ func getStatusForURL(url string) int {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode
+}
+
+// cellInfoCacheTTLArgs returns the tablet's --topo-cell-info-cache-ttl flag: cellInfoCacheTTL, except on shard2's
+// primary, which keeps the default of 0 to compare with.
+func cellInfoCacheTTLArgs(tablet *cluster.Vttablet) []string {
+	ttl := cellInfoCacheTTL
+	if tablet == shard2Primary {
+		ttl = 0
+	}
+	return []string{"--topo-cell-info-cache-ttl", ttl.String()}
 }
