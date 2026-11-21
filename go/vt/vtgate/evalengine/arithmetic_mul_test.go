@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestMathMulOverflow covers the integer multiplication helpers at the edges
@@ -49,7 +50,7 @@ func TestMathMulOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := mathMul_ii0(c.v1, c.v2)
 			if c.wantErr {
-				assert.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
+				require.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
 				continue
 			}
 			if assert.NoError(t, err, "%d * %d", c.v1, c.v2) {
@@ -76,7 +77,7 @@ func TestMathMulOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := mathMul_uu0(c.v1, c.v2)
 			if c.wantErr {
-				assert.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
+				require.Error(t, err, "%d * %d = %d, want out of range error", c.v1, c.v2, got)
 				continue
 			}
 			if assert.NoError(t, err, "%d * %d", c.v1, c.v2) {
