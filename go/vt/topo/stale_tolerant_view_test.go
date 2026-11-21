@@ -236,29 +236,85 @@ func TestStaleTolerantViewCachesCellInfo(t *testing.T) {
 	})
 }
 
-// TestStaleTolerantViewFollowsConnForCell verifies that once ConnForCell has found a cell re-pointed by
-// another process and replaced the cell's connection, the StaleTolerantView reads the cell's CellInfo again
-// rather than keep using the CellInfo it cached for the closed connection.
+// TestStaleTolerantViewFollowsConnForCell verifies how the StaleTolerantView follows ConnForCell's handling of
+// a cell re-pointed by another process. Once ConnForCell has found the new topo server and replaced the cell's
+// connection, whether the cell's root or only its address changed, the view reads the cell's CellInfo again
+// rather than keep using the CellInfo it cached for the replaced connection. When the new topo server can't be
+// connected to, ConnForCell keeps the old connection open, and the view reads through it within the TTL, fails
+// like ConnForCell once the TTL has passed, and reads through the original connection again once the cell is
+// pointed back.
 func TestStaleTolerantViewFollowsConnForCell(t *testing.T) {
 	ctx := t.Context()
 	ts, other, factory := newCellInfoServer(t, time.Hour)
 
-	conn, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
+	repoints := []struct {
+		name   string
+		update func(ci *topodatapb.CellInfo)
+	}{
+		{"root", func(ci *topodatapb.CellInfo) { ci.Root = "/zone1-moved" }},
+		{"address only", func(ci *topodatapb.CellInfo) { ci.ServerAddress = "zone1-moved:2379" }},
+	}
+	for _, repoint := range repoints {
+		t.Run("re-pointed to a reachable topo server, by "+repoint.name, func(t *testing.T) {
+			ts.ExpireCellInfo("zone1")
+			conn, err := ts.CellReader(ctx, "zone1")
+			require.NoError(t, err)
 
-	repointCell(t, other, "zone1", "/zone1-moved")
-	got, err := ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-	require.Same(t, conn, got, "the view read CellInfo within the TTL")
+			require.NoError(t, other.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+				repoint.update(ci)
+				return nil
+			}))
+			got, err := ts.CellReader(ctx, "zone1")
+			require.NoError(t, err)
+			require.Same(t, conn, got, "the view read CellInfo within the TTL")
 
-	moved, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-	require.NotSame(t, conn, moved)
-	before := factory.reads.Load()
-	got, err = ts.CellReader(ctx, "zone1")
-	require.NoError(t, err)
-	assert.Same(t, moved, got, "the view did not use ConnForCell's new connection")
-	assert.Equal(t, before+1, factory.reads.Load(), "the view did not read CellInfo again")
+			moved, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
+			require.NotSame(t, conn, moved)
+			before := factory.reads.Load()
+			got, err = ts.CellReader(ctx, "zone1")
+			require.NoError(t, err)
+			assert.Same(t, moved, got, "the view did not use ConnForCell's new connection")
+			assert.Equal(t, before+1, factory.reads.Load(), "the view did not read CellInfo again")
+		})
+	}
+
+	t.Run("re-pointed to an unreachable topo server", func(t *testing.T) {
+		// A downFactory can't connect to a root under /down, and tells whether a connection was closed.
+		_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+		ts, err := topo.NewWithFactory(&downFactory{Factory: memFactory, t: t}, "", "")
+		require.NoError(t, err)
+		t.Cleanup(ts.Close)
+		ts.SetCellInfoCacheTTL(time.Hour)
+		other, err := topo.NewWithFactory(memFactory, "", "")
+		require.NoError(t, err)
+		t.Cleanup(other.Close)
+		original, err := ts.GetCellInfo(ctx, "zone1", true /*strongRead*/)
+		require.NoError(t, err)
+
+		conn, err := ts.CellReader(ctx, "zone1")
+		require.NoError(t, err)
+
+		repointCell(t, other, "zone1", "/down")
+		_, wantErr := ts.ConnForCell(ctx, "zone1")
+		require.Error(t, wantErr)
+		got, err := ts.CellReader(ctx, "zone1")
+		require.NoError(t, err, "the view did not read through the open connection within the TTL")
+		assert.Same(t, conn, got)
+		assertClosed(t, conn.(topo.Conn), false, "the connection the view reads through was closed")
+
+		// Stand in for the TTL passing.
+		ts.ExpireCellInfo("zone1")
+		_, err = ts.CellReader(ctx, "zone1")
+		require.Error(t, err, "the view read from a cell whose topo server can't be connected to after the TTL")
+		assert.Equal(t, wantErr.Error(), err.Error(), "the view did not fail like ConnForCell")
+
+		repointCell(t, other, "zone1", original.Root)
+		got, err = ts.CellReader(ctx, "zone1")
+		require.NoError(t, err)
+		assert.Same(t, conn, got, "the view did not read through the original connection once the cell was pointed back")
+		assertClosed(t, got.(topo.Conn), false, "the view returned a closed connection")
+	})
 }
 
 // TestStaleTolerantViewExpiryDuringRead verifies that when this process changes a cell's CellInfo while the
@@ -374,7 +430,8 @@ func TestStaleTolerantViewConcurrentRepoints(t *testing.T) {
 }
 
 // TestStaleTolerantViewReads verifies that the StaleTolerantView's GetTablet and FindAllTabletAliasesInShard
-// return what the Server's do, and with the CellInfo cache read no CellInfo once it is cached.
+// return what the Server's do, and with the CellInfo cache read no CellInfo once it is cached, while the
+// Server's own GetTablet, GetShardReplication and FindAllTabletAliasesInShardByCell still read it on every call.
 func TestStaleTolerantViewReads(t *testing.T) {
 	ctx := t.Context()
 	ts, _, factory := newCellInfoServer(t, time.Hour)
@@ -434,6 +491,28 @@ func TestStaleTolerantViewReads(t *testing.T) {
 		require.NoError(t, err)
 	}
 	assert.Equal(t, before, factory.reads.Load(), "the view read CellInfo while it was cached")
+
+	// The Server's own reads, which share their code with the view's, read CellInfo on every call, as on main,
+	// however warm the cache: they feed decisions that must not see a cell's old topo server.
+	serverReads := map[string]func() error{
+		"GetTablet": func() error {
+			_, err := ts.GetTablet(ctx, want[0])
+			return err
+		},
+		"GetShardReplication": func() error {
+			_, err := ts.GetShardReplication(ctx, "zone1", "ks", "-80")
+			return err
+		},
+		"FindAllTabletAliasesInShardByCell": func() error {
+			_, err := ts.FindAllTabletAliasesInShardByCell(ctx, "ks", "-80", []string{"zone1"})
+			return err
+		},
+	}
+	for name, read := range serverReads {
+		before := factory.reads.Load()
+		require.NoError(t, read())
+		assert.Equal(t, before+1, factory.reads.Load(), "Server.%s did not read CellInfo with the cache warm", name)
+	}
 
 	_, err = view.GetTablet(ctx, &topodatapb.TabletAlias{Cell: "zone1", Uid: 100})
 	assert.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
