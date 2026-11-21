@@ -174,6 +174,14 @@ func TestMergeLimitExpressions(t *testing.T) {
 			expectedFailed: false,
 		},
 		{
+			// Do not replace an invalid count with the other LIMIT, even when it is 1.
+			name:           "first limit exceeds uint64 and second limit is one",
+			limit1:         sqlparser.NewIntLiteral("18446744073709551616"),
+			limit2:         sqlparser.NewIntLiteral("1"),
+			offset2:        sqlparser.NewIntLiteral("9223372036854775807"),
+			expectedFailed: true,
+		},
+		{
 			name:           "first limit is argument",
 			limit1:         sqlparser.NewArgument("limit1"),
 			limit2:         sqlparser.NewIntLiteral("7"),

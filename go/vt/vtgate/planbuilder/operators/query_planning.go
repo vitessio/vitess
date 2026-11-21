@@ -465,54 +465,41 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 			// No offset, so the first limit is used directly.
 			return l1, false
 		}
-		off2, ok := off2.(*sqlparser.Literal)
-		if !ok {
-			// If the offset is not a literal, fail the merge.
+		v1, ok1 := limitLiteral(l1)
+		offset, ok2 := limitLiteral(off2)
+		if !ok1 || !ok2 {
 			return nil, true
 		}
-		lim1str, ok := l1.(*sqlparser.Literal)
-		if !ok {
-			// If the first limit is not a literal, return the first limit without failing.
-			return nil, false
-		}
-		// Calculate the remaining limit after the offset.
-		off2int, _ := strconv.Atoi(off2.Val)
-		l1int, _ := strconv.Atoi(lim1str.Val)
-		lim := max(l1int-off2int, 0)
-		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+		return sqlparser.NewIntLiteral(strconv.FormatInt(max(v1-offset, 0), 10)), false
 
 	default:
-		v1str, ok1 := l1.(*sqlparser.Literal)
-		if ok1 && v1str.Val == "1" {
+		// Validate both row counts before either can be discarded by the merge.
+		v1, ok1 := limitLiteral(l1)
+		v2, ok2 := limitLiteral(l2)
+		if !ok1 || !ok2 {
+			return nil, true
+		}
+		if l1.(*sqlparser.Literal).Val == "1" {
 			// If the first limit is "1", it dominates, so return it.
 			return l1, false
 		}
-		v2str, ok2 := l2.(*sqlparser.Literal)
-		if ok2 && v2str.Val == "1" {
+		if l2.(*sqlparser.Literal).Val == "1" {
 			// If the second limit is "1", it dominates, so return it.
 			return l2, false
 		}
-		if !ok1 || !ok2 {
-			// If either limit is not a literal, fail the merge.
-			return nil, true
-		}
-
-		var off2int int
+		var offset int64
 		if off2 != nil {
-			off2, ok := off2.(*sqlparser.Literal)
+			var ok bool
+			offset, ok = limitLiteral(off2)
 			if !ok {
-				// If the offset is not a literal, fail the merge.
 				return nil, true
 			}
-			off2int, _ = strconv.Atoi(off2.Val)
 		}
 
-		v1, _ := strconv.Atoi(v1str.Val)
-		v2, _ := strconv.Atoi(v2str.Val)
-		lim := max(min(v2, v1-off2int),
+		lim := max(min(v2, v1-offset),
 			// If the combined limit is negative, set it to zero.
 			0)
-		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+		return sqlparser.NewIntLiteral(strconv.FormatInt(lim, 10)), false
 	}
 }
 
