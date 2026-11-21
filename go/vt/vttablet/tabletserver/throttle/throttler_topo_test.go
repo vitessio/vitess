@@ -31,9 +31,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestThrottlerTopoServer verifies that a throttler made by NewThrottler reads tablet records through the topo server's
-// StaleTolerantView, which with --topo-cell-info-cache-ttl reads no CellInfo once it is cached, and reads
-// SrvKeyspace, which holds its config, through ConnForCell as before.
+// TestThrottlerTopoServer verifies that a throttler made by NewThrottler reads the tablet records that decide
+// what it probes through the topo server's StaleTolerantView, which with --topo-cell-info-cache-ttl reads no
+// CellInfo once it is cached, and reads its own tablet record and SrvKeyspace, which holds its config, through
+// ConnForCell as before.
 func TestThrottlerTopoServer(t *testing.T) {
 	ctx := t.Context()
 	ttl := topo.CellInfoCacheTTL
@@ -51,7 +52,7 @@ func TestThrottlerTopoServer(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "TestThrottlerTopoServer")
 	throttler := NewThrottler(env, nil, ts, alias, nil, func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }, "TestPool")
 	throttlerTS := throttler.ts
-	_, err := throttlerTS.GetTablet(ctx, alias)
+	_, err := throttlerTS.GetTabletStaleTolerant(ctx, alias)
 	require.NoError(t, err)
 
 	// A read through ConnForCell also reads the cell's CellInfo; a cached one does not.
@@ -61,9 +62,13 @@ func TestThrottlerTopoServer(t *testing.T) {
 	assert.Equal(t, []*topodatapb.TabletAlias{alias}, aliases)
 	assert.Equal(t, before+2, gets(), "FindAllTabletAliasesInShard read more than the Shard and its ShardReplication")
 	before = gets()
+	_, err = throttlerTS.GetTabletStaleTolerant(ctx, alias)
+	require.NoError(t, err)
+	assert.Equal(t, before+1, gets(), "GetTabletStaleTolerant read more than the tablet record")
+	before = gets()
 	_, err = throttlerTS.GetTablet(ctx, alias)
 	require.NoError(t, err)
-	assert.Equal(t, before+1, gets(), "GetTablet read more than the tablet record")
+	assert.Equal(t, before+2, gets(), "GetTablet did not read the cell's CellInfo")
 	before = gets()
 	_, err = throttlerTS.GetSrvKeyspace(ctx, "zone1", "ks")
 	require.NoError(t, err)

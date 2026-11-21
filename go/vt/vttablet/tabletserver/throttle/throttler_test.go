@@ -201,6 +201,10 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 	return tablet, nil
 }
 
+func (ts *FakeTopoServer) GetTabletStaleTolerant(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	return ts.GetTablet(ctx, alias)
+}
+
 func (ts *FakeTopoServer) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
 	return topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{
 		PrimaryAlias: &topodatapb.TabletAlias{Cell: "fakezone0", Uid: 100},
@@ -2614,6 +2618,10 @@ func (ts *stimulateTopoServer) GetTablet(ctx context.Context, alias *topodatapb.
 		return nil, ts.tabletErr
 	}
 	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias, Type: ts.tabletTypes[alias.Uid]}}, nil
+}
+
+func (ts *stimulateTopoServer) GetTabletStaleTolerant(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	return ts.GetTablet(ctx, alias)
 }
 
 func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
