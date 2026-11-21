@@ -220,6 +220,11 @@ func init() {
 	for _, cmd := range FlagBinaries {
 		servenv.OnParseFor(cmd, registerTopoFlags)
 	}
+	// Only the tablet throttler reads through the StaleTolerantView, so only the binaries that run it take the
+	// cache flag.
+	for _, cmd := range []string{"vtcombo", "vttablet"} {
+		servenv.OnParseFor(cmd, registerCellInfoCacheFlags)
+	}
 }
 
 func registerTopoFlags(fs *pflag.FlagSet) {
@@ -227,6 +232,9 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &topoGlobalServerAddress, "topo-global-server-address", topoGlobalServerAddress, "the address of the global topology server")
 	utils.SetFlagStringVar(fs, &topoGlobalRoot, "topo-global-root", topoGlobalRoot, "the path of the global topology data in the global topology server")
 	utils.SetFlagInt64Var(fs, &DefaultReadConcurrency, "topo-read-concurrency", DefaultReadConcurrency, "Maximum concurrency of topo reads per global or local cell.")
+}
+
+func registerCellInfoCacheFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &CellInfoCacheTTL, "topo-cell-info-cache-ttl", CellInfoCacheTTL, "How long reads that tolerate a stale cell location, such as the tablet throttler's tablet inventory, reuse a cell's CellInfo before reading it from the global topo again; 0 reads it on every call. Until it is read again, these reads do not notice a cell re-pointed or deleted by another process, and keep reading from the cell's old topo server.")
 }
 
