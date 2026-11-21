@@ -1046,6 +1046,8 @@ func TestOlapErrorAfterFields(t *testing.T) {
 
 // TestLimitOffsetAboveBigint compares large unsigned limits and overflowing sums with MySQL.
 func TestLimitOffsetAboveBigint(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 

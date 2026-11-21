@@ -124,6 +124,8 @@ func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
 
 // TestDerivedLimitOffsetOverflow compares overflowing nested offsets with MySQL.
 func TestDerivedLimitOffsetOverflow(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 

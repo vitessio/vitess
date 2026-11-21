@@ -653,6 +653,12 @@ func TestLimitInvalidCount(t *testing.T) {
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
 	require.EqualError(t, err, "Cannot convert value to desired type")
 
+	l.Count = evalengine.NewLiteralUint(18446744073709551615)
+	count, offset, err := l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, math.MaxInt, count)
+	assert.Zero(t, offset)
+
 	l.Count = evalengine.NewLiteralInt(-1)
 	_, _, err = l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
 	require.EqualError(t, err, "requested limit is out of range: -1")
