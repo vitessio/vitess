@@ -1267,7 +1267,7 @@ func (asm *assembler) IntDiv_ii() {
 		if r.i == 0 {
 			env.vm.stack[env.vm.sp-2] = nil
 		} else {
-			l.i = l.i / r.i
+			l.i, env.vm.err = mathIntDiv_ii0(l.i, r.i)
 		}
 		env.vm.sp--
 		return 1

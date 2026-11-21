@@ -1221,6 +1221,22 @@ func Arithmetic(yield Query) {
 			}
 		}
 	}
+
+	// DIV at the int64/uint64 boundaries. inputConversions has no unsigned
+	// value at 2^63-1 or 2^63, and MySQL rejects -2^63 DIV -1 and -2^63 DIV 1.
+	boundaries := []string{
+		`CAST(9223372036854775807 AS UNSIGNED)`,
+		`CAST(9223372036854775808 AS UNSIGNED)`,
+		`-9223372036854775807`,
+		`-9223372036854775808`,
+		`-1`,
+		`1`,
+	}
+	for _, lhs := range boundaries {
+		for _, rhs := range boundaries {
+			yield(fmt.Sprintf("%s DIV %s", lhs, rhs), nil, false)
+		}
+	}
 }
 
 func HexArithmetic(yield Query) {
