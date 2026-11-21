@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
@@ -424,17 +425,22 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 	case e2 == nil:
 		return e1, false
 	default:
-		v1str, ok := e1.(*sqlparser.Literal)
+		// Decline the merge unless both offsets are valid LIMIT literals, so
+		// the original values are still validated at execution
+		v1, ok := limitLiteral(e1)
 		if !ok {
 			return nil, true
 		}
-		v2str, ok := e2.(*sqlparser.Literal)
+		v2, ok := limitLiteral(e2)
 		if !ok {
 			return nil, true
 		}
-		v1, _ := strconv.Atoi(v1str.Val)
-		v2, _ := strconv.Atoi(v2str.Val)
-		return sqlparser.NewIntLiteral(strconv.Itoa(v1 + v2)), false
+		if v1 > math.MaxInt64-v2 {
+			// Saturate instead of overflowing: no result can hold this many rows,
+			// so both offsets skip every row
+			return sqlparser.NewIntLiteral(strconv.FormatInt(math.MaxInt64, 10)), false
+		}
+		return sqlparser.NewIntLiteral(strconv.FormatInt(v1+v2, 10)), false
 	}
 }
 
@@ -516,15 +522,50 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 		// we can't push down an offset, so we need to convert it to a rowcount
 		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest
 		// this way we can still limit the number of rows that are returned
-		plus := &sqlparser.BinaryExpr{
-			Operator: sqlparser.PlusOp,
-			Left:     pushedLimit.Rowcount,
-			Right:    pushedLimit.Offset,
+		if upper, ok := saturatedUpperLimit(pushedLimit.Rowcount, pushedLimit.Offset); ok {
+			pushedLimit.Rowcount = upper
+		} else {
+			plus := &sqlparser.BinaryExpr{
+				Operator: sqlparser.PlusOp,
+				Left:     pushedLimit.Rowcount,
+				Right:    pushedLimit.Offset,
+			}
+			pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		}
-		pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		pushedLimit.Offset = nil
 	}
 	return newLimit(src, pushedLimit, false)
+}
+
+// saturatedUpperLimit returns math.MaxInt64 as a literal when rowcount and offset
+// are integer literals whose sum does not fit in a BIGINT. The Limit primitive
+// saturates its upper limit in the same way: no result can hold that many rows,
+// so the pushed down limit still returns every row the LIMIT on top needs.
+func saturatedUpperLimit(rowcount, offset sqlparser.Expr) (sqlparser.Expr, bool) {
+	count, ok := limitLiteral(rowcount)
+	if !ok {
+		return nil, false
+	}
+	off, ok := limitLiteral(offset)
+	if !ok || count <= math.MaxInt64-off {
+		return nil, false
+	}
+	return sqlparser.NewIntLiteral(strconv.FormatInt(math.MaxInt64, 10)), true
+}
+
+// limitLiteral returns the value of a non-negative integer literal used as a LIMIT
+// row count or offset. MySQL accepts values up to 18446744073709551615; values above
+// math.MaxInt64 saturate at math.MaxInt64, like they do in the Limit primitive.
+func limitLiteral(expr sqlparser.Expr) (int64, bool) {
+	lit, ok := expr.(*sqlparser.Literal)
+	if !ok || lit.Type != sqlparser.IntVal {
+		return 0, false
+	}
+	val, err := strconv.ParseUint(lit.Val, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return int64(min(val, math.MaxInt64)), true
 }
 
 // getLimitExpression is a helper function to simplify an expression using the evalengine

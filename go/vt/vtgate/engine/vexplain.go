@@ -331,7 +331,7 @@ func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor
 			return err
 		}
 		bindVars = copyBindVars(bindVars)
-		bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
+		bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(upperLimit(count, offset)))
 	}
 
 	inputs, _ := primitive.Inputs()

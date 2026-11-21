@@ -1317,6 +1317,93 @@
     }
   },
   {
+    "comment": "sharded limit offset whose sum does not fit in a BIGINT",
+    "query": "select id from user limit 1 offset 9223372036854775807",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from user limit 1 offset 9223372036854775807",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "1",
+        "Offset": "9223372036854775807",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` limit 9223372036854775807"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "sharded unsigned limit above the BIGINT range with an offset",
+    "query": "select id from user limit 18446744073709551615 offset 1",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from user limit 18446744073709551615 offset 1",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "18446744073709551615",
+        "Offset": "1",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` limit 9223372036854775807"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "merged offsets whose sum does not fit in a BIGINT",
+    "query": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 0 offset 1",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from user limit 0 offset 9223372036854775807) as t limit 0 offset 1",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "0",
+        "Offset": "9223372036854775807",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id from `user` where 1 != 1) as t where 1 != 1",
+            "Query": "select id from (select id from `user`) as t limit 9223372036854775807"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "sharded limit offset with arguments",
     "query": "select user_id from music order by user_id limit :limit, :offset",
     "plan": {

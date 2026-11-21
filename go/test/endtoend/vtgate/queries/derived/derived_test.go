@@ -121,3 +121,13 @@ func TestDerivedTableColumnAliasWithJoin(t *testing.T) {
 	mcmp.Exec(`SELECT user.id FROM user join (SELECT id FROM user) t(uid) on t.uid = user.id`)
 	mcmp.Exec(`SELECT user.id FROM user left join (SELECT id FROM user) t(uid) on t.uid = user.id`)
 }
+
+// TestDerivedLimitOffsetOverflow compares overflowing nested offsets with MySQL.
+func TestDerivedLimitOffsetOverflow(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.AssertMatches("select id from (select id from user limit 9223372036854775807 offset 9223372036854775807) as t limit 9223372036854775807 offset 1", "[]")
+}

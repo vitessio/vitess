@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -135,11 +134,7 @@ func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars 
 		return 0, sqltypes.ErrIncompatibleTypeCast
 	}
 
-	count, err := strconv.Atoi(value.RawStr())
-	if err != nil || count < 0 {
-		return 0, fmt.Errorf("requested limit is out of range: %v", value.RawStr())
-	}
-	return count, nil
+	return limitValue(value)
 }
 
 func (ms *MemorySort) description() PrimitiveDescription {
