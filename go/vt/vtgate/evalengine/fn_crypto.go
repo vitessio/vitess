@@ -26,6 +26,8 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type builtinMD5 struct {
@@ -198,6 +200,10 @@ type builtinRandomBytes struct {
 
 var _ IR = (*builtinRandomBytes)(nil)
 
+// errRandomBytesLength is the error MySQL raises when the length passed to
+// RANDOM_BYTES is outside of 1..1024.
+var errRandomBytesLength = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "length value is out of range in 'random_bytes'")
+
 func (call *builtinRandomBytes) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
@@ -210,7 +216,7 @@ func (call *builtinRandomBytes) eval(env *ExpressionEnv) (eval, error) {
 
 	l := evalToInt64(arg)
 	if l.i < 1 || l.i > 1024 {
-		return nil, nil
+		return nil, errRandomBytesLength
 	}
 
 	buf := make([]byte, l.i)

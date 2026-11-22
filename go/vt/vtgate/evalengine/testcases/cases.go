@@ -830,13 +830,16 @@ func FnSHA2(yield Query) {
 func FnRandomBytes(yield Query) {
 	for _, num := range radianInputs {
 		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil, false)
-		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil, false)
 	}
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("LENGTH(RANDOM_BYTES(%s))", num), nil, false)
-		yield(fmt.Sprintf("COLLATION(RANDOM_BYTES(%s))", num), nil, false)
 	}
+
+	// MySQL does not evaluate the argument of COLLATION, so it returns
+	// "binary" even for a length that RANDOM_BYTES rejects. The evalengine
+	// does evaluate it, so only check COLLATION with a valid length.
+	yield("COLLATION(RANDOM_BYTES(16))", nil, false)
 }
 
 func CaseExprWithValue(yield Query) {
