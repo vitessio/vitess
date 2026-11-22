@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -90,7 +91,7 @@ func TestBackupRestoresTypeWhenChangeToBackupFails(t *testing.T) {
 	injectedErr := errors.New("injected replication status failure")
 	fake.ReplicationStatusError = injectedErr
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engineName)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engineName)})
 	require.ErrorContains(t, err, injectedErr.Error())
 	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 	ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
@@ -113,7 +114,7 @@ func TestBackupRestoresPrimarySemiSync(t *testing.T) {
 		return nil
 	}
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.ErrorContains(t, err, injectedErr.Error())
 	assert.False(t, servingWhenEnabled, "semi-sync was enabled after serving resumed")
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
@@ -151,15 +152,19 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 				return nil
 			}
 
-			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			outcome, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 			require.ErrorContains(t, err, tt.wantErr)
 			if tt.backedUp {
 				require.ErrorContains(t, err, "backup completed, but")
 				assert.Len(t, handle.EndBackupCalls, 1)
 				assert.Empty(t, handle.AbortBackupCalls)
+				// The backup is stored, so it is reported alongside the error.
+				assert.Equal(t, mysqlctl.BackupUsable, outcome.Result)
+				assert.NotEmpty(t, outcome.Name)
 			} else {
 				assert.NotContains(t, err.Error(), "backup completed")
 				require.NotErrorIs(t, err, restoreErr)
+				assert.Empty(t, outcome.Name)
 			}
 			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
 			ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
@@ -276,7 +281,7 @@ func TestBackupRefusesPrimaryWithInvalidDurabilityConfiguration(t *testing.T) {
 			wasSemiSync := fake.SemiSyncPrimaryEnabled
 			engine := mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine)
 
-			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 			require.ErrorContains(t, err, tc.wantErr)
 			assert.Empty(t, engine.ExecuteBackupCalls)
 			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
@@ -325,7 +330,7 @@ func TestBackupRestoresPrimarySemiSyncFromPolicyAtStart(t *testing.T) {
 				},
 			}
 
-			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 			require.NoError(t, err)
 			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 			assert.True(t, qsc.IsServing())
@@ -356,7 +361,7 @@ func TestBackupLeavesReplicaSourceSemiSyncOff(t *testing.T) {
 				factory.AddOperationError(memorytopo.Get, "keyspaces/ks/Keyspace$", errors.New("injected keyspace read failure"))
 			}
 
-			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(primaryDrainEngine)})
+			_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(primaryDrainEngine)})
 			require.NoError(t, err)
 			assert.Len(t, handle.EndBackupCalls, 1)
 			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
@@ -396,7 +401,7 @@ func TestBackupRestoresPrimarySemiSyncWhenCanceled(t *testing.T) {
 		},
 	}
 
-	err := tm.Backup(backupCtx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(backupCtx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	// The fake engine completes the backup despite the cancellation.
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
@@ -478,7 +483,8 @@ func TestBackupReleasesActionLockWhenPrimaryRestoreHangs(t *testing.T) {
 
 			returned := make(chan error, 1)
 			go func() {
-				returned <- tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+				_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+				returned <- err
 			}()
 			var err error
 			require.Eventually(t, func() bool {
@@ -516,7 +522,7 @@ func TestBackupRestoresPrimaryTypeWithItsOwnBudget(t *testing.T) {
 	useFakeBackupStorage(t)
 	tm.MysqlDaemon = &stalledSemiSyncMysqlDaemon{FakeMysqlDaemon: fake, completes: true}
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
@@ -538,7 +544,7 @@ func TestBackupStartsMonitorWhenPrimaryRestoreFailsAfterPublishing(t *testing.T)
 		during:           func() { qsc.SetServingTypeError = servingErr },
 	}
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.ErrorContains(t, err, servingErr.Error())
 	require.ErrorContains(t, err, "backup completed, but")
 	assert.Len(t, handle.EndBackupCalls, 1)
@@ -593,7 +599,7 @@ func TestBackupRestoresDeniedTablesAfterSlowSchemaRead(t *testing.T) {
 				},
 			}
 
-			err = tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: tabletType == topodatapb.TabletType_PRIMARY, BackupEngine: new(primaryDrainEngine)})
+			_, err = tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: tabletType == topodatapb.TabletType_PRIMARY, BackupEngine: new(primaryDrainEngine)})
 			require.NoError(t, err)
 			assert.True(t, qsc.IsServing())
 			assert.NotNil(t, qsc.GetQueryRules(denyListQueryList).Find("denied_table"), "serving without the routing fence")
@@ -625,7 +631,7 @@ func TestBackupWithoutSemiSyncDoesNotRepeatDisable(t *testing.T) {
 		return nil
 	}
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.NoError(t, err)
 	assert.Equal(t, 1, disables)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
@@ -654,7 +660,7 @@ func TestBackupPrimaryWithoutReplicationConfiguration(t *testing.T) {
 	fake.ReplicationStatusError = mysql.ErrNotReplica
 	handle := useFakeBackupStorage(t)
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
@@ -663,4 +669,77 @@ func TestBackupPrimaryWithoutReplicationConfiguration(t *testing.T) {
 	assert.True(t, qsc.IsServing())
 	assert.True(t, fake.SemiSyncPrimaryEnabled)
 	assert.Len(t, handle.EndBackupCalls, 1)
+}
+
+// TestBackupReturnsMysqlctlOutcome checks that the tablet manager hands back
+// mysqlctl.Backup's outcome unchanged, since the gRPC server builds the terminal
+// Backup message from it, and asks the engine for the MANIFEST only when the
+// request asks for the outcome.
+func TestBackupReturnsMysqlctlOutcome(t *testing.T) {
+	const engineName = "test-backup-outcome"
+	const manifest = `{"BackupName":"x"}`
+
+	tcs := []struct {
+		name           string
+		result         mysqlctl.BackupResult
+		engineErr      error
+		includeOutcome bool
+		wantManifest   string
+	}{
+		{name: "usable", result: mysqlctl.BackupUsable, includeOutcome: true, wantManifest: manifest},
+		{name: "usable without the outcome", result: mysqlctl.BackupUsable},
+		{name: "empty", result: mysqlctl.BackupEmpty, includeOutcome: true},
+		{name: "stored, then the engine fails", result: mysqlctl.BackupUsable, engineErr: errors.New("can't restart mysqld"), includeOutcome: true, wantManifest: manifest},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			t.Cleanup(ts.Close)
+			tablet := newTestTablet(t, 100, "ks", "-", nil)
+			require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+			fakedb := fakesqldb.New(t)
+			t.Cleanup(fakedb.Close)
+			tm := newTestReplicationTM(tablet, mysqlctl.NewFakeMysqlDaemon(fakedb), ts)
+			tm.Cnf = &mysqlctl.Mycnf{}
+
+			engine := &mysqlctl.FakeBackupEngine{
+				ExecuteBackupReturn:   mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: tc.result, Err: tc.engineErr},
+				ExecuteBackupManifest: manifest,
+			}
+			storage := &mysqlctl.FakeBackupStorage{
+				StartBackupReturn: mysqlctl.FakeBackupStorageStartBackupReturn{BackupHandle: &mysqlctl.FakeBackupHandle{}},
+			}
+			storage.WithParamsReturn = storage
+			previousStorage := backupstorage.BackupStorageImplementation
+			mysqlctl.BackupRestoreEngineMap[engineName] = engine
+			backupstorage.BackupStorageMap[engineName] = storage
+			backupstorage.BackupStorageImplementation = engineName
+			t.Cleanup(func() {
+				delete(mysqlctl.BackupRestoreEngineMap, engineName)
+				delete(backupstorage.BackupStorageMap, engineName)
+				backupstorage.BackupStorageImplementation = previousStorage
+			})
+
+			backupEngine := engineName
+			outcome, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: &backupEngine, IncludeOutcome: tc.includeOutcome})
+			if tc.engineErr != nil {
+				require.ErrorIs(t, err, tc.engineErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.result, outcome.Result)
+			assert.Equal(t, tc.wantManifest, outcome.Manifest)
+			if tc.result == mysqlctl.BackupUsable {
+				assert.Contains(t, outcome.Name, "cell1-0000000100")
+			} else {
+				assert.Empty(t, outcome.Name)
+			}
+			require.Len(t, engine.ExecuteBackupCalls, 1)
+			assert.Equal(t, tc.includeOutcome, engine.ExecuteBackupCalls[0].BackupParams.ManifestOut != nil,
+				"the engine should be asked for the MANIFEST only with IncludeOutcome")
+			assert.False(t, tm.IsBackupRunning())
+		})
+	}
 }
