@@ -191,6 +191,21 @@ func isFinite(f float64) bool {
 	return uint32(x>>shift)&mask != mask
 }
 
+// doubleOutOfRangeError is the error MySQL raises when a math function
+// returns an infinite or NaN result (check_float_overflow).
+func doubleOutOfRangeError(fn string, args ...float64) error {
+	buf := []byte(fn)
+	buf = append(buf, '(')
+	for i, a := range args {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = strconv.AppendFloat(buf, a, 'g', -1, 64)
+	}
+	buf = append(buf, ')')
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DOUBLE value is out of range in '%s'", buf)
+}
+
 type builtinAcos struct {
 	CallExpr
 }
@@ -344,7 +359,11 @@ func (call *builtinCot) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	f, _ := evalToFloat(arg)
-	return newEvalFloat(1.0 / math.Tan(f.f)), nil
+	r := 1.0 / math.Tan(f.f)
+	if !isFinite(r) {
+		return nil, doubleOutOfRangeError("cot", f.f)
+	}
+	return newEvalFloat(r), nil
 }
 
 func (call *builtinCot) compile(c *compiler) (ctype, error) {
@@ -413,7 +432,11 @@ func (call *builtinDegrees) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	f, _ := evalToFloat(arg)
-	return newEvalFloat(f.f * (180 / math.Pi)), nil
+	r := f.f * (180 / math.Pi)
+	if !isFinite(r) {
+		return nil, doubleOutOfRangeError("degrees", f.f)
+	}
+	return newEvalFloat(r), nil
 }
 
 func (call *builtinDegrees) compile(c *compiler) (ctype, error) {
@@ -461,7 +484,7 @@ func (call *builtinExp) eval(env *ExpressionEnv) (eval, error) {
 	f, _ := evalToFloat(arg)
 	a := math.Exp(f.f)
 	if !isFinite(a) {
-		return nil, nil
+		return nil, doubleOutOfRangeError("exp", f.f)
 	}
 	return newEvalFloat(a), nil
 }
@@ -616,7 +639,7 @@ func (call *builtinPow) eval(env *ExpressionEnv) (eval, error) {
 
 	a := math.Pow(f1.f, f2.f)
 	if !isFinite(a) {
-		return nil, nil
+		return nil, doubleOutOfRangeError("pow", f1.f, f2.f)
 	}
 
 	return newEvalFloat(a), nil
