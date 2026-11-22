@@ -117,15 +117,37 @@ func (sc *SimpleProjection) namesOnly() bool {
 // of panicking with an index out of range deeper down: in OLTP mode the panic
 // would be caught by the connection's recover and close the client connection,
 // and in OLAP mode it would take down the whole vtgate process.
+//
+// Chunks that carry field info are validated against the fields. Streaming
+// chunks after the first carry rows but no field info, so they are validated
+// against the width of their rows instead: the Cols are indices into the input
+// rows, so the highest index must exist in a row. This matters in OLAP mode,
+// where Concatenate.parallelStreamExec sends fields only on the first chunk
+// and clears them on every later chunk: once the fields chunk has failed with
+// the error below, cancel() does not run until the failing arm's
+// StreamExecutePrimitive returns (a scatter route waits for all of its shard
+// streams to finish), and the other arms keep delivering row chunks in the
+// meantime, which would otherwise panic in buildResult before the error could
+// be returned. Rows of a chunk all come from the same source, so checking the
+// first row keeps the overhead to one comparison per chunk. (A planner-level
+// fix that rejects such projections outright would also be possible, but this
+// runtime check guards every execution path.)
 func (sc *SimpleProjection) checkColumns(inner *sqltypes.Result) error {
-	if sc.namesOnly() || len(inner.Fields) == 0 {
-		// Streaming chunks after the first carry no field info; the field
-		// validation on the first chunk covers them.
+	if sc.namesOnly() {
 		return nil
 	}
-	for _, col := range sc.Cols {
-		if col >= len(inner.Fields) {
-			return errWrongNumberOfColumnsInSelect
+	if len(inner.Fields) > 0 {
+		for _, col := range sc.Cols {
+			if col >= len(inner.Fields) {
+				return errWrongNumberOfColumnsInSelect
+			}
+		}
+	}
+	if len(inner.Rows) > 0 {
+		for _, col := range sc.Cols {
+			if col >= len(inner.Rows[0]) {
+				return errWrongNumberOfColumnsInSelect
+			}
 		}
 	}
 	return nil
