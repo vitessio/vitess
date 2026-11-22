@@ -160,11 +160,12 @@ func TestUnion(t *testing.T) {
 // columns its dedup needs, a recursive CTE arm keeps the columns the recursion
 // joins on, and an ApplyJoin arm carries its join columns. The planner trims the
 // wider arms so the Concatenate sees equal widths, and the results match MySQL.
-// With a literal in the select list, the projection above the union can resolve
-// that literal to one of the padding columns Union.GetColumns adds to match the
-// widest arm; with the trim in place that column no longer exists, so those
-// queries fail at execution (main fails them with 1222) instead of returning the
-// wrong data a padding-based approach produced.
+// Each arm also keeps its own literal column, so the projection above the union
+// resolves per-arm literals to real columns and the query returns the same rows
+// as MySQL. In setups where the dedup needs weight_string columns (see the plan
+// tests in union_cases.json), the union's own columns are padded and a
+// projection that resolves to one of those padding columns fails cleanly with
+// 1222 at execution instead of returning wrong data or panicking.
 func TestUnionArmsOfDifferentWidths(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -186,13 +187,8 @@ func TestUnionArmsOfDifferentWidths(t *testing.T) {
 		`[[VARCHAR("root")] [VARCHAR("alice")] [VARCHAR("bob")] [VARCHAR("carol")] [VARCHAR("dave")] [VARCHAR("alice")]]`)
 
 	// MySQL returns the distinct names of u1 and u2 followed by u2's rows with the
-	// literal 1. Vitess plans this query, but the projection above the union reads a
-	// column that the trim removed, so the query errors out instead of returning the
-	// wrong data it would have returned with padded inputs.
-	const literalQuery = `select name, 0 from u1 union select name, 0 from u2 union all select name, 1 from u2`
-	_, vtErr := mcmp.ExecAllowError(literalQuery)
-	require.Error(t, vtErr)
-	mysqlQr, mysqlErr := mcmp.MySQLConn.ExecuteFetch(literalQuery, 1000, true)
-	require.NoError(t, mysqlErr)
-	require.Len(t, mysqlQr.Rows, 7)
+	// literal 1. Every arm keeps its own literal column, so the projection above
+	// the union reads per-arm literals and vitess returns the same rows as MySQL.
+	mcmp.AssertMatchesNoOrder(`select name, 0 from u1 union select name, 0 from u2 union all select name, 1 from u2`,
+		`[[VARCHAR("root") INT64(0)] [VARCHAR("alice") INT64(0)] [VARCHAR("bob") INT64(0)] [VARCHAR("carol") INT64(0)] [VARCHAR("dave") INT64(0)] [VARCHAR("alice") INT64(1)] [VARCHAR("dave") INT64(1)]]`)
 }

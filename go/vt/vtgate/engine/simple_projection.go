@@ -52,12 +52,18 @@ func (sc *SimpleProjection) TryExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return nil, err
 	}
+	if err := sc.checkColumns(inner); err != nil {
+		return nil, err
+	}
 	return sc.buildResult(inner), nil
 }
 
 // TryStreamExecute performs a streaming exec.
 func (sc *SimpleProjection) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return vcursor.StreamExecutePrimitive(ctx, sc.Input, bindVars, wantfields, func(inner *sqltypes.Result) error {
+		if err := sc.checkColumns(inner); err != nil {
+			return err
+		}
 		return callback(sc.buildResult(inner))
 	})
 }
@@ -66,6 +72,9 @@ func (sc *SimpleProjection) TryStreamExecute(ctx context.Context, vcursor VCurso
 func (sc *SimpleProjection) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	inner, err := sc.Input.GetFields(ctx, vcursor, bindVars)
 	if err != nil {
+		return nil, err
+	}
+	if err := sc.checkColumns(inner); err != nil {
 		return nil, err
 	}
 	return &sqltypes.Result{Fields: sc.buildFields(inner)}, nil
@@ -98,6 +107,28 @@ func (sc *SimpleProjection) buildResult(inner *sqltypes.Result) *sqltypes.Result
 
 func (sc *SimpleProjection) namesOnly() bool {
 	return sc.Cols == nil
+}
+
+// checkColumns verifies that every requested column exists in the input result.
+// A projection that reads at or past the end of the input's columns can only
+// come from a planning bug - for example, a projection above a union whose
+// wider inputs were trimmed, resolving a select expression to one of the
+// padding columns that Union.GetColumns added. Fail with a clean error instead
+// of panicking with an index out of range deeper down: in OLTP mode the panic
+// would be caught by the connection's recover and close the client connection,
+// and in OLAP mode it would take down the whole vtgate process.
+func (sc *SimpleProjection) checkColumns(inner *sqltypes.Result) error {
+	if sc.namesOnly() || len(inner.Fields) == 0 {
+		// Streaming chunks after the first carry no field info; the field
+		// validation on the first chunk covers them.
+		return nil
+	}
+	for _, col := range sc.Cols {
+		if col >= len(inner.Fields) {
+			return errWrongNumberOfColumnsInSelect
+		}
+	}
+	return nil
 }
 
 func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field {

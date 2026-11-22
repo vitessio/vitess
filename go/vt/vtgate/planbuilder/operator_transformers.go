@@ -934,8 +934,9 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (
 	// Union.GetColumns still pads the union's own columns with constant columns up to
 	// the widest arm, and a projection above the union can resolve a select expression
 	// to one of those padding columns. With the trim in place, that projection reads
-	// past the end of the trimmed rows and the query fails at execution time instead
-	// of silently returning wrong data.
+	// past the end of the trimmed rows; SimpleProjection detects the out-of-range
+	// column and the query fails cleanly with 1222 at execution time instead of
+	// silently returning wrong data or panicking.
 	minCols := -1
 	for _, src := range op.Sources {
 		if cols := len(src.GetColumns(ctx)); minCols == -1 || cols < minCols {

@@ -2911,7 +2911,7 @@
     "skip_e2e": true
   },
   {
-    "comment": "union all over a recursive CTE — the CTE arm keeps the columns the recursion needs; the narrower arm is padded so the Concatenate sees equal widths (issue #21960)",
+    "comment": "union all over a recursive CTE — the CTE arm keeps the columns the recursion needs; the wider CTE arm is trimmed so the Concatenate sees equal widths (issue #21960)",
     "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte union all select name from user",
     "plan": {
       "Type": "Complex",
@@ -2981,7 +2981,7 @@
     }
   },
   {
-    "comment": "a distinct union followed by a union all arm that is not merged — the distinct arm carries weight_string columns, the other arm is padded (issue #21995)",
+    "comment": "a distinct union followed by a union all arm that is not merged — the distinct arm carries the weight_string columns its dedup needs, so the wider arm is trimmed (issue #21995)",
     "query": "select name from user union select name from music union all select name from user",
     "plan": {
       "Type": "Complex",
@@ -3230,7 +3230,7 @@
     }
   },
   {
-    "comment": "different literals in the select list - Union.GetColumns pads the union's own columns with constant columns up to the widest arm, so the projection above the union can resolve to one of those padding columns; with the trim in place that column no longer exists and the query fails at execution instead of returning wrong data (review point 2)",
+    "comment": "different literals in the select list - Union.GetColumns pads the union's own columns with constant columns up to the widest arm, so the projection above the union can resolve to one of those padding columns; with the trim in place that column no longer exists and SimpleProjection fails the query cleanly with 1222 at execution instead of returning wrong data or panicking (review point 2)",
     "query": "select name, 0 from user union select name, 0 from music union all select name, 1 from user_extra",
     "plan": {
       "Type": "Complex",
