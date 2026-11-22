@@ -307,6 +307,41 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "DECIMAL(-3)",
 		},
 		{
+			expression: "ROUND(column0)",
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte("12.5"))},
+			result:     "FLOAT64(12)",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			// The double does not keep the precision of the TIME.
+			expression: "ROUND(TIME'10:11:12.5')",
+			result:     "FLOAT64(101112)",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: "ROUND(TIME'10:11:12.5', 1)",
+			result:     "FLOAT64(101112.5)",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: "TRUNCATE(TIME'10:11:12.5', 1)",
+			result:     "FLOAT64(101112.5)",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			// Only the second argument can be NULL.
+			expression: "TRUNCATE(1, column0)",
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     "NULL",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Int64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: "CRC32(column0)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     "UINT64(3904355907)",
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
 			expression: "1.0e0 < column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(2)},
 			result:     "INT64(1)",
