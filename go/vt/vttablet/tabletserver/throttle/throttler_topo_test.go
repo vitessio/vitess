@@ -119,7 +119,7 @@ func TestThrottlerTopoServer(t *testing.T) {
 	select {
 	case probes := <-throttler.clusterProbesChan:
 		assert.Contains(t, probes.TabletProbes, topoproto.TabletAliasString(alias))
-	case <-time.After(10 * time.Second):
+	case <-time.After(waitForProbesTimeout):
 		require.FailNow(t, "refreshInventory did not send the probes")
 	}
 	assert.Equal(t, before+4, gets(), "refreshInventory read more than the Shard, its ShardReplication and the two tablet records")
