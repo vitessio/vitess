@@ -662,6 +662,8 @@ func FnRound(yield Query) {
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("ROUND(%s)", num), nil, false)
 	}
+	yield("ROUND(CAST('12.5' AS JSON)) = CAST('12' AS JSON)", nil, false)
+	yield("JSON_ARRAY(ROUND(1 = 1))", nil, false)
 
 	for _, num1 := range radianInputs {
 		for _, num2 := range radianInputs {
@@ -680,6 +682,9 @@ func FnRound(yield Query) {
 			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, false)
 		}
 	}
+	yield("ROUND(CAST('12.5' AS JSON), 1) = CAST('12.5' AS JSON)", nil, false)
+	yield("JSON_ARRAY(ROUND(1 = 1, 0))", nil, false)
+	yield("ROUND(1.5, NULL) = 1", nil, false)
 }
 
 func FnTruncate(yield Query) {
@@ -700,6 +705,9 @@ func FnTruncate(yield Query) {
 			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, false)
 		}
 	}
+	yield("TRUNCATE(CAST('12.5' AS JSON), 1) = CAST('12.5' AS JSON)", nil, false)
+	yield("JSON_ARRAY(TRUNCATE(1 = 1, 0))", nil, false)
+	yield("TRUNCATE(1.5, NULL) = 1", nil, false)
 }
 
 func FnCrc32(yield Query) {
@@ -714,6 +722,7 @@ func FnCrc32(yield Query) {
 	for _, num := range inputConversions {
 		yield(fmt.Sprintf("CRC32(%s)", num), nil, false)
 	}
+	yield("CRC32(JSON_ARRAY()) = JSON_ARRAY()", nil, false)
 }
 
 func FnConv(yield Query) {
