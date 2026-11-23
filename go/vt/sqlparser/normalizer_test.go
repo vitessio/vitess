@@ -494,6 +494,42 @@ func TestNormalizeInvalidDates(t *testing.T) {
 	}
 }
 
+// TestNormalizeSelectIntoVariables checks that SELECT ... INTO a variable list
+// is refused, not rewritten: the variables are assignment targets, and the
+// rewrites of user-defined and system variables turn them into bind variables.
+// The list also holds bare names, which are local variables in a stored routine.
+func TestNormalizeSelectIntoVariables(t *testing.T) {
+	parser := NewTestParser()
+	for _, in := range []string{
+		"select id from t limit 1 into @x",
+		"select id from t limit 1 into val",
+		"select 1 into autocommit",
+		"select 1, 2 into @x, val",
+	} {
+		t.Run(in, func(t *testing.T) {
+			stmt, err := parser.Parse(in)
+			require.NoError(t, err)
+			known := getBindvars(stmt)
+			_, err = Normalize(stmt, NewReservedVars("bv", known), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.EqualError(t, err, "VT12001: unsupported: INTO variables")
+		})
+	}
+
+	// the other forms of INTO are not variable lists
+	for _, in := range []string{
+		"select id from t into outfile 's3://bucket/file'",
+		"select id from t into dumpfile '/tmp/file'",
+	} {
+		t.Run(in, func(t *testing.T) {
+			stmt, err := parser.Parse(in)
+			require.NoError(t, err)
+			known := getBindvars(stmt)
+			_, err = Normalize(stmt, NewReservedVars("bv", known), map[string]*querypb.BindVariable{}, true, "ks", 0, "", map[string]string{}, nil, nil)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestNormalizeValidSQL(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {

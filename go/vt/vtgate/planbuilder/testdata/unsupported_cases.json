@@ -262,7 +262,17 @@
   {
     "comment": "select into user-defined variables",
     "query": "select id from user limit 1 into @x",
-    "plan": "VT12001: unsupported: INTO user-defined variables"
+    "plan": "VT12001: unsupported: INTO variables"
+  },
+  {
+    "comment": "select into a bare name, a local variable in a stored routine, which does not exist outside of one",
+    "query": "select id from user limit 1 into val",
+    "plan": "VT12001: unsupported: INTO variables"
+  },
+  {
+    "comment": "select into a bare system variable name must not be rewritten to a bind variable",
+    "query": "select 1 into autocommit",
+    "plan": "VT12001: unsupported: INTO variables"
   },
   {
     "comment": "explain - routed table with join on different keyspace table",
