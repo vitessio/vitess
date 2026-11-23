@@ -600,7 +600,7 @@ func changeCaseType(col collations.ID) sqltypes.Type {
 // collation. With asciiFallback, a collation without a case mapping falls back
 // to bytes.ToUpper and bytes.ToLower, which use Go's Unicode tables and replace
 // malformed UTF-8 with U+FFFD. That is only right for valid utf8mb4 text, such
-// as the text of a number, a date, or an ENUM or SET value.
+// as the text of a number or a date.
 func changeCaseBytes(col collations.ID, src []byte, upcase, asciiFallback bool) ([]byte, error) {
 	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
 	switch {
@@ -635,6 +635,15 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	case *evalJSON:
 		b = newEvalText(e.ToRawBytes(), collationJSON)
 
+	case *evalEnum, *evalSet:
+		// The label bytes are in the character set of the column, which the value does not
+		// carry: take the collation from the column.
+		col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+		if column, ok := call.Arguments[0].(*Column); ok && column.Collation.Collation != collations.Unknown {
+			col = column.Collation
+		}
+		b = newEvalText(e.ToRawBytes(), col)
+
 	default:
 		b, err = evalToVarchar(e, call.collate, true)
 		if err != nil {
@@ -659,8 +668,15 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 
 	var col *collations.TypedCollation
+	var asciiFallback bool
 	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag)}
 	switch {
+	case (str.Type == sqltypes.Enum || str.Type == sqltypes.Set) && str.Col.Collation != collations.Unknown:
+		// The labels of an ENUM or SET are in the character set of the column: keep
+		// its collation, and change their case with it.
+		c.asm.Convert_xc(1, sqltypes.VarChar, str.Col.Collation, nil)
+		res.Size = 0
+		col = &res.Col
 	case str.isHexOrBitLiteral():
 		// A hex or bit literal, such as a bind variable the normalizer made out
 		// of one, is a binary value whatever collation its static type names.
@@ -672,6 +688,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 		res.Col = collationJSON
 		col = &res.Col
 	default:
+		asciiFallback = true
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 		res.Size = 0
 		// Convert_xc gives the converted value this collation: the text of a
@@ -685,7 +702,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	}
 	res.Type = changeCaseType(res.Col.Collation)
 
-	c.asm.Fn_LUCASE(call.upcase, col, str.Type != sqltypes.TypeJSON && !str.isTextual())
+	c.asm.Fn_LUCASE(call.upcase, col, asciiFallback)
 	c.asm.jumpDestination(skip)
 
 	return res, nil

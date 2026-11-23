@@ -145,3 +145,52 @@ func TestChangeCaseNumericRepertoire(t *testing.T) {
 		})
 	}
 }
+
+// TestChangeCaseEnumSetCollation checks that LOWER and UPPER change the case of
+// an ENUM or SET label in the character set of its column, not in the
+// connection character set, and keep that collation on the result, in both the
+// interpreter and the compiler.
+func TestChangeCaseEnumSetCollation(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	latin1 := collations.ID(8) // latin1_swedish_ci
+
+	for _, tc := range []struct {
+		name       string
+		typ        sqltypes.Type
+		expression string
+		in, out    string
+	}{
+		// 0xC9 is E acute and 0xE9 is e acute in latin1, and neither is valid utf8mb4.
+		{"enum lower", sqltypes.Enum, `LOWER(column0)`, "\xC9A", "\xE9a"},
+		{"enum upper", sqltypes.Enum, `UPPER(column0)`, "\xE9a", "\xC9A"},
+		{"set lower", sqltypes.Set, `LOWER(column0)`, "\xC9A,B", "\xE9a,b"},
+		{"set upper", sqltypes.Set, `UPPER(column0)`, "\xE9a,b", "\xC9A,B"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := FieldResolver{{Name: "column0", Type: tc.typ, Charset: uint32(latin1)}}
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			converted, err := Translate(expr, &Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := EmptyExpressionEnv(venv)
+			env.Row = []sqltypes.Value{sqltypes.MakeTrusted(tc.typ, []byte(tc.in))}
+
+			ast, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			require.Equal(t, tc.out, string(ast.v.(*evalBytes).bytes), "bad value from eval engine")
+			require.Equal(t, latin1, ast.v.(*evalBytes).col.Collation, "bad collation from eval engine")
+
+			vm, err := env.EvaluateVM(converted.(*CompiledExpr))
+			require.NoError(t, err)
+			require.Equal(t, tc.out, string(vm.v.(*evalBytes).bytes), "bad value from compiler")
+			require.Equal(t, latin1, vm.v.(*evalBytes).col.Collation, "bad collation from compiler")
+		})
+	}
+}
