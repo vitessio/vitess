@@ -405,13 +405,13 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 	// reports a negative term.
 	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
 		if th.Serving {
-			log.Warn("ignoring a serving primary with an older term than the highest known primary term",
-				slog.String("tablet", topoproto.TabletAliasString(th.Tablet.GetAlias())),
-				slog.String("keyspace", th.Target.Keyspace),
-				slog.String("shard", th.Target.Shard),
-				slog.String("primary_tablet", topoproto.TabletAliasString(sstate.currentPrimary)),
-				slog.Time("primary_term_start_time", time.Unix(th.PrimaryTermStartTime, 0).UTC()),
-				slog.Time("highest_primary_term_start_time", time.Unix(sstate.externallyReparented, 0).UTC()))
+			log.Warningf("ignoring a serving primary with an older term than the highest known primary term: tablet=%s keyspace=%s shard=%s primary_tablet=%s primary_term_start_time=%s highest_primary_term_start_time=%s",
+				topoproto.TabletAliasString(th.Tablet.GetAlias()),
+				th.Target.Keyspace,
+				th.Target.Shard,
+				topoproto.TabletAliasString(sstate.currentPrimary),
+				time.Unix(th.PrimaryTermStartTime, 0).UTC().Format(time.RFC3339),
+				time.Unix(sstate.externallyReparented, 0).UTC().Format(time.RFC3339))
 		}
 
 		return
