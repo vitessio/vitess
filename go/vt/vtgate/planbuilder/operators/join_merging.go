@@ -274,6 +274,6 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		Routing:       r,
 		Conditions:    conditions,
 	}
-	inheritNoRoutesSpecialHandling(route, op1, op2)
+	inheritSpecialUnionInput(route, op1, op2)
 	return route
 }

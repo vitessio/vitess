@@ -41,9 +41,9 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
-		// NoRoutesSpecialHandling is set when an empty destination can still
+		// ContainsSpecialUnionInput is set when an empty destination can still
 		// produce rows from a reference or dual UNION input.
-		NoRoutesSpecialHandling bool
+		ContainsSpecialUnionInput bool
 
 		Routing Routing
 
@@ -120,10 +120,10 @@ type (
 	}
 )
 
-func inheritNoRoutesSpecialHandling(route *Route, sources ...*Route) {
+func inheritSpecialUnionInput(route *Route, sources ...*Route) {
 	for _, source := range sources {
-		if source != nil && source.NoRoutesSpecialHandling {
-			route.NoRoutesSpecialHandling = true
+		if source != nil && source.ContainsSpecialUnionInput {
+			route.ContainsSpecialUnionInput = true
 			return
 		}
 	}

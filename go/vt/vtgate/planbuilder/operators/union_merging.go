@@ -112,7 +112,7 @@ func mergeUnionInputs(
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
 	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
-	noRoutesSpecialHandling := routeNeedsNoRoutesSpecialHandling(lhsInput) || routeNeedsNoRoutesSpecialHandling(rhsInput)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
 
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
@@ -126,7 +126,7 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
-			markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
+			markSpecialUnionInput(op, containsSpecialInput)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -138,17 +138,17 @@ func mergeUnionInputs(
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == dual || (b == anyShard && sameKeyspace):
 		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
-		markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
+		markSpecialUnionInput(op, containsSpecialInput)
 		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
 		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
-		markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
+		markSpecialUnionInput(op, containsSpecialInput)
 		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
-			markNoRoutesSpecialHandling(res, noRoutesSpecialHandling)
+			markSpecialUnionInput(res, containsSpecialInput)
 			return res, exprs
 		}
 	}
@@ -159,11 +159,11 @@ func mergeUnionInputs(
 	return nil, nil
 }
 
-func routeNeedsNoRoutesSpecialHandling(route *Route) bool {
+func routeContainsSpecialUnionInput(route *Route) bool {
 	if route == nil {
 		return false
 	}
-	if route.NoRoutesSpecialHandling {
+	if route.ContainsSpecialUnionInput {
 		return true
 	}
 	switch route.Routing.(type) {
@@ -173,7 +173,7 @@ func routeNeedsNoRoutesSpecialHandling(route *Route) bool {
 	return false
 }
 
-func markNoRoutesSpecialHandling(op Operator, needed bool) {
+func markSpecialUnionInput(op Operator, needed bool) {
 	if !needed {
 		return
 	}
@@ -186,7 +186,7 @@ func markNoRoutesSpecialHandling(op Operator, needed bool) {
 		return
 	}
 	if _, isLookupVindex := sharded.SelectedVindex().(vindexes.Lookup); isLookupVindex {
-		route.NoRoutesSpecialHandling = true
+		route.ContainsSpecialUnionInput = true
 	}
 }
 

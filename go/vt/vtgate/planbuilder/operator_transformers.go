@@ -558,7 +558,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 		RoutingParameters:       rp,
 		TruncateColumnCount:     op.ResultColumns,
 		FetchLastInsertID:       ctx.SemTable.ShouldFetchLastInsertID(),
-		NoRoutesSpecialHandling: op.NoRoutesSpecialHandling,
+		NoRoutesSpecialHandling: op.ContainsSpecialUnionInput,
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings

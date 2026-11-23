@@ -657,7 +657,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			ResultColumns: outer.ResultColumns,
 			Conditions:    allCond,
 		}
-		inheritNoRoutesSpecialHandling(route, inner, outer)
+		inheritSpecialUnionInput(route, inner, outer)
 		return route
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -678,7 +678,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		ResultColumns: s.outer.ResultColumns,
 		Conditions:    allCond,
 	}
-	inheritNoRoutesSpecialHandling(route, inner, outer)
+	inheritSpecialUnionInput(route, inner, outer)
 	return route
 }
 
