@@ -1255,7 +1255,20 @@ func TestTLSRequired(t *testing.T) {
 	params.SslCert = path.Join(root, "revoked-client-cert.pem")
 	params.SslKey = path.Join(root, "revoked-client-key.pem")
 	conn, err = connectWithGoneServerHandling()
-	require.ErrorContains(t, err, "remote error: tls: bad certificate")
+	require.Error(t, err)
+	errStr := err.Error()
+	// With TLS 1.3, the client finishes its handshake before the server
+	// checks the client certificate. So when the server rejects the revoked
+	// cert and closes the connection first, the client's write of the
+	// handshake response fails with connection reset by peer before it can
+	// read the server's bad certificate alert.
+	require.True(
+		t,
+		strings.Contains(errStr, "remote error: tls: bad certificate") ||
+			strings.Contains(errStr, "connection reset by peer"),
+		"expected 'remote error: tls: bad certificate' or 'connection reset by peer', got %q",
+		errStr,
+	)
 	if conn != nil {
 		conn.Close()
 	}
