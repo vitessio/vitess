@@ -9791,10 +9791,10 @@ func TestGetTabletsStalePrimaryWithFailedCell(t *testing.T) {
 }
 
 // TestGetTabletsStalePrimaryWithoutCurrentPrimaryRecord covers a stale primary
-// whose shard's current primary has no tablet record, as after
-// DeleteTablets --allow-primary. A request for primaries only must still leave
-// the stale primary out, since GetSchemaMigrations runs a query on every
-// tablet it gets back.
+// whose shard's current primary was deleted with DeleteTablets --allow-primary,
+// so no tablet record holds the newest term. A request for primaries only must
+// still leave the stale primary out, since GetSchemaMigrations runs a query on
+// every tablet it gets back.
 func TestGetTabletsStalePrimaryWithoutCurrentPrimaryRecord(t *testing.T) {
 	t.Parallel()
 
@@ -9821,8 +9821,17 @@ func TestGetTabletsStalePrimaryWithoutCurrentPrimaryRecord(t *testing.T) {
 			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 		},
 	)
-	// 101's tablet record is deleted; the shard record still names it.
-	require.NoError(t, ts.DeleteTablet(ctx, &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}))
+	// Deleting 101 clears the shard's primary alias and starts a new term in
+	// the shard record.
+	_, err := vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		TabletAliases: []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 101}},
+		AllowPrimary:  true,
+	})
+	require.NoError(t, err)
+
+	si, err := ts.GetShard(ctx, "testkeyspace", "-80")
+	require.NoError(t, err)
+	require.Nil(t, si.PrimaryAlias)
 
 	resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
 		Keyspace:   "testkeyspace",
@@ -9880,9 +9889,10 @@ func TestGetTabletsMissingShardRecord(t *testing.T) {
 	}, types)
 }
 
-// TestGetTabletsShardRecordReadError covers tablet alias requests whose shard
-// records can't be read: a strict request fails with a coded error, and a
-// non-strict one judges each shard by the fetched tablets alone.
+// TestGetTabletsShardRecordReadError covers tablet alias and cell filter
+// requests whose shard records can't be read: a strict request fails with a
+// coded error, and a non-strict one judges each shard by the fetched tablets
+// alone.
 func TestGetTabletsShardRecordReadError(t *testing.T) {
 	t.Parallel()
 
@@ -9927,6 +9937,16 @@ func TestGetTabletsShardRecordReadError(t *testing.T) {
 			name:       "strict with replica tablet type",
 			strict:     true,
 			tabletType: topodatapb.TabletType_REPLICA,
+			expected: map[uint32]topodatapb.TabletType{
+				101: topodatapb.TabletType_REPLICA,
+			},
+		},
+		{
+			// The same holds with a cell filter.
+			name:       "strict with replica tablet type and cell filter",
+			strict:     true,
+			tabletType: topodatapb.TabletType_REPLICA,
+			byCell:     true,
 			expected: map[uint32]topodatapb.TabletType{
 				101: topodatapb.TabletType_REPLICA,
 			},
