@@ -156,10 +156,10 @@ func (kss *keyspaceState) Format(f fmt.State, verb rune) {
 
 	fmt.Fprintf(f, "Keyspace(%s) = deleted: %v, consistent: %v, shards: [\n", kss.keyspace, kss.deleted, kss.consistent)
 	for shard, ss := range kss.shards {
-		fmt.Fprintf(f, "  Shard(%s) = target: [%s/%s %v], serving: %v, externally_reparented: %d, current_primary: %s\n",
+		fmt.Fprintf(f, "  Shard(%s) = target: [%s/%s %v], serving: %v, wait_for_reparent: %v, primary_not_serving: %v, externally_reparented: %d, current_primary: %s\n",
 			shard,
 			ss.target.Keyspace, ss.target.Shard, ss.target.TabletType,
-			ss.serving, ss.externallyReparented,
+			ss.serving, ss.waitForReparent, ss.primaryNotServing, ss.externallyReparented,
 			ss.currentPrimary.String(),
 		)
 	}
@@ -207,7 +207,13 @@ type shardState struct {
 	// waitForReparent is used to tell the keyspace event watcher
 	// that this shard should be marked serving only after a reparent
 	// operation has succeeded.
-	waitForReparent      bool
+	waitForReparent bool
+
+	// primaryNotServing is true when the latest healthcheck from the current
+	// primary of this shard reported not serving. MarkShardNotServing does not
+	// set waitForReparent while it is true.
+	primaryNotServing bool
+
 	externallyReparented int64
 	currentPrimary       *topodatapb.TabletAlias
 }
@@ -394,6 +400,23 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		kss.shards[th.Target.Shard] = sstate
 	}
 
+	// Ignore a primary with an older known term. Terms come from each primary's
+	// clock and are assumed to increase across reparents. A stopping primary
+	// reports a negative term.
+	if th.PrimaryTermStartTime > 0 && th.PrimaryTermStartTime < sstate.externallyReparented {
+		if th.Serving {
+			log.Warningf("ignoring a serving primary with an older term than the highest known primary term: tablet=%s keyspace=%s shard=%s primary_tablet=%s primary_term_start_time=%s highest_primary_term_start_time=%s",
+				topoproto.TabletAliasString(th.Tablet.GetAlias()),
+				th.Target.Keyspace,
+				th.Target.Shard,
+				topoproto.TabletAliasString(sstate.currentPrimary),
+				time.Unix(th.PrimaryTermStartTime, 0).UTC().Format(time.RFC3339),
+				time.Unix(sstate.externallyReparented, 0).UTC().Format(time.RFC3339))
+		}
+
+		return
+	}
+
 	// if the shard went from serving to not serving, or the other way around, the keyspace
 	// is undergoing an availability event
 	if sstate.serving != th.Serving {
@@ -434,6 +457,12 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 		sstate.externallyReparented = th.PrimaryTermStartTime
 		sstate.currentPrimary = th.Tablet.Alias
 		kss.consistent = false
+	}
+
+	// Record the serving state of the current primary only. The healthcheck
+	// keeps reporting a dead former primary as a not serving PRIMARY.
+	if topoproto.TabletAliasEqual(th.Tablet.GetAlias(), sstate.currentPrimary) {
+		sstate.primaryNotServing = !th.Serving
 	}
 
 	kss.ensureConsistentLocked()
@@ -1046,7 +1075,8 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 // We use this when we start buffering for a given shard. This helps
 // coordinate between the sharding logic and the keyspace event watcher.
 // We take in a boolean as well to tell us whether this error is because
-// a reparent is ongoing. If it is, we also mark the shard to wait for a reparent.
+// a reparent is ongoing. If it is, and the current primary has not already
+// reported not serving, we also mark the shard to wait for a reparent.
 // The return argument is whether the shard was found and marked not serving successfully or not.
 func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspace string, shard string, isReparentErr bool) bool {
 	kss := kew.getKeyspaceStatus(ctx, keyspace)
@@ -1065,7 +1095,11 @@ func (kew *KeyspaceEventWatcher) MarkShardNotServing(ctx context.Context, keyspa
 	// Mark the keyspace inconsistent and the shard not serving.
 	kss.consistent = false
 	sstate.serving = false
-	if isReparentErr {
+
+	// Skip waitForReparent while the current primary reports not serving.
+	// onHealthCheck marks the shard serving on a same-term recovery only while
+	// waitForReparent is unset.
+	if isReparentErr && !sstate.primaryNotServing {
 		// If the error was triggered because a reparent operation has started.
 		// We mark the shard to wait for a reparent to finish before marking it serving.
 		// This is required to prevent premature stopping of buffering if we receive
