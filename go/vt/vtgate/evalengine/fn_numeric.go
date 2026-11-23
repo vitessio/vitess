@@ -156,6 +156,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 	case sqltypes.Float64:
 		c.asm.Fn_ABS_f()
 	case sqltypes.Decimal:
+		convt.Size, convt.Scale = arg.Size, arg.Scale
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		c.asm.Fn_ABS_d()
