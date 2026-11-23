@@ -160,21 +160,30 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	lockedStage, _, err := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), normalWaitTime)
 	require.NoError(t, err)
 	t.Logf("tables locked, stage %q", lockedStage)
+	type probeResult struct {
+		at  time.Time
+		err error
+	}
 	probeStart := time.Now()
-	probeReleased := make(chan time.Time, 1)
+	probeReleased := make(chan probeResult, 1)
 	go func() {
 		_, err := probeConn.ExecuteFetch(fmt.Sprintf("select id from %s limit 1", tableName), 1, false)
-		assert.NoError(t, err)
-		probeReleased <- time.Now()
+		probeReleased <- probeResult{at: time.Now(), err: err}
 	}()
 
 	// The cut-over gives up here; this stage is written before the function
 	// returns and its deferred cleanup runs.
 	_, failedAt, err := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), normalWaitTime)
 	require.NoError(t, err)
-	releasedAt := <-probeReleased
-	heldAfterFailure := releasedAt.Sub(failedAt)
-	t.Logf("probe blocked for %v in total; original table stayed locked for %v after the cut-over gave up", releasedAt.Sub(probeStart), heldAfterFailure)
+	var probe probeResult
+	select {
+	case probe = <-probeReleased:
+	case <-time.After(extendedWaitTime):
+		require.Fail(t, "probe is still blocked: the table was not unlocked after the cut-over gave up")
+	}
+	require.NoError(t, probe.err)
+	heldAfterFailure := probe.at.Sub(failedAt)
+	t.Logf("probe blocked for %v in total; original table stayed locked for %v after the cut-over gave up", probe.at.Sub(probeStart), heldAfterFailure)
 
 	// Let vreplication catch up; the scheduler retries the cut-over on its own.
 	_, err = stallConn.ExecuteFetch("rollback", 0, false)
