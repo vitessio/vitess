@@ -52,6 +52,7 @@ const (
 	sqlGetVDiffsToRun                = "select * from _vt.vdiff where state in ('started','pending') and db_name = %a" // what VDiffs have not been stopped or completed
 	sqlGetVDiffsToRetry              = "select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true' and db_name = %a"
 	sqlGetVDiffID                    = "select id as id from _vt.vdiff where vdiff_uuid = %a and db_name = %a"
+	sqlUpdateVDiffOptions            = "update _vt.vdiff set options = %a where id = %a and db_name = %a"
 	sqlGetVDiffIDsByKeyspaceWorkflow = "select id as id from _vt.vdiff where keyspace = %a and workflow = %a and db_name = %a"
 	sqlGetTableRows                  = "select table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %a and table_name = %a"
 	sqlGetAllTableRows               = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s) order by table_name"

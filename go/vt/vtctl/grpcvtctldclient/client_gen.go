@@ -1072,6 +1072,15 @@ func (client *gRPCVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.V
 	return client.c.VDiffStop(ctx, in, opts...)
 }
 
+// VDiffUpdate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VDiffUpdate(ctx context.Context, in *vtctldatapb.VDiffUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffUpdateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VDiffUpdate(ctx, in, opts...)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	if client.c == nil {
