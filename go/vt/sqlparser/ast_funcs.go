@@ -132,6 +132,16 @@ const (
 	ColKey
 )
 
+// withInlineKey returns the key option after next follows k. A UNIQUE after
+// PRIMARY KEY or KEY keeps k. A column holds one key option, so the separate
+// unique key MySQL also creates is still dropped.
+func (k ColumnKeyOption) withInlineKey(next ColumnKeyOption) ColumnKeyOption {
+	if (k == ColKeyPrimary || k == ColKey) && (next == ColKeyUnique || next == ColKeyUniqueKey) {
+		return k
+	}
+	return next
+}
+
 // ReferenceAction indicates the action takes by a referential constraint e.g.
 // the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
 type ReferenceAction int
@@ -193,7 +203,38 @@ const queryOptimizerPrefix = "/*+"
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
+	// keys are appended in order, so only the ones since the last column have none
+	for _, idx := range slices.Backward(ts.Indexes) {
+		if idx._beforeColumn != "" {
+			break
+		}
+		idx._beforeColumn = cd.Name.Lowered()
+	}
+	for _, c := range slices.Backward(ts.Constraints) {
+		if c._beforeColumn != "" {
+			break
+		}
+		c._beforeColumn = cd.Name.Lowered()
+	}
 	ts.Columns = append(ts.Columns, cd)
+}
+
+// keysBefore maps each column's lowered name to how many indexes and constraints
+// Format writes before it: every one up to the last one written before it, so that
+// they keep their order. Only a foreign key moves among the constraints, since it adds a key.
+func (ts *TableSpec) keysBefore() (indexes, constraints map[string]int) {
+	indexes, constraints = map[string]int{}, map[string]int{}
+	for i, idx := range ts.Indexes {
+		if idx._beforeColumn != "" {
+			indexes[idx._beforeColumn] = i + 1
+		}
+	}
+	for i, c := range ts.Constraints {
+		if _, isForeignKey := c.Details.(*ForeignKeyDefinition); isForeignKey && c._beforeColumn != "" {
+			constraints[c._beforeColumn] = i + 1
+		}
+	}
+	return indexes, constraints
 }
 
 // AddIndex appends the given index to the list in the spec
