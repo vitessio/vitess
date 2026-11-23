@@ -1,0 +1,186 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package scheduler
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+	"vitess.io/vitess/go/test/endtoend/throttler"
+	"vitess.io/vitess/go/vt/schema"
+)
+
+// TestCutOverFailureReleasesLocksPromptly reproduces a cut-over that fails
+// after the RENAME has been issued and is blocked behind the cut-over's own
+// LOCK TABLES, and measures how long the original table stays locked after
+// the cut-over has given up.
+//
+// Failure injection: once the cut-over has passed "post-sentry pos reached",
+// an external transaction takes a row lock on this migration's row in
+// _vt.vreplication. The vplayer can then no longer persist its position, so
+// the post-lock waitForPos times out with "failed waiting for pos after
+// locking" while the RENAME is still in flight.
+func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
+	shards = clusterInstance.Keyspaces[0].Shards
+	require.Len(t, shards, 1)
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+
+	// This test uses its own table so that it does not interfere with the
+	// tables used by the other tests in this package.
+	const (
+		ddlStrategy = "vitess"
+		tableName   = "t_cutover_test"
+		createTable = `CREATE TABLE t_cutover_test (id bigint(20) not null, hint_col varchar(64) not null default 'just-created', PRIMARY KEY (id)) ENGINE=InnoDB`
+		alterTable  = `ALTER TABLE t_cutover_test ENGINE=InnoDB`
+		dropTable   = `DROP TABLE IF EXISTS t_cutover_test`
+	)
+
+	t.Run("create table", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: createTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "insert ignore into t_cutover_test values (1, 'new_row')")
+		require.NoError(t, err)
+	})
+	defer func() {
+		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: dropTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+	}()
+
+	uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion", executeStrategy: "vtgate", skipWait: true})
+	onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+	waitForReadyToComplete(t, uuid, true)
+
+	newConn := func() *mysql.Conn {
+		conn, err := primaryTablet.VttabletProcess.TabletConn(keyspaceName, true)
+		require.NoError(t, err)
+		return conn
+	}
+	stageConn := newConn()
+	defer stageConn.Close()
+	stallConn := newConn()
+	defer stallConn.Close()
+	probeConn := newConn()
+	defer probeConn.Close()
+
+	readStage := func() (string, error) {
+		rs, err := stageConn.ExecuteFetch(fmt.Sprintf("select stage from _vt.schema_migrations where migration_uuid='%s'", uuid), 1, false)
+		if err != nil {
+			return "", err
+		}
+		if len(rs.Rows) != 1 {
+			return "", fmt.Errorf("expected 1 row for migration %s, got %d", uuid, len(rs.Rows))
+		}
+		return rs.Rows[0][0].ToString(), nil
+	}
+	// pollStage polls the migration stage every 5ms until pred holds, and
+	// returns the matching stage and the local time it was first observed.
+	// It does not fail the test itself, so that it can be used from goroutines.
+	pollStage := func(pred func(string) bool, timeout time.Duration) (string, time.Time, error) {
+		var last string
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			stage, err := readStage()
+			if err != nil {
+				return "", time.Time{}, err
+			}
+			if pred(stage) {
+				return stage, time.Now(), nil
+			}
+			last = stage
+			time.Sleep(5 * time.Millisecond)
+		}
+		return "", time.Time{}, fmt.Errorf("timeout waiting for stage; last stage: %q", last)
+	}
+	hasAnyPrefix := func(prefixes ...string) func(string) bool {
+		return func(stage string) bool {
+			for _, p := range prefixes {
+				if strings.HasPrefix(stage, p) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	// Stall vplayer position updates as soon as the cut-over is past the sentry
+	// wait, so that the post-lock waitForPos cannot be satisfied.
+	type stallResult struct {
+		stage string
+		err   error
+	}
+	stalled := make(chan stallResult, 1)
+	go func() {
+		stage, _, err := pollStage(hasAnyPrefix(
+			"post-sentry pos reached",
+			"buffering queries",
+			"graceful wait for buffering",
+			"locking tables",
+			"renaming tables",
+			"waiting for RENAME to block",
+			"RENAME found",
+		), normalWaitTime)
+		if err == nil {
+			_, err = stallConn.ExecuteFetch("begin", 0, false)
+		}
+		if err == nil {
+			_, err = stallConn.ExecuteFetch(fmt.Sprintf("select id from _vt.vreplication where workflow='%s' for update", uuid), 1, false)
+		}
+		stalled <- stallResult{stage: stage, err: err}
+	}()
+
+	onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
+	stall := <-stalled
+	require.NoError(t, stall.err)
+	t.Logf("vplayer position updates stalled at stage %q", stall.stage)
+
+	// LOCK TABLES is held and the RENAME is in flight from "RENAME found" on.
+	// Probe the original table from a third connection: this read blocks until
+	// the cut-over's LOCK TABLES is released.
+	lockedStage, _, err := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), normalWaitTime)
+	require.NoError(t, err)
+	t.Logf("tables locked, stage %q", lockedStage)
+	probeStart := time.Now()
+	probeReleased := make(chan time.Time, 1)
+	go func() {
+		_, err := probeConn.ExecuteFetch(fmt.Sprintf("select id from %s limit 1", tableName), 1, false)
+		assert.NoError(t, err)
+		probeReleased <- time.Now()
+	}()
+
+	// The cut-over gives up here; this stage is written before the function
+	// returns and its deferred cleanup runs.
+	_, failedAt, err := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), normalWaitTime)
+	require.NoError(t, err)
+	releasedAt := <-probeReleased
+	heldAfterFailure := releasedAt.Sub(failedAt)
+	t.Logf("probe blocked for %v in total; original table stayed locked for %v after the cut-over gave up", releasedAt.Sub(probeStart), heldAfterFailure)
+
+	// Let vreplication catch up; the scheduler retries the cut-over on its own.
+	_, err = stallConn.ExecuteFetch("rollback", 0, false)
+	require.NoError(t, err)
+	status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	require.Equal(t, schema.OnlineDDLStatusComplete, status)
+
+	assert.Less(t, heldAfterFailure, time.Second, "original table stayed locked for %v after the cut-over gave up", heldAfterFailure)
+}

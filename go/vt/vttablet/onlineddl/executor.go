@@ -1275,17 +1275,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed getting rename connection")
 	}
 	defer renameConn.Recycle()
-	defer func() {
-		if !renameWasSuccessful {
-			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
-			if err != nil {
-				log.Warn("Failed to kill connection being used to rename tables in OnlineDDL migration", e.migrationLogAttrs(onlineDDL,
-					slog.Any("error", err),
-					slog.String("error_code", vterrors.Code(err).String()),
-				)...)
-			}
-		}
-	}()
 	// Set large enough `@@lock_wait_timeout` so that it does not interfere with the cut-over operation.
 	// The code will ensure everything that needs to be terminated by `onlineDDL.CutOverThreshold` will be terminated.
 	renameConnRestoreLockWaitTimeout, err := e.initConnectionLockWaitTimeout(ctx, renameConn.Conn, 2*onlineDDL.CutOverThreshold)
@@ -1298,6 +1287,23 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
 	}
 	defer renameConnRestoreWaitTimeout()
+	// This defer is registered after the session-variable restores below so that it
+	// runs before them. On a failed cut-over the RENAME is still in flight on this
+	// connection, blocked behind lockConn's LOCK TABLES, so any restore sent first
+	// would queue behind it until its own timeout killed it. Killing the connection
+	// first aborts the RENAME immediately; the restores then fail fast on the
+	// closed connection, which is fine, since the connection is discarded anyway.
+	defer func() {
+		if !renameWasSuccessful {
+			err := renameConn.Conn.Kill("premature exit while renaming tables", 0)
+			if err != nil {
+				log.Warn("Failed to kill connection being used to rename tables in OnlineDDL migration", e.migrationLogAttrs(onlineDDL,
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()),
+				)...)
+			}
+		}
+	}()
 
 	// See if backend MySQL server supports 'rename_table_preserve_foreign_key' variable
 	preserveFKSupported, err := e.isPreserveForeignKeySupported(ctx)
