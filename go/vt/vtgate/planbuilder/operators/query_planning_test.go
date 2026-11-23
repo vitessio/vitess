@@ -60,6 +60,12 @@ func TestMergeOffsetExpressions(t *testing.T) {
 			expectedFailed: true,
 		},
 		{
+			name:           "second offset beyond BIGINT UNSIGNED",
+			offset1:        sqlparser.NewIntLiteral("1"),
+			offset2:        sqlparser.NewIntLiteral("18446744073709551616"),
+			expectedFailed: true,
+		},
+		{
 			name:           "string offset",
 			offset1:        sqlparser.NewStrLiteral("5"),
 			offset2:        sqlparser.NewIntLiteral("1"),
@@ -170,6 +176,25 @@ func TestMergeLimitExpressions(t *testing.T) {
 			offset2:        sqlparser.NewIntLiteral("3"),
 			expectedExpr:   sqlparser.NewIntLiteral("7"),
 			expectedFailed: false,
+		},
+		{
+			name:           "first limit exceeds uint64 and second limit is nil",
+			limit1:         sqlparser.NewIntLiteral("18446744073709551616"),
+			offset2:        sqlparser.NewIntLiteral("3"),
+			expectedFailed: true,
+		},
+		{
+			name:           "offset2 exceeds uint64 and second limit is nil",
+			limit1:         sqlparser.NewIntLiteral("18446744073709551615"),
+			offset2:        sqlparser.NewIntLiteral("18446744073709551616"),
+			expectedFailed: true,
+		},
+		{
+			name:           "offset2 exceeds uint64 with both limits",
+			limit1:         sqlparser.NewIntLiteral("18446744073709551615"),
+			limit2:         sqlparser.NewIntLiteral("18446744073709551615"),
+			offset2:        sqlparser.NewIntLiteral("18446744073709551616"),
+			expectedFailed: true,
 		},
 		{
 			name:           "offset2 is nil",
