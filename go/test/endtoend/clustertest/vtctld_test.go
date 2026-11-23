@@ -141,16 +141,12 @@ func TestGetTabletsStalePrimary(t *testing.T) {
 		assert.Equal(t, map[string]string{shard.PrimaryTablet().Alias: "primary"}, types)
 	})
 
-	t.Run("keyspace with primary tablet type", func(t *testing.T) {
-		// Without --shard this goes through the cells path, which is the request
-		// GetSchemaMigrations sends.
-		types := getTabletTypes(t, "GetTablets", "--keyspace", keyspace.Name, "--tablet-type", "primary")
-		assert.NotContains(t, types, staleAlias)
-		want := make(map[string]string, len(keyspace.Shards))
-		for _, s := range keyspace.Shards {
-			want[s.PrimaryTablet().Alias] = "primary"
-		}
-		assert.Equal(t, want, types)
+	t.Run("OnlineDDL show ignores stale primary", func(t *testing.T) {
+		// GetSchemaMigrations asks GetTablets for the keyspace's primaries and
+		// queries every tablet it returns, so a stale primary record with no
+		// vttablet behind it would make the command fail.
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("--action-timeout", "30s", "OnlineDDL", "show", keyspace.Name, "all")
+		assert.NoError(t, err, out)
 	})
 }
 

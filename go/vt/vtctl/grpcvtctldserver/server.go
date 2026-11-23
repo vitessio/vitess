@@ -2465,8 +2465,10 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	terms := latestPrimaryTerms(filteredTablets)
 
 	// A cell filter, or a cell that couldn't be read, can leave out a shard's
-	// current primary.
-	if (len(req.Cells) > 0 || rec.HasErrors()) && mayReturnPrimaries(req.TabletType) {
+	// current primary. A request for primaries only also reads the shard
+	// records, so that a stale primary is left out even when the current
+	// primary's tablet record is missing.
+	if (len(req.Cells) > 0 || rec.HasErrors() || req.TabletType == topodatapb.TabletType_PRIMARY) && mayReturnPrimaries(req.TabletType) {
 		if err := s.addShardRecordPrimaryTerms(ctx, filteredTablets, terms, req.Strict); err != nil {
 			return nil, err
 		}
