@@ -395,6 +395,7 @@ func TestRecursiveUnionAllSeedReturnedOnceWithEmptyTerm(t *testing.T) {
 // Each arm fits the configured 2000-row budget; buffering both in a serialized
 // OLAP session must fail before retaining their combined 2002 rows.
 func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 	const count = 1001
@@ -441,6 +442,32 @@ func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
 	result, err := mcmp.VtConn.ExecuteFetch(override, count*2, true)
 	require.NoError(t, err)
 	require.Len(t, result.Rows, count*2)
+}
+
+// A cyclic term must stop at a WHERE depth guard for split recursive seeds,
+// with the same results as an equivalent guard in the JOIN's ON clause.
+func TestRecursiveWhereDepthGuard(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("insert into t1(id1,id2) values (1,2),(2,3),(3,1)")
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (1)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (1)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(mcmp.AsT(), mcmp.VtConn, "set workload = "+workload)
+			// Explicit BIGINT seeds give both engines identical field types.
+			for _, seed := range []string{"select id as n, cast(0 as signed) as lvl from ref", "select cast(1 as signed) as n, cast(0 as signed) as lvl from dual", "select id1 as n, cast(0 as signed) as lvl from t1 where id1 = 1"} {
+				for _, guard := range []string{" where c.lvl < 5", " and c.lvl < 5"} {
+					query := "with recursive c as (" + seed + " union all select u.id1, c.lvl + 1 from c join t1 u on u.id2 + 0 = c.n" + guard + ") select n,lvl from c order by lvl"
+					mcmp.AssertMatches(query, "[[INT64(1) INT64(0)] [INT64(3) INT64(1)] [INT64(2) INT64(2)] [INT64(1) INT64(3)] [INT64(3) INT64(4)] [INT64(2) INT64(5)]]")
+				}
+			}
+		})
+	}
 }
 
 // A reference seed routed through VTGate recursion must return all of its rows

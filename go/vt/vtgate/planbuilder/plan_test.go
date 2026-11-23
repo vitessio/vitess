@@ -232,6 +232,31 @@ func (s *planTestSuite) TestOrderedUnionLimitKeepsHelperColumns() {
 	}
 }
 
+// Different arm sort types cannot safely select a local top-N before UNION
+// coercion. A numeric arm could discard 10 even though it sorts before 2 as text.
+func (s *planTestSuite) TestUnionArmOrderingRejectsMixedSortTypes() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select textcol1 from user union all select col41 from unsharded_fk_allow.u_tbl4 order by 1 limit 3",
+		"select intcol from user union all select col4 from unsharded_fk_allow.u_tbl4 order by 1 limit 3",
+		"select col41 from unsharded_fk_allow.u_tbl4 union all select textcol1 from user order by 1 limit 3",
+		"select col4 from unsharded_fk_allow.u_tbl4 union all select intcol from user order by 1 limit 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			routes := routePrimitives(plan.Instructions)
+			s.Require().Len(routes, 2)
+			s.Require().NotNil(engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions))
+			for _, route := range routes {
+				s.Require().NotContains(route.Query, ":__upper_limit", route.Query)
+			}
+		})
+	}
+}
+
 // MySQL resolves a bare ORDER BY column against select aliases first.
 func (s *planTestSuite) TestUnionArmOrderingQualifiesColumns() {
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
@@ -1612,6 +1637,43 @@ func (s *planTestSuite) TestRecursiveDistinctPreservesExistingPlans() {
 		}, plan.Instructions)
 		s.Require().NotNil(recurse, query)
 		s.Require().True(recurse.(*engine.RecurseCTE).Distinct, query)
+		description := engine.PrimitiveToPlanDescription(recurse, nil)
+		s.Require().Equal(true, description.Other["Distinct"], query)
+		s.Require().Equal(false, description.Other["ScaleWorkLimitBySeed"], query)
+	}
+}
+
+// Recursive WHERE predicates must bind the current CTE row just like ON
+// predicates, without changing ordinary predicates on the recursive term table.
+func (s *planTestSuite) TestRecursiveWherePredicatesAreBound() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, seed := range []string{"select id as n, 1 as lvl from ref", "select 1 as n, 1 as lvl from dual", "select id as n, 1 as lvl from user"} {
+		query := "with recursive c as (" + seed + " union all select u.id, c.lvl + 1 from c join user u on u.col = c.n where c.lvl < 5 and u.id > 0) select n from c"
+		s.Run(seed, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			primitive := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.RecurseCTE); return ok }, plan.Instructions)
+			s.Require().NotNil(primitive)
+			recurse := primitive.(*engine.RecurseCTE)
+			s.Require().Contains(recurse.Vars, "c_lvl")
+			routes := routePrimitives(recurse.Term)
+			s.Require().NotEmpty(routes)
+			for _, route := range routes {
+				s.Require().Contains(route.Query, ":c_lvl < 5")
+				s.Require().Contains(route.Query, "u.id > 0")
+				stmt, err := env.Parser().Parse(route.Query)
+				s.Require().NoError(err)
+				s.Require().NoError(sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+					if col, ok := node.(*sqlparser.ColName); ok {
+						s.Require().NotEqual("c", col.Qualifier.Name.String(), route.Query)
+					}
+					return true, nil
+				}, stmt))
+			}
+		})
 	}
 }
 
@@ -1636,6 +1698,9 @@ func (s *planTestSuite) TestRecursiveWorkLimitPolicy() {
 		recurse := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.RecurseCTE); return ok }, plan.Instructions)
 		s.Require().NotNil(recurse, query)
 		s.Require().Equal(tc.scale, recurse.(*engine.RecurseCTE).ScaleWorkLimitBySeed, query)
+		description := engine.PrimitiveToPlanDescription(recurse, nil)
+		s.Require().Equal(false, description.Other["Distinct"], query)
+		s.Require().Equal(tc.scale, description.Other["ScaleWorkLimitBySeed"], query)
 	}
 }
 

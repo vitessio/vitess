@@ -2457,6 +2457,7 @@
         "JoinVars": {
           "cte_foo": 1
         },
+        "ScaleWorkLimitBySeed": true,
         "Inputs": [
           {
             "OperatorType": "Route",

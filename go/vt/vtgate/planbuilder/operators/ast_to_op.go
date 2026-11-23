@@ -107,6 +107,10 @@ func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlpars
 			expr = sqlparser.NewIntLiteral("0")
 		}
 
+		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(expr).IsOverlapping(cte.Id) {
+			expr = addCTEPredicate(ctx, expr, cte)
+		}
+
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}

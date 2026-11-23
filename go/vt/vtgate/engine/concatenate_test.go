@@ -441,21 +441,39 @@ func TestConcatenateTypes(t *testing.T) {
 }
 
 func TestConcatenateCoercesBitValues(t *testing.T) {
-	bitResult := &sqltypes.Result{
-		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Bit, Charset: collations.CollationBinaryID}},
-		Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Bit, []byte{1, 2})}},
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{"BIT16", []byte{1, 2}, "258"},
+		{"BIT64", []byte{1, 2, 3, 4, 5, 6, 7, 8}, "72623859790382856"},
+	} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%v", tc.name, stream), func(t *testing.T) {
+				bitResult := &sqltypes.Result{
+					Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Bit, Charset: collations.CollationBinaryID}},
+					Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Bit, tc.raw)}},
+				}
+				concatenate := NewConcatenate([]Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{bitResult}},
+					&fakePrimitive{results: []*sqltypes.Result{r("id", "int32", "3")}},
+				}, nil)
+				var result *sqltypes.Result
+				var err error
+				if stream {
+					result, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
+				} else {
+					result, err = concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+				}
+				require.NoError(t, err)
+				require.Equal(t, sqltypes.Int64, result.Fields[0].Type)
+				require.Len(t, result.Rows, 2)
+				// Streaming UNION ALL may deliver its arms in either order.
+				require.ElementsMatch(t, []string{tc.want, "3"}, []string{result.Rows[0][0].ToString(), result.Rows[1][0].ToString()})
+			})
+		}
 	}
-	intResult := r("id", "int32", "3")
-	concatenate := NewConcatenate([]Primitive{
-		&fakePrimitive{results: []*sqltypes.Result{bitResult, bitResult}},
-		&fakePrimitive{results: []*sqltypes.Result{intResult, intResult}},
-	}, nil)
-
-	result, err := concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
-	require.NoError(t, err)
-	require.Equal(t, sqltypes.Int64, result.Fields[0].Type)
-	require.Equal(t, "258", result.Rows[0][0].ToString())
-	require.Equal(t, "3", result.Rows[1][0].ToString())
 }
 
 func TestConcatenatePreservesGeometryValues(t *testing.T) {

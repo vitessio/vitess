@@ -230,7 +230,9 @@ func (r *RecurseCTE) Inputs() ([]Primitive, []map[string]any) {
 
 func (r *RecurseCTE) description() PrimitiveDescription {
 	other := map[string]any{
-		"JoinVars": orderedStringIntMap(r.Vars),
+		"JoinVars":             orderedStringIntMap(r.Vars),
+		"Distinct":             r.Distinct,
+		"ScaleWorkLimitBySeed": r.ScaleWorkLimitBySeed,
 	}
 
 	return PrimitiveDescription{
