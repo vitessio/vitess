@@ -6,6 +6,7 @@ The following is the full list, alphabetically ordered.
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mattalord@gmail.com
+* Miguel Ángel Pastor Olivar ([migue](https://github.com/migue)) miguelinlas3@gmail.com
 * Mohamed Hamza ([mhamza15](https://github.com/mhamza15)) mhamza@fastmail.com
 * Tim Vaillancourt ([timvaillancourt](https://github.com/timvaillancourt)) tim@timvaillancourt.com
 
@@ -39,7 +40,7 @@ frouioui, arthurschreiber
 mattlord
 
 ### Cluster Management
-mattlord, timvaillancourt
+mattlord, timvaillancourt, migue
 
 ### Java
 mattlord
@@ -54,10 +55,10 @@ mattlord
 derekperkins, mattlord
 
 ### High Availability
-mattlord, timvaillancourt
+mattlord, timvaillancourt, migue
 
 ### Security
-timvaillancourt, mattlord
+mattlord, migue
 
 ## Past Maintainers
 We thank the following past maintainers for their contributions.

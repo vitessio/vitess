@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Log messages are becoming constant, with values in attributes](#log-constant-messages)
         - [Comment directives apply only to their statement](#vtgate-statement-directive-options)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
@@ -35,6 +36,7 @@
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
         - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
+        - [Bounded memory for VStreamRows streams](#vreplication-vstream-memory-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -71,6 +73,7 @@
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
         - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
+        - [Replication initialization is serialized with reparents](#vttablet-replication-init-shard-lock)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -305,6 +308,27 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
 
+#### <a id="log-constant-messages"/>Log messages are becoming constant, with values in attributes</a>
+
+Log messages across Vitess are being converted to constant messages, with the values they used to contain, such as tablet aliases, keyspaces, tables, positions, queries and errors, in structured attributes ([#21323](https://github.com/vitessio/vitess/issues/21323)). This keeps row data and query text out of the message itself. Some components are converted in this release, and others will follow.
+
+With the default JSON log format, each attribute is a field next to `msg`. With `--log-format=text`, attributes follow the message as `key=value` pairs.
+
+Converted lines follow these conventions:
+
+- The message is a fixed sentence, and every value is in an attribute.
+- Errors are under `error`. Many lines that log a Vitess error also log its code, such as `INVALID_ARGUMENT`, under `error_code`.
+- Lines from a throttled logger carry the logger's name under `logger`, where it used to prefix the message. Their report of skipped lines is `skipped log messages`, with `logger` and `skipped`.
+- With the JSON format, attributes logged as durations are integer nanoseconds. The text format prints durations such as `1.5s`. With `--log-err-stacks` set, errors from `vterrors.New`, `Errorf`, `Wrap` and the like still include their stack traces when logged as attributes, in both formats; with the JSON format, `error` is then the error's text followed by its stack traces.
+
+When a converted line logs a MySQL error under `error`, the record also gets `mysql_errno`, MySQL's error number as an integer, so you can filter and alert on it without parsing `error` ([#21982](https://github.com/vitessio/vitess/pull/21982)). `mysql_errno` holds only the number. MySQL's error text is still logged under `error`, except that with `--queryserver-config-terse-errors`, vttablet's `Request failed` line can have `mysql_errno` and `sql_state` but no `error`. If an error passed between Vitess components as plain text, the number is read back out of that text. A client can influence that text, so the number can sometimes be wrong or missing. Use it for filtering and alerts, not as proof.
+
+Some attributes can contain user data, such as query text, row values, column definitions or error messages. If you send Vitess logs somewhere others can read them, consider dropping or redacting keys like `error`, `query`, `row`, `values`, `alter`, `stderr` and `message`. More examples are listed in the doc comment of `go/tools/logcheck/logcheck.go`. That list isn't complete either, so if you filter logs, keeping only keys you know are safe is safer than trying to block every unsafe one. Lines that aren't converted yet can still carry these values in `msg`. `tablet` and `error_code` don't carry user data. `keyspace` and `shard` don't carry row or query data, but they can contain names a client sent.
+
+**Impact**: alerts, dashboards, log searches, log-based rules and redaction rules that match on a line's old message text, or on a value inside it, stop matching once that line is converted. For example, `Error applying event for table <table> while processing position <position>: <error>` is now `Error applying event`, with `table`, `processing_position` and `error` attributes.
+
+**Migration**: if you search or alert on a log line's text, match on its new constant message and filter on its attributes instead. For example, search for the message `Error applying event` with `table` set to `users`, rather than for the text `Error applying event for table users`. The pull requests linked from [#21323](https://github.com/vitessio/vitess/issues/21323) list, in their Deployment Notes, the changed lines you're most likely to be matching on.
+
 #### <a id="vtgate-statement-directive-options"/>Comment directives apply only to their statement</a>
 
 The execute options that the `WORKLOAD_NAME`, `PRIORITY`, `CONSOLIDATOR` and `QUERY_TIMEOUT_MS` comment directives set now apply only to the statement that carries them, and to the statements that VTGate runs on its behalf, such as lookup vindex queries and savepoints. VTGate used to write them into the session. A `WORKLOAD_NAME` then carried over to every later statement on the same connection, and a statement without directives cleared the `Priority` and `Consolidator` that a gRPC client had set in its session's `Options`.
@@ -425,6 +449,14 @@ At the end of each copy cycle of a workflow or Online DDL migration, the target 
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
+
+#### <a id="vreplication-vstream-memory-bounds"/>Bounded memory for VStreamRows streams</a>
+
+The row streams behind VReplication copies and VDiffs (`VStreamRows`, `VStreamTables`) reuse one set of rows across packets on both the source and the receiving tablet. Each reused row only ever grew to the largest value it had held, so a long stream retained the sum of those high-water marks until it ended, and its dynamically sized packets had no upper bound. Both ends now drop the reused rows when they retain more than about four times the live packet, and dynamic packet sizing stops growing at 16 times `--vstream-packet-size`.
+
+This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way. A workflow's config overrides are sent to every tablet it streams from and to, and a tablet rejects a key it does not know: a source on an earlier release fails the copy or the replication with an error naming the key (on v24 and earlier that surfaces as an "uncaught panic" error from the nil streamer). So set `vstream-memory-bounds` only once every source and target tablet runs a release that has it. A VDiff does not carry the workflow's overrides: its streams follow the tablets' `--vstream-memory-bounds` and `--vstream-packet-size` alone. The same goes for the copy phase of a VTGate `VStream`, which copies each table through the same row streamer and so also gets the sender's trim and the cap; VTGate sends no config overrides, so only the source tablets' flags apply to it.
+
+See [#20954](https://github.com/vitessio/vitess/issues/20954) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -868,6 +900,12 @@ Each tablet decides from its own `--throttle-tablet-types` whether the primary p
 
 See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 
+
+#### <a id="vttablet-replication-init-shard-lock"/>Replication initialization is serialized with reparents</a>
+
+A replica now initializes replication at startup, and after a restore, under the shard lock, so a tablet that restarts or finishes a restore while an `EmergencyReparentShard` holds the shard lock no longer reconnects to the old primary. If another operation holds the lock for longer than the new `--init-replication-lock-wait` flag (default `1s`), the replica leaves replication unchanged and stays `NOT_SERVING` until VTOrc, a reparent or an operator starts replication; VTOrc has been required since v16. Replicas that restart together contend for the lock as well. The new `ReplicationInitDeferred` gauge is `1` while a replica waits this way. A longer wait lets replicas that restart together take turns, but a reparent that holds the lock can wait as long for the tablet's RPCs, so keep it well below the reparent's `--wait-replicas-timeout`. A tablet that waits out a reparent also initializes right after the reparent releases the lock, while the shard record can still name the old primary until the new primary publishes itself ([#21670](https://github.com/vitessio/vitess/issues/21670)): it then fails to start if the old primary doesn't answer, or can replicate from it if it does.
+
+See [#21802](https://github.com/vitessio/vitess/pull/21802) for details.
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 

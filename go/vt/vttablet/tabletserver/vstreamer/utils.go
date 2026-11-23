@@ -24,6 +24,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func GetVReplicationConfig(options *binlogdatapb.VStreamOptions) (*vttablet.VReplicationConfig, error) {
@@ -33,7 +34,7 @@ func GetVReplicationConfig(options *binlogdatapb.VStreamOptions) (*vttablet.VRep
 	config, err := vttablet.NewVReplicationConfig(options.ConfigOverrides)
 	if err != nil {
 		log.Error("Error parsing VReplicationConfig", slog.Any("error", err))
-		return nil, vterrors.Wrapf(err, "failed to parse VReplicationConfig")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to parse VReplicationConfig: %v", err)
 	}
 	return config, nil
 }
