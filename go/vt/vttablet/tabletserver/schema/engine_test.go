@@ -26,6 +26,8 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -43,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -50,6 +53,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -313,7 +317,9 @@ func TestOpenAndReload(t *testing.T) {
 	))
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	// A periodic reload's table size queries panic against the results faked here, and the DDL
+	// wait cases below take seconds, so the reload interval outlasts the test.
+	se := newEngine(time.Minute, 10*time.Second, 0, db, nil)
 	se.Open()
 	defer se.Close()
 
@@ -518,6 +524,172 @@ func TestOpenAndReload(t *testing.T) {
 	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
+
+	// A binlog reader can see a DDL before the DDL commits, so a reload at a DDL whose GTID is a
+	// MySQL GTID first waits for MySQL to execute that GTID, and only that GTID.
+	sid, err := replication.ParseSID("7b04699f-f5e9-11e9-bf88-9cb6d089e1c3")
+	require.NoError(t, err)
+	se.reloadTimeout = 2 * time.Second // makes the wait query's timeout 1 second
+	pos3, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-30")
+	require.NoError(t, err)
+	waitDDL30 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:30', 1)"
+	db.AddQuery(waitDDL30, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	// Each wait is timed under the DDLCommitWait type of the Waits timings. The timings are
+	// process-wide, so they keep the samples of earlier tests and runs; count from here.
+	ddlCommitWaits := func() int64 {
+		return se.env.Stats().WaitTimings.Counts()["SchemaTest.DDLCommitWait"]
+	}
+	ddlCommitWaitsBefore := ddlCommitWaits()
+	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
+	require.NoError(t, err)
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
+	assert.Equal(t, pos3, se.reloadAtPos)
+	assert.EqualValues(t, 1, ddlCommitWaits()-ddlCommitWaitsBefore)
+
+	// The engine has already reloaded at pos3, so it doesn't wait again.
+	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
+	require.NoError(t, err)
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
+	assert.EqualValues(t, 1, ddlCommitWaits()-ddlCommitWaitsBefore)
+
+	// A DDL that MySQL doesn't commit within the reload timeout fails the reload, rather than
+	// loading a schema without it.
+	pos4, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-40")
+	require.NoError(t, err)
+	waitDDL40 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:40', 1)"
+	db.AddQuery(waitDDL40, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "1"))
+	err = se.ReloadAtDDL(t.Context(), pos4, replication.Mysql56GTID{Server: sid, Sequence: 40})
+	require.ErrorContains(t, err, "7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:40")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL40))
+	assert.Equal(t, pos3, se.reloadAtPos)
+	// A wait that times out is timed too.
+	assert.EqualValues(t, 2, ddlCommitWaits()-ddlCommitWaitsBefore)
+
+	// So is a wait that fails to connect, since its callers are held until it fails.
+	pos42, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42")
+	require.NoError(t, err)
+	db.EnableConnFail()
+	err = se.ReloadAtDDL(t.Context(), pos42, replication.Mysql56GTID{Server: sid, Sequence: 42})
+	db.DisableConnFail()
+	require.ErrorContains(t, err,
+		"failed to connect to wait for the DDL with GTID 7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:42")
+	assert.Equal(t, pos3, se.reloadAtPos)
+	assert.EqualValues(t, 3, ddlCommitWaits()-ddlCommitWaitsBefore)
+
+	// A wait query that MySQL never answers ends when the reload timeout passes, which closes its
+	// connection, and a retry then waits afresh.
+	pos45, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-45")
+	require.NoError(t, err)
+	gtid45 := replication.Mysql56GTID{Server: sid, Sequence: 45}
+	waitDDL45 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:45', 1)"
+	db.AddQuery(waitDDL45, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	answer := make(chan struct{})
+	db.SetBeforeFunc(waitDDL45, func() {
+		// The fallback answers a wait that the reload timeout didn't end, so that the test
+		// fails rather than hangs.
+		select {
+		case <-answer:
+		case <-time.After(30 * time.Second):
+		}
+	})
+	err = se.ReloadAtDDL(t.Context(), pos45, gtid45)
+	require.ErrorContains(t, err,
+		"failed to wait for the DDL with GTID 7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:45")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.Equal(t, pos3, se.reloadAtPos)
+	close(answer)
+	err = se.ReloadAtDDL(t.Context(), pos45, gtid45)
+	require.NoError(t, err)
+	assert.Equal(t, 2, db.GetQueryCalledNum(waitDDL45))
+	assert.Equal(t, pos45, se.reloadAtPos)
+
+	// A DDL with any other kind of GTID is reloaded at without a wait, which the file position
+	// and MariaDB waits can't provide on a primary.
+	pos5, err := replication.DecodePosition("MariaDB/0-41983-50")
+	require.NoError(t, err)
+	mariadbGTID := replication.MariadbGTID{Domain: 0, Server: 41983, Sequence: 50}
+	err = se.ReloadAtDDL(t.Context(), pos5, mariadbGTID)
+	require.NoError(t, err)
+	assert.Equal(t, pos5, se.reloadAtPos)
+
+	// The vstreams that reach the same DDL share one wait, and each stops waiting when its own
+	// context ends. The wait goes on after the vstream that started it stops waiting, so the
+	// others don't fail then or run a wait query of their own, and one that goes on waiting
+	// reloads once the DDL commits.
+	se.reloadTimeout = 30 * time.Second // outlasts the callers' contexts
+	pos6, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-60")
+	require.NoError(t, err)
+	gtid60 := replication.Mysql56GTID{Server: sid, Sequence: 60}
+	// The wait query's timeout is what remains of the reload timeout once the wait has
+	// connected, so the pattern matches any timeout.
+	var waitsDDL60 atomic.Int64
+	commit := make(chan struct{})
+	commitDDL60 := sync.OnceFunc(func() { close(commit) })
+	// Ends the shared wait if a check fails first, so that it doesn't run on, holding its
+	// connection and the fake server's handler, until the reload timeout.
+	defer commitDDL60()
+	db.AddQueryPatternWithCallback(
+		`SELECT WAIT_FOR_EXECUTED_GTID_SET\('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:60', \d+\)`,
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"),
+		func(string) {
+			waitsDDL60.Add(1)
+			<-commit
+		})
+	firstCtx, cancelFirst := context.WithCancel(t.Context())
+	defer cancelFirst()
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- se.ReloadAtDDL(firstCtx, pos6, gtid60) }()
+	require.Eventually(t, func() bool {
+		return waitsDDL60.Load() == 1
+	}, 30*time.Second, 10*time.Millisecond)
+	// The wait doesn't hold the engine's mutex, so the engine's other users, such as tablet
+	// state changes and schema readers, don't wait for a DDL that is slow to commit.
+	require.True(t, se.mu.TryLock(), "the DDL commit wait holds the engine's mutex")
+	se.mu.Unlock()
+	// The second caller joins the wait before the first stops waiting, and goes on waiting
+	// until the DDL commits.
+	secondCtx := &waitingContext{Context: t.Context()}
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- se.ReloadAtDDL(secondCtx, pos6, gtid60) }()
+	require.Eventually(t, secondCtx.waiting.Load, 30*time.Second, 10*time.Millisecond,
+		"the second caller never started waiting for the DDL to commit")
+	cancelFirst()
+	err = <-firstDone
+	require.ErrorContains(t, err, "stopped waiting for the DDL")
+	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	// The third caller reaches the DDL after the first has stopped waiting, and still joins the
+	// wait that the first started.
+	thirdCtx, cancelThird := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancelThird()
+	err = se.ReloadAtDDL(thirdCtx, pos6, gtid60)
+	require.ErrorContains(t, err, "stopped waiting for the DDL")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.EqualValues(t, 1, waitsDDL60.Load())
+	commitDDL60()
+	require.NoError(t, <-secondDone)
+	assert.EqualValues(t, 1, waitsDDL60.Load())
+	assert.Equal(t, pos6, se.reloadAtPos)
+	// The three vstreams shared one wait, so it was timed once: the waits for 30, 40, 42, 45
+	// (twice) and 60 make six.
+	assert.EqualValues(t, 6, ddlCommitWaits()-ddlCommitWaitsBefore)
+	// None of them is counted as a schema reload.
+	assert.Zero(t, se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"])
+}
+
+// waitingContext records whether Done has been called. waitForDDLCommit calls it only as it
+// starts to wait, once it has joined or started the shared wait for a DDL, so a test can tell
+// that a caller in another goroutine is waiting. If waitForDDLCommit called it any earlier, a
+// test could go on before the caller had joined the wait.
+type waitingContext struct {
+	context.Context
+	waiting atomic.Bool
+}
+
+// Done records that it has been called and returns the wrapped context's Done channel.
+func (c *waitingContext) Done() <-chan struct{} {
+	c.waiting.Store(true)
+	return c.Context.Done()
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is
