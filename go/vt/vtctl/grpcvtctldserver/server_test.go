@@ -9616,6 +9616,54 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
+// TestGetTabletsMissingShardRecord covers a PRIMARY tablet record left behind
+// after its shard was deleted. A missing shard record isn't a partial read,
+// so even a strict request succeeds and judges that shard by its fetched
+// tablets alone.
+func TestGetTabletsMissingShardRecord(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Keyspace:             "testkeyspace",
+			Shard:                "-80",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+		},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+			Keyspace:             "testkeyspace",
+			Shard:                "80-",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+		},
+	)
+	// 80- is deleted, but 200's tablet record is left behind.
+	require.NoError(t, ts.DeleteShard(ctx, "testkeyspace", "80-"))
+
+	resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		TabletAliases: []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 100}, {Cell: "zone1", Uid: 200}},
+		Strict:        true,
+	})
+	require.NoError(t, err)
+
+	types := make(map[uint32]topodatapb.TabletType, len(resp.Tablets))
+	for _, tablet := range resp.Tablets {
+		types[tablet.Alias.Uid] = tablet.Type
+	}
+	assert.Equal(t, map[uint32]topodatapb.TabletType{
+		100: topodatapb.TabletType_PRIMARY,
+		200: topodatapb.TabletType_PRIMARY,
+	}, types)
+}
+
 // TestGetTabletsShardRecordReadError covers tablet alias requests whose shard
 // records can't be read: a strict request fails with a coded error, and a
 // non-strict one judges each shard by the fetched tablets alone.

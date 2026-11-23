@@ -2546,9 +2546,10 @@ func latestPrimaryTerms(tablets []*topo.TabletInfo) map[string]time.Time {
 // term start time in the shard's topo record, when that one is newer. A
 // filtered request may not have fetched a shard's current primary, so the
 // fetched tablets alone can make a stale primary look current. Only shards
-// with a PRIMARY tablet in tablets are read. If a shard record can't be read,
-// the error is returned when strict is set; otherwise that shard keeps the
-// terms seen in tablets.
+// with a PRIMARY tablet in tablets are read. A shard whose record doesn't
+// exist keeps the terms seen in tablets. If a shard record can't be read, the
+// error is returned when strict is set; otherwise that shard keeps the terms
+// seen in tablets.
 func (s *VtctldServer) addShardRecordPrimaryTerms(ctx context.Context, tablets []*topo.TabletInfo, terms map[string]time.Time, strict bool) error {
 	shards := make(map[string]*topo.TabletInfo)
 	for _, ti := range tablets {
@@ -2565,6 +2566,12 @@ func (s *VtctldServer) addShardRecordPrimaryTerms(ctx context.Context, tablets [
 	for key, ti := range shards {
 		eg.Go(func() error {
 			si, err := s.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+			if topo.IsErrType(err, topo.NoNode) {
+				// The shard was deleted but a tablet record of it was left
+				// behind. That isn't a partial read, so judge the shard by the
+				// fetched tablets alone, as GetTabletMap skips deleted tablets.
+				return nil
+			}
 			if err != nil {
 				return topoErrorf(err, "GetShard(%s) failed", key)
 			}
