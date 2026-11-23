@@ -379,6 +379,739 @@ func TestVersion(t *testing.T) {
 	assert.True(t, proto.Equal(mt, dbSchema.Tables[0]))
 }
 
+<<<<<<< HEAD
+||||||| parent of 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
+func TestHistorianStartupRefreshOnNewStream(t *testing.T) {
+	ctx := t.Context()
+	require.NoError(t, env.SchemaEngine.EnableHistorian(false))
+	require.NoError(t, createSchemaVersionTable(t))
+	isolateSchemaVersionTable(t)
+	require.NoError(t, env.SchemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, env.SchemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	schema2 := makeHistorianMinimalTable("t1", []string{"id1", "id2"})
+
+	gtid1 := primaryPosition(t)
+	require.NoError(t, insertSchemaVersionRow(t, 910001, gtid1, "create table t1(id1 int, primary key(id1))", 123, schema1))
+	require.NoError(t, env.SchemaEngine.RegisterVersionEvent())
+
+	gtid2 := primaryPosition(t)
+	require.NoError(t, insertSchemaVersionRow(t, 910002, gtid2, "alter table t1 add column id2 int", 124, schema2))
+	gtidAfterNewest := primaryPosition(t)
+
+	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidAfterNewest)
+	require.NoError(t, err)
+	require.Truef(t, proto.Equal(mt, schema1), "pre-stream schema = %v, want %v", mt, schema1)
+
+	streamCtx, cancel := context.WithCancel(t.Context())
+	wg, ch := startStream(streamCtx, t, nil, "current", nil)
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+		_, ok := <-ch
+		require.False(t, ok)
+	})
+
+	expectLog(streamCtx, t, "current pos", ch, [][]string{{"gtid", "type:OTHER"}})
+
+	mt, err = env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidAfterNewest)
+	require.NoError(t, err)
+	require.Truef(t, proto.Equal(mt, schema2), "post-start schema = %v, want %v", mt, schema2)
+}
+
+func TestHistorianStartupRefreshFailureStopsStream(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	db.RejectQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where id > [0-9]+ order by id asc", "refresh failed")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	sent := false
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		sent = true
+		return errors.New("unexpected send")
+	}, nil)
+	require.ErrorContains(t, err, "refresh failed")
+	require.False(t, sent)
+}
+
+func TestHistorianStartupRefreshCurrentPathRefreshesOnce(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	refreshQuery := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 1 order by id asc"
+	db.AddQuery(refreshQuery, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, schema1).Fields})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		cancel()
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))
+}
+
+func TestHistorianStartupRefreshCurrentFailureIncludesCurrentPosition(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	db.RejectQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where id > [0-9]+ order by id asc", "refresh failed")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		return errors.New("unexpected send")
+	}, nil)
+	require.ErrorContains(t, err, "refresh failed")
+	require.ErrorContains(t, err, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
+}
+
+func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	refreshQuery := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 1 order by id asc"
+	db.AddQuery(refreshQuery, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, schema1).Fields})
+
+	startPos := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-20"
+	uvs := newUVStreamer(t.Context(), streamEngine, streamEngine.env.Config().DB.FilteredWithDB(), schemaEngine, startPos, []*binlogdatapb.TableLastPK{getTablePK("t1", 1)}, &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}}}, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		return nil
+	}, nil)
+	require.NotNil(t, uvs)
+
+	pos, err := replication.DecodePosition(startPos)
+	require.NoError(t, err)
+	uvs.pos = pos
+
+	catchup, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "catchup", nil)
+	require.NoError(t, err)
+	require.NoError(t, catchup.refreshHistorianForStartup(uvs.ctx))
+	fastforward, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", nil)
+	require.NoError(t, err)
+	require.NoError(t, fastforward.refreshHistorianForStartup(uvs.ctx))
+	replicate, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send, "replicate", uvs.options)
+	require.NoError(t, err)
+	require.NoError(t, replicate.refreshHistorianForStartup(uvs.ctx))
+
+	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))
+}
+
+func createSchemaVersionTable(t *testing.T) error {
+	t.Helper()
+	return env.Mysqld.ExecuteSuperQueryList(t.Context(), []string{
+		"create database if not exists _vt",
+		"create table if not exists _vt.schema_version(id int, pos longblob, time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+	})
+}
+
+func isolateSchemaVersionTable(t *testing.T) {
+	t.Helper()
+	ctx := context.WithoutCancel(t.Context())
+	backupTable := fmt.Sprintf("_vt.schema_version_test_backup_%d", time.Now().UnixNano())
+	require.NoError(t, env.Mysqld.ExecuteSuperQueryList(ctx, []string{
+		fmt.Sprintf("create table %s like _vt.schema_version", backupTable),
+		fmt.Sprintf("insert into %s select * from _vt.schema_version", backupTable),
+		"delete from _vt.schema_version",
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "delete from _vt.schema_version"))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.schema_version select * from "+backupTable))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "drop table "+backupTable))
+	})
+}
+
+func insertSchemaVersionRow(t *testing.T, id int, pos, ddl string, timeUpdated int64, table *binlogdatapb.MinimalTable) error {
+	t.Helper()
+	blob, err := (&binlogdatapb.MinimalSchema{Tables: []*binlogdatapb.MinimalTable{table}}).MarshalVT()
+	require.NoError(t, err)
+	blobVal := sqltypes.MakeTrusted(sqltypes.VarBinary, blob)
+	buf := bytes2.Buffer{}
+	blobVal.EncodeSQLBytes2(&buf)
+	return env.Mysqld.ExecuteSuperQuery(t.Context(), fmt.Sprintf(
+		"insert into _vt.schema_version values(%d, %s, %d, %s, %v)",
+		id,
+		encodeString(pos),
+		timeUpdated,
+		encodeString(ddl),
+		buf.String(),
+	))
+}
+
+func makeHistorianMinimalTable(name string, fieldNames []string) *binlogdatapb.MinimalTable {
+	fields := make([]*querypb.Field, 0, len(fieldNames))
+	for _, fieldName := range fieldNames {
+		charset := collations.CollationForType(querypb.Type_INT32, testenv.DefaultCollationID)
+		fields = append(fields, &querypb.Field{
+			Name:    fieldName,
+			Type:    querypb.Type_INT32,
+			Charset: uint32(charset),
+			Flags:   mysql.FlagsForColumn(querypb.Type_INT32, charset),
+			Table:   name,
+		})
+	}
+	return &binlogdatapb.MinimalTable{
+		Name:      name,
+		Fields:    fields,
+		PKColumns: []int64{0},
+	}
+}
+
+func historianSchemaVersionResult(id int64, pos, ddl string, timeUpdated int64, table *binlogdatapb.MinimalTable) *sqltypes.Result {
+	blob, err := (&binlogdatapb.MinimalSchema{Tables: []*binlogdatapb.MinimalTable{table}}).MarshalVT()
+	if err != nil {
+		panic(err)
+	}
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "pos",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "ddl",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "time_updated",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "schemax",
+			Type: sqltypes.Blob,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(id),
+			sqltypes.NewVarBinary(pos),
+			sqltypes.NewVarBinary(ddl),
+			sqltypes.NewInt64(timeUpdated),
+			sqltypes.NewVarBinary(string(blob)),
+		}},
+	}
+}
+
+func newHistorianStartupRefreshTestEngine(t *testing.T) (*Engine, *schema.Engine, *fakesqldb.DB) {
+	t.Helper()
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(`(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`, &sqltypes.Result{})
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("t", "int64"),
+		"1427325876",
+	))
+	db.AddQuery(mysql.ShowRowsRead, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|int64"),
+		"Innodb_rows_read|1",
+	))
+	db.AddQuery("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", &sqltypes.Result{})
+	db.AddQuery("select @@binlog_row_image", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@binlog_row_image", "varchar"),
+		"FULL",
+	))
+	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"),
+		"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100",
+	))
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, makeHistorianMinimalTable("t1", []string{"id1"})).Fields})
+
+	cp := *db.ConnParams()
+	tabletConfig := tabletenv.NewDefaultConfig()
+	tabletConfig.DB = dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	tabletEnv := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletConfig, "VStreamerHistorianStartupRefreshTest")
+	schemaEngine := schema.NewEngine(tabletEnv)
+	schemaEngine.InitDBConfig(tabletConfig.DB.DbaWithDB())
+	require.NoError(t, schemaEngine.Open())
+	t.Cleanup(func() {
+		schemaEngine.Close()
+		db.Close()
+	})
+
+	streamEngine := NewEngine(tabletEnv, nil, schemaEngine, nil, "cell1")
+	streamEngine.InitDBConfig("fakesqldb", "0")
+	streamEngine.Open()
+	t.Cleanup(streamEngine.Close)
+
+	return streamEngine, schemaEngine, db
+}
+
+=======
+func TestHistorianStartupRefreshOnNewStream(t *testing.T) {
+	ctx := t.Context()
+	require.NoError(t, env.SchemaEngine.EnableHistorian(false))
+	require.NoError(t, createSchemaVersionTable(t))
+	isolateSchemaVersionTable(t)
+	require.NoError(t, env.SchemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, env.SchemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	schema2 := makeHistorianMinimalTable("t1", []string{"id1", "id2"})
+
+	gtid1 := primaryPosition(t)
+	require.NoError(t, insertSchemaVersionRow(t, 910001, gtid1, "create table t1(id1 int, primary key(id1))", 123, schema1))
+	require.NoError(t, env.SchemaEngine.RegisterVersionEvent())
+
+	gtid2 := primaryPosition(t)
+	require.NoError(t, insertSchemaVersionRow(t, 910002, gtid2, "alter table t1 add column id2 int", 124, schema2))
+	gtidAfterNewest := primaryPosition(t)
+
+	mt, err := env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidAfterNewest)
+	require.NoError(t, err)
+	require.Truef(t, proto.Equal(mt, schema1), "pre-stream schema = %v, want %v", mt, schema1)
+
+	streamCtx, cancel := context.WithCancel(t.Context())
+	wg, ch := startStream(streamCtx, t, nil, "current", nil)
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+		_, ok := <-ch
+		require.False(t, ok)
+	})
+
+	expectLog(streamCtx, t, "current pos", ch, [][]string{{"gtid", "type:OTHER"}})
+
+	mt, err = env.SchemaEngine.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidAfterNewest)
+	require.NoError(t, err)
+	require.Truef(t, proto.Equal(mt, schema2), "post-start schema = %v, want %v", mt, schema2)
+}
+
+func TestHistorianStartupRefreshFailureStopsStream(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	db.RejectQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where id > [0-9]+ order by id asc", "refresh failed")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	sent := false
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		sent = true
+		return errors.New("unexpected send")
+	}, nil)
+	require.ErrorContains(t, err, "refresh failed")
+	require.False(t, sent)
+}
+
+func TestHistorianStartupRefreshCurrentPathRefreshesOnce(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	refreshQuery := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 1 order by id asc"
+	db.AddQuery(refreshQuery, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, schema1).Fields})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		cancel()
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))
+}
+
+func TestHistorianStartupRefreshCurrentFailureIncludesCurrentPosition(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	db.RejectQueryPattern("select id, pos, ddl, time_updated, schemax from _vt\\.schema_version where id > [0-9]+ order by id asc", "refresh failed")
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+
+	err := streamEngine.Stream(ctx, "current", nil, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		return errors.New("unexpected send")
+	}, nil)
+	require.ErrorContains(t, err, "refresh failed")
+	require.ErrorContains(t, err, "16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100")
+}
+
+func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
+	streamEngine, schemaEngine, db := newHistorianStartupRefreshTestEngine(t)
+	require.NoError(t, schemaEngine.EnableHistorian(false))
+	require.NoError(t, schemaEngine.EnableHistorian(true))
+	t.Cleanup(func() {
+		require.NoError(t, schemaEngine.EnableHistorian(false))
+	})
+
+	schema1 := makeHistorianMinimalTable("t1", []string{"id1"})
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, historianSchemaVersionResult(1, "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10", "create table t1(id1 int)", 123, schema1))
+	require.NoError(t, schemaEngine.RegisterVersionEvent())
+
+	refreshQuery := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 1 order by id asc"
+	db.AddQuery(refreshQuery, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, schema1).Fields})
+
+	startPos := "MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-20"
+	uvs := newUVStreamer(t.Context(), streamEngine, streamEngine.env.Config().DB.FilteredWithDB(), schemaEngine, startPos, []*binlogdatapb.TableLastPK{getTablePK("t1", 1)}, &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}}}, nil, throttlerapp.VStreamerName, func(_ []*binlogdatapb.VEvent) error {
+		return nil
+	}, nil)
+	require.NotNil(t, uvs)
+
+	pos, err := replication.DecodePosition(startPos)
+	require.NoError(t, err)
+	uvs.pos = pos
+
+	catchup, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "catchup", nil)
+	require.NoError(t, err)
+	require.NoError(t, catchup.refreshHistorianForStartup(uvs.ctx))
+	fastforward, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send2, "fastforward", nil)
+	require.NoError(t, err)
+	require.NoError(t, fastforward.refreshHistorianForStartup(uvs.ctx))
+	replicate, err := uvs.newStartupVStreamer(uvs.ctx, replication.EncodePosition(uvs.pos), "", uvs.send, "replicate", uvs.options)
+	require.NoError(t, err)
+	require.NoError(t, replicate.refreshHistorianForStartup(uvs.ctx))
+
+	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))
+}
+
+// TestSchemaReloadWaitsForDDLCommit checks that the schema tracker saves the schema that a DDL
+// produces even when its vstream reads the DDL from the binlog before the DDL commits (#21883).
+// MySQL sends a transaction's binlog events to the binlog dump threads once the binlog is
+// synced, and semi-sync's AFTER_SYNC wait, with no replica connected, then holds the commit
+// until the test switches semi-sync off, once the tracker has reached the DDL. The DDL is an
+// Online DDL style cutover: a RENAME that swaps a shadow table, created later, over the
+// original.
+func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
+	ctx := t.Context()
+	if !strings.HasPrefix(primaryPosition(t), replication.Mysql56FlavorID+"/") {
+		t.Skip("DDL commit waits require MySQL GTIDs")
+	}
+	qr, err := env.Mysqld.FetchSuperQuery(ctx,
+		"select variable_name from performance_schema.global_variables where variable_name in "+
+			"('rpl_semi_sync_source_timeout', 'rpl_semi_sync_master_timeout')")
+	require.NoError(t, err)
+	// mysqlctl's my.cnf templates for MySQL all load the semi-sync plugins. Fail rather than skip
+	// when the source plugin is missing, so that the test can't silently stop running in CI.
+	require.NotEmpty(t, qr.Rows, "the semi-sync source plugin is not loaded; "+
+		"check the mysqld error log for a plugin load failure")
+	semiSync := strings.TrimSuffix(strings.ToLower(qr.Rows[0][0].ToString()), "_timeout")
+
+	require.NoError(t, createSchemaVersionTable(t))
+	isolateSchemaVersionTable(t)
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			"drop table if exists hist_vis",
+			"drop table if exists hist_vis_new",
+			"drop table if exists hist_vis_old",
+		})
+	})
+	// count runs query, which counts rows, and returns the count.
+	count := func(c require.TestingT, query string) int64 {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+		require.NoError(c, err)
+		rows, err := qr.Rows[0][0].ToInt64()
+		require.NoError(c, err)
+		return rows
+	}
+	// waitForCount waits until query, which counts rows, counts more than floor.
+	waitForCount := func(query string, floor int64) {
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Greater(c, count(c, query), floor)
+		}, 30*time.Second, 50*time.Millisecond)
+	}
+	// The schema engine compares create_time in seconds, so the shadow table is created in a
+	// later second than the original, and the engine loads both in a later second still.
+	waitPastCreateTime := func(table string) {
+		waitForCount("select count(*) from information_schema.tables "+
+			"where table_schema = database() and table_name = "+encodeString(table)+
+			" and create_time < now()", 0)
+	}
+	execStatements(t, []string{"create table hist_vis(id int, a int, b int, primary key(id))"})
+	waitPastCreateTime("hist_vis")
+	execStatements(t, []string{"create table hist_vis_new(id int, b int, primary key(id))"})
+	waitPastCreateTime("hist_vis_new")
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+	require.NoError(t, insertSchemaVersionRow(t, 1, primaryPosition(t),
+		"create table hist_vis(id int, a int, b int, primary key(id))", 123,
+		makeHistorianMinimalTable("hist_vis", []string{"id", "a", "b"})))
+
+	binlogDumps := "select count(*) from information_schema.processlist " +
+		"where command = 'Binlog Dump GTID'"
+	binlogDumpsBefore := count(t, binlogDumps)
+	tracker := schema.NewTracker(env.TabletEnv, engine, env.SchemaEngine)
+	tracker.Enable(true)
+	t.Cleanup(func() { tracker.Enable(false) })
+	// The tracker resumes from the row above, so once its stream is reading the binlog, it reads
+	// the RENAME as soon as the binlog has it.
+	waitForCount(binlogDumps, binlogDumpsBefore)
+
+	qr, err = env.Mysqld.FetchSuperQuery(ctx, fmt.Sprintf(
+		"select @@global.%[1]s_enabled, @@global.%[1]s_timeout, @@global.%[1]s_wait_point",
+		semiSync))
+	require.NoError(t, err)
+	enabled, timeout := qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString()
+	waitPoint := qr.Rows[0][2].ToString()
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			fmt.Sprintf("set global %s_enabled = %s", semiSync, enabled),
+			fmt.Sprintf("set global %s_timeout = %s", semiSync, timeout),
+			fmt.Sprintf("set global %s_wait_point = %s", semiSync, waitPoint),
+		})
+	})
+	// The timeout outlasts the wait below for the tracker to reach the RENAME, so the RENAME
+	// commits only once the test switches semi-sync off, and it bounds the wait for the RENAME
+	// to return.
+	execStatements(t, []string{
+		fmt.Sprintf("set global %s_wait_point = AFTER_SYNC", semiSync),
+		fmt.Sprintf("set global %s_timeout = 60000", semiSync),
+		fmt.Sprintf("set global %s_enabled = 1", semiSync),
+	})
+
+	// Buffered, so that the RENAME's goroutine exits even if the test fails before reading it.
+	renamed := make(chan error, 1)
+	go func() {
+		renamed <- env.Mysqld.ExecuteSuperQuery(ctx,
+			"rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis")
+	}()
+	// The tracker has reached the RENAME once it waits for the RENAME to commit or, without that
+	// wait, saves a schema version for it, whose commit semi-sync holds too.
+	waitForCount("select count(*) from information_schema.processlist where "+
+		"info like 'select wait_for_executed_gtid_set(%' or "+
+		"info like 'insert into _vt.schema_version%'", 0)
+	require.Empty(t, renamed, "the RENAME committed before the tracker reached it")
+	execStatements(t, []string{fmt.Sprintf("set global %s_enabled = 0", semiSync)})
+	require.NoError(t, <-renamed)
+
+	waitForCount("select count(*) from _vt.schema_version where id > 1", 0)
+	qr, err = env.Mysqld.FetchSuperQuery(ctx,
+		"select ddl, schemax from _vt.schema_version where id > 1 order by id limit 1")
+	require.NoError(t, err)
+	require.Equal(t, "rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis",
+		qr.Rows[0][0].ToString())
+	blob, err := qr.Rows[0][1].ToBytes()
+	require.NoError(t, err)
+	sch := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, sch.UnmarshalVT(blob))
+	var saved []string
+	for _, table := range sch.Tables {
+		if table.Name != "hist_vis" {
+			continue
+		}
+		for _, field := range table.Fields {
+			saved = append(saved, field.Name)
+		}
+	}
+	require.Equal(t, []string{"id", "b"}, saved,
+		"the version saved for the RENAME should have the swapped-in table's columns")
+}
+
+// createSchemaVersionTable creates _vt.schema_version as the sidecar database defines it, unless
+// it exists: TestVersion drops the table, and the schema tracker needs its AUTO_INCREMENT id.
+func createSchemaVersionTable(t *testing.T) error {
+	t.Helper()
+	return env.Mysqld.ExecuteSuperQueryList(t.Context(), []string{
+		"create database if not exists _vt",
+		"create table if not exists _vt.schema_version(id int not null auto_increment, " +
+			"pos longblob not null, time_updated bigint(20) not null, ddl blob default null, " +
+			"schemax longblob not null, primary key(id))",
+	})
+}
+
+func isolateSchemaVersionTable(t *testing.T) {
+	t.Helper()
+	ctx := context.WithoutCancel(t.Context())
+	backupTable := fmt.Sprintf("_vt.schema_version_test_backup_%d", time.Now().UnixNano())
+	require.NoError(t, env.Mysqld.ExecuteSuperQueryList(ctx, []string{
+		fmt.Sprintf("create table %s like _vt.schema_version", backupTable),
+		fmt.Sprintf("insert into %s select * from _vt.schema_version", backupTable),
+		"delete from _vt.schema_version",
+	}))
+	t.Cleanup(func() {
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "delete from _vt.schema_version"))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "insert into _vt.schema_version select * from "+backupTable))
+		require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, "drop table "+backupTable))
+	})
+}
+
+func insertSchemaVersionRow(t *testing.T, id int, pos, ddl string, timeUpdated int64, table *binlogdatapb.MinimalTable) error {
+	t.Helper()
+	blob, err := (&binlogdatapb.MinimalSchema{Tables: []*binlogdatapb.MinimalTable{table}}).MarshalVT()
+	require.NoError(t, err)
+	blobVal := sqltypes.MakeTrusted(sqltypes.VarBinary, blob)
+	buf := bytes2.Buffer{}
+	blobVal.EncodeSQLBytes2(&buf)
+	return env.Mysqld.ExecuteSuperQuery(t.Context(), fmt.Sprintf(
+		"insert into _vt.schema_version values(%d, %s, %d, %s, %v)",
+		id,
+		encodeString(pos),
+		timeUpdated,
+		encodeString(ddl),
+		buf.String(),
+	))
+}
+
+func makeHistorianMinimalTable(name string, fieldNames []string) *binlogdatapb.MinimalTable {
+	fields := make([]*querypb.Field, 0, len(fieldNames))
+	for _, fieldName := range fieldNames {
+		charset := collations.CollationForType(querypb.Type_INT32, testenv.DefaultCollationID)
+		fields = append(fields, &querypb.Field{
+			Name:    fieldName,
+			Type:    querypb.Type_INT32,
+			Charset: uint32(charset),
+			Flags:   mysql.FlagsForColumn(querypb.Type_INT32, charset),
+			Table:   name,
+		})
+	}
+	return &binlogdatapb.MinimalTable{
+		Name:      name,
+		Fields:    fields,
+		PKColumns: []int64{0},
+	}
+}
+
+func historianSchemaVersionResult(id int64, pos, ddl string, timeUpdated int64, table *binlogdatapb.MinimalTable) *sqltypes.Result {
+	blob, err := (&binlogdatapb.MinimalSchema{Tables: []*binlogdatapb.MinimalTable{table}}).MarshalVT()
+	if err != nil {
+		panic(err)
+	}
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "pos",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "ddl",
+			Type: sqltypes.VarBinary,
+		}, {
+			Name: "time_updated",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "schemax",
+			Type: sqltypes.Blob,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(id),
+			sqltypes.NewVarBinary(pos),
+			sqltypes.NewVarBinary(ddl),
+			sqltypes.NewInt64(timeUpdated),
+			sqltypes.NewVarBinary(string(blob)),
+		}},
+	}
+}
+
+func newHistorianStartupRefreshTestEngine(t *testing.T) (*Engine, *schema.Engine, *fakesqldb.DB) {
+	t.Helper()
+	db := fakesqldb.New(t)
+	db.AddQueryPattern(`(?s).*SELECT.*its\.space = it\.space.*SUM\(its\.file_size\).*`, &sqltypes.Result{})
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("t", "int64"),
+		"1427325876",
+	))
+	db.AddQuery(mysql.ShowRowsRead, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("Variable_name|Value", "varchar|int64"),
+		"Innodb_rows_read|1",
+	))
+	db.AddQuery("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", &sqltypes.Result{})
+	db.AddQuery("select @@binlog_row_image", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@binlog_row_image", "varchar"),
+		"FULL",
+	))
+	db.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"),
+		"16b1039f-22b6-11ed-b765-0a43f95f28a3:1-100",
+	))
+	query := "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > 0 order by id asc"
+	db.AddQuery(query, &sqltypes.Result{Fields: historianSchemaVersionResult(1, "", "", 0, makeHistorianMinimalTable("t1", []string{"id1"})).Fields})
+
+	cp := *db.ConnParams()
+	tabletConfig := tabletenv.NewDefaultConfig()
+	tabletConfig.DB = dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	tabletEnv := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletConfig, "VStreamerHistorianStartupRefreshTest")
+	schemaEngine := schema.NewEngine(tabletEnv)
+	schemaEngine.InitDBConfig(tabletConfig.DB.DbaWithDB())
+	require.NoError(t, schemaEngine.Open())
+	t.Cleanup(func() {
+		schemaEngine.Close()
+		db.Close()
+	})
+
+	streamEngine := NewEngine(tabletEnv, nil, schemaEngine, nil, "cell1")
+	streamEngine.InitDBConfig("fakesqldb", "0")
+	streamEngine.Open()
+	t.Cleanup(streamEngine.Close)
+
+	return streamEngine, schemaEngine, db
+}
+
+>>>>>>> 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
 func TestMissingTables(t *testing.T) {
 	ts := &TestSpec{
 		t: t,

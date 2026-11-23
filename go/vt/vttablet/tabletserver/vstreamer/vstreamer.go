@@ -85,7 +85,22 @@ type vstreamer struct {
 	stopPos        string
 	commitParent   int64
 	sequenceNumber int64
+<<<<<<< HEAD
 	eventGTID      replication.GTID
+||||||| parent of 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
+	// eventGTID is the formatted GTID of the current transaction, or empty
+	// outside one. It is set by setEventGTID and stamped on each VEvent.
+	eventGTID string
+=======
+	// eventGTID is the formatted GTID of the current transaction, or empty
+	// outside one. It is set by setEventGTID and stamped on each VEvent.
+	eventGTID string
+	// gtid is the GTID of the last GTID event. For a DDL, it is the DDL's own GTID, which
+	// parseEvent passes to ReloadAtDDL. It is nil before the first GTID event, and from
+	// each binlog file boundary (a rotate, stop, format description or previous-GTIDs event)
+	// until the next GTID event. setEventGTID sets and clears it together with eventGTID.
+	gtid replication.GTID
+>>>>>>> 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
 
 	phase   string
 	vse     *Engine
@@ -168,6 +183,28 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
+<<<<<<< HEAD
+||||||| parent of 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
+// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
+func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.eventGTID = ""
+	if gtid != nil {
+		vs.eventGTID = gtid.String()
+	}
+}
+
+=======
+// setEventGTID records gtid and formats it into eventGTID, or clears both if
+// gtid is nil.
+func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.gtid = gtid
+	vs.eventGTID = ""
+	if gtid != nil {
+		vs.eventGTID = gtid.String()
+	}
+}
+
+>>>>>>> 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
 // Cancel stops the streaming.
 func (vs *vstreamer) Cancel() {
 	vs.cancel()
@@ -569,7 +606,23 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
+<<<<<<< HEAD
 				vs.se.ReloadAt(context.Background(), vs.pos)
+||||||| parent of 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
+				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
+					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
+				}
+				if err := vs.rebuildPlans(); err != nil {
+					return nil, vterrors.Wrap(err, "failed to rebuild replication plans after DDL encountered in stream")
+				}
+=======
+				if err := vs.se.ReloadAtDDL(vs.ctx, vs.pos, vs.gtid); err != nil {
+					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
+				}
+				if err := vs.rebuildPlans(); err != nil {
+					return nil, vterrors.Wrap(err, "failed to rebuild replication plans after DDL encountered in stream")
+				}
+>>>>>>> 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
 			}
 		case sqlparser.StmtSavepoint:
 			// We currently completely skip `SAVEPOINT ...` statements.
