@@ -312,7 +312,7 @@ func (cmp Comparison) Sort(out []sqltypes.Row) {
 
 type Sorter struct {
 	Compare Comparison
-	Limit   int
+	Limit   int64
 
 	rows []sqltypes.Row
 	heap bool
@@ -323,7 +323,7 @@ func (s *Sorter) Len() int {
 }
 
 func (s *Sorter) Push(row sqltypes.Row) {
-	if len(s.rows) < s.Limit {
+	if int64(len(s.rows)) < s.Limit {
 		s.rows = append(s.rows, row)
 		return
 	}

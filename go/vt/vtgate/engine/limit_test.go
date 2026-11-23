@@ -333,8 +333,8 @@ func TestLimitOffsetExecute(t *testing.T) {
 }
 
 // TestLimitOffsetUpperLimitOverflow checks that count + offset does not wrap
-// around when the sum is larger than the largest int, and that unsigned values
-// above the largest int saturate instead of failing.
+// around when the sum is larger than the largest int64, and that unsigned values
+// above the largest int64 saturate instead of failing.
 func TestLimitOffsetUpperLimitOverflow(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
@@ -656,7 +656,7 @@ func TestLimitInvalidCount(t *testing.T) {
 	l.Count = evalengine.NewLiteralUint(18446744073709551615)
 	count, offset, err := l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, math.MaxInt, count)
+	assert.Equal(t, int64(math.MaxInt64), count)
 	assert.Zero(t, offset)
 
 	l.Count = evalengine.NewLiteralInt(-1)
