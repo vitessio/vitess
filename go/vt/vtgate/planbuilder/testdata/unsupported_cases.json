@@ -523,5 +523,15 @@
     "comment": "a qualified name is never a vitess_metadata value",
     "query": "set @@vitess_metadata.app_v1 = t.x",
     "plan": "Incorrect argument type to variable 'app_v1'"
+  },
+  {
+    "comment": "a qualified name is rejected before its last part is judged as a character set name",
+    "query": "set character_set_client = t.utf8mb4",
+    "plan": "Incorrect argument type to variable 'character_set_client'"
+  },
+  {
+    "comment": "a qualified name is rejected before its last part is judged as a character set name",
+    "query": "set character_set_client = t.sjis",
+    "plan": "Incorrect argument type to variable 'character_set_client'"
   }
 ]

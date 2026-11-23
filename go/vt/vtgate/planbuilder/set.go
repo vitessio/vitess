@@ -242,6 +242,11 @@ func validateSQLModePlan(inner planFunc) planFunc {
 // fail every dump replayed through VTGate.
 func validateConnectionCharsetPlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		// A qualified name is never a value for a system variable: MySQL rejects it
+		// with error 1232, whatever its last part names.
+		if err := rejectQualifiedIdentifier(expr); err != nil {
+			return nil, err
+		}
 		var safe bool
 		switch value := expr.Expr.(type) {
 		case *sqlparser.Literal:
@@ -257,7 +262,7 @@ func validateConnectionCharsetPlan(inner planFunc) planFunc {
 				}
 			}
 		case *sqlparser.ColName:
-			safe = value.Qualifier.IsEmpty() && collations.IsConnectionCharsetName(value.Name.String())
+			safe = collations.IsConnectionCharsetName(value.Name.String())
 		case *sqlparser.NullVal:
 			safe = expr.Var.Name.Lowered() == "character_set_results"
 		case *sqlparser.Argument:

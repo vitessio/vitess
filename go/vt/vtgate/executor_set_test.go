@@ -439,6 +439,21 @@ func TestExecutorSetOp(t *testing.T) {
 		result: returnNoResult("character_set_connection", "varchar"),
 		err:    "unsupported connection character set concat('sj', 'is') for character_set_connection: use utf8mb4",
 	}, {
+		// a system variable is not a constant either, whatever it holds
+		in:     "set character_set_client = @@global.character_set_server",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set @@global.character_set_server for character_set_client: use utf8mb4",
+	}, {
+		// the normalizer turns @@autocommit into a non-user bind variable, which is not a user variable
+		in:     "set character_set_client = @@autocommit",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set :__vtautocommit for character_set_client: use utf8mb4",
+	}, {
+		// a hex literal is not a character set name
+		in:     "set character_set_client = 0x75746638",
+		result: returnNoResult("character_set_client", "varchar"),
+		err:    "unsupported connection character set 0x75746638 for character_set_client: use utf8mb4",
+	}, {
 		// except a user variable, which mysqldump output restores the character set from
 		in:     "set character_set_client = @old_character_set_client",
 		result: returnNoResult("character_set_client", "varchar"),
