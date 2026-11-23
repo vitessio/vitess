@@ -26,13 +26,9 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
-<<<<<<< HEAD
 	"strings"
-||||||| parent of 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
-=======
 	"sync"
 	"sync/atomic"
->>>>>>> 1e5ae1ac84 (VReplication: reload the schema at a DDL only once MySQL has committed it (#21887))
 	"testing"
 	"time"
 
