@@ -569,7 +569,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
-				vs.se.ReloadAt(context.Background(), vs.pos)
+				// The reload is best effort, as it was before it waited for the DDL to commit: if the
+				// wait or the reload fails, the stream goes on without it.
+				if err := vs.se.ReloadAtDDL(vs.ctx, vs.pos, vs.eventGTID); err != nil && vs.ctx.Err() == nil {
+					log.Warningf("Failed to reload the schema after DDL encountered in stream, going on without it: %v", err)
+				}
 			}
 		case sqlparser.StmtSavepoint:
 			// We currently completely skip `SAVEPOINT ...` statements.
