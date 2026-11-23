@@ -2343,15 +2343,6 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 	span.Annotate("strict", req.Strict)
 
-	// It is possible that an old primary has not yet updated its type in the
-	// topo. In that case, report its type as UNKNOWN. It used to be PRIMARY but
-	// is no longer the serving primary.
-	adjustTypeForStalePrimary := func(ti *topo.TabletInfo, mtst time.Time) {
-		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(mtst) {
-			ti.Type = topodatapb.TabletType_UNKNOWN
-		}
-	}
-
 	// Create a context for our per-cell RPCs, with a timeout upper-bounded at
 	// the RemoteOperationTimeout.
 	//
@@ -2395,33 +2386,21 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	}
 
 	if tabletMap != nil {
-		fetched := slices.Collect(maps.Values(tabletMap))
-		terms := latestPrimaryTerms(fetched)
+		tablets := slices.Collect(maps.Values(tabletMap))
+		terms := latestPrimaryTerms(tablets)
 
-		// A tablet alias filter can leave out a shard's current primary, so
-		// the fetched tablets alone can make a stale primary look current.
-		if len(req.TabletAliases) > 0 && mayReturnPrimaries(req.TabletType) {
-			if err := s.addShardRecordPrimaryTerms(ctx, fetched, terms, req.Strict); err != nil {
+		// A tablet alias filter can leave out a shard's current primary. So can
+		// the keyspace/shard path, when a cell can't be read or the primary's
+		// tablet record is missing.
+		if mayReturnPrimaries(req.TabletType) {
+			if err := s.addShardRecordPrimaryTerms(ctx, tablets, terms, req.Strict); err != nil {
 				return nil, err
 			}
 		}
 
-		tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
-		for _, ti := range fetched {
-			// Relabel stale primaries before filtering by tablet type, so the
-			// filter matches the type we report.
-			adjustTypeForStalePrimary(ti, terms[topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)])
-			if req.TabletType != topodatapb.TabletType_UNKNOWN && ti.Type != req.TabletType {
-				continue
-			}
-			tablets = append(tablets, ti.Tablet)
-		}
-
-		// Sort the list of tablets alphabetically by alias to improve readability of output.
-		sort.Slice(tablets, func(i, j int) bool {
-			return topoproto.TabletAliasString(tablets[i].Alias) < topoproto.TabletAliasString(tablets[j].Alias)
-		})
-		return &vtctldatapb.GetTabletsResponse{Tablets: tablets}, nil
+		return &vtctldatapb.GetTabletsResponse{
+			Tablets: tabletsForResponse(tablets, terms, req.TabletType),
+		}, nil
 	}
 
 	cells := req.Cells
@@ -2473,49 +2452,28 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		}
 	}
 
-	// Collect true primary term start times, and optionally filter out any
-	// tablets by keyspace according to the request.
-	PrimaryTermStartTimes := map[string]time.Time{}
+	// Filter by keyspace here. The tablet type filter is applied after stale
+	// primaries are relabeled, in tabletsForResponse.
 	filteredTablets := make([]*topo.TabletInfo, 0, len(allTablets))
-
 	for _, tablet := range allTablets {
 		if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
 			continue
 		}
-		if req.TabletType != topodatapb.TabletType_UNKNOWN && tablet.Type != req.TabletType {
-			continue
-		}
-
-		key := tablet.Keyspace + "." + tablet.Shard
-		if v, ok := PrimaryTermStartTimes[key]; ok {
-			if tablet.GetPrimaryTermStartTime().After(v) {
-				PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
-			}
-		} else {
-			PrimaryTermStartTimes[key] = tablet.GetPrimaryTermStartTime()
-		}
-
 		filteredTablets = append(filteredTablets, tablet)
 	}
 
-	adjustedTablets := make([]*topodatapb.Tablet, len(filteredTablets))
+	terms := latestPrimaryTerms(filteredTablets)
 
-	// collect the tablets with adjusted primary term start times. they've
-	// already been filtered by the above loop, so no keyspace filtering
-	// here.
-	for i, ti := range filteredTablets {
-		key := ti.Keyspace + "." + ti.Shard
-		adjustTypeForStalePrimary(ti, PrimaryTermStartTimes[key])
-
-		adjustedTablets[i] = ti.Tablet
+	// A cell filter, or a cell that couldn't be read, can leave out a shard's
+	// current primary.
+	if (len(req.Cells) > 0 || rec.HasErrors()) && mayReturnPrimaries(req.TabletType) {
+		if err := s.addShardRecordPrimaryTerms(ctx, filteredTablets, terms, req.Strict); err != nil {
+			return nil, err
+		}
 	}
-	// Sort the list of tablets alphabetically by alias to improve readability of output.
-	sort.Slice(adjustedTablets, func(i, j int) bool {
-		return topoproto.TabletAliasString(adjustedTablets[i].Alias) < topoproto.TabletAliasString(adjustedTablets[j].Alias)
-	})
 
 	return &vtctldatapb.GetTabletsResponse{
-		Tablets: adjustedTablets,
+		Tablets: tabletsForResponse(filteredTablets, terms, req.TabletType),
 	}, nil
 }
 
@@ -2592,6 +2550,32 @@ func (s *VtctldServer) addShardRecordPrimaryTerms(ctx context.Context, tablets [
 		log.Warn("GetTablets could not read some shard records; judging stale primaries in those shards by the fetched tablets only", slog.Any("error", err))
 	}
 	return nil
+}
+
+// tabletsForResponse reports each stale primary in tablets as UNKNOWN, keeps
+// the tablets matching tabletType (all of them if it is UNKNOWN), and sorts
+// them by alias. A primary is stale when its term began before the newest
+// primary term of its shard in terms: it used to be the primary but hasn't
+// updated its own record yet. Relabeling happens before filtering, so the
+// filter applies to the type that is reported.
+func tabletsForResponse(tablets []*topo.TabletInfo, terms map[string]time.Time, tabletType topodatapb.TabletType) []*topodatapb.Tablet {
+	result := make([]*topodatapb.Tablet, 0, len(tablets))
+	for _, ti := range tablets {
+		key := topoproto.KeyspaceShardString(ti.Keyspace, ti.Shard)
+		if ti.Type == topodatapb.TabletType_PRIMARY && ti.GetPrimaryTermStartTime().Before(terms[key]) {
+			ti.Type = topodatapb.TabletType_UNKNOWN
+		}
+		if tabletType != topodatapb.TabletType_UNKNOWN && ti.Type != tabletType {
+			continue
+		}
+		result = append(result, ti.Tablet)
+	}
+
+	// Sort the list of tablets alphabetically by alias to improve readability of output.
+	sort.Slice(result, func(i, j int) bool {
+		return topoproto.TabletAliasString(result[i].Alias) < topoproto.TabletAliasString(result[j].Alias)
+	})
+	return result
 }
 
 // GetTopologyPath is part of the vtctlservicepb.VtctldServer interface.
