@@ -270,6 +270,26 @@
     "plan": "VT12001: unsupported: get_lock in a DO statement, use SELECT instead"
   },
   {
+    "comment": "get_lock with its name in backticks, which MySQL runs as the native function",
+    "query": "do `get_lock`('foo', 10)",
+    "plan": "VT12001: unsupported: get_lock in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "release_lock with its name in backticks",
+    "query": "do `release_lock`('foo')",
+    "plan": "VT12001: unsupported: release_lock in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "release_all_locks with its name in backticks",
+    "query": "do `release_all_locks`()",
+    "plan": "VT12001: unsupported: release_all_locks in a DO statement, use SELECT instead"
+  },
+  {
+    "comment": "get_lock in capitals and backticks",
+    "query": "do `GET_LOCK`('foo', 10)",
+    "plan": "VT12001: unsupported: get_lock in a DO statement, use SELECT instead"
+  },
+  {
     "comment": "release_lock in a DO statement",
     "query": "do release_lock('foo')",
     "plan": "VT12001: unsupported: release_lock in a DO statement, use SELECT instead"

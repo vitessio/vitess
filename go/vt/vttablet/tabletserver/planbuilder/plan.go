@@ -215,9 +215,8 @@ type Plan struct {
 	// keep-on-timeout safety. Set for DML containing a mutating lock
 	// function: the statement's row changes roll back atomically under KILL
 	// QUERY, but the lock grant or release does not, and can race the kill —
-	// leaving lock state the session never recorded. DO containing a mutating
-	// lock function sets it too. SELECT carries the same fact as the
-	// SelectLockFunc plan type instead.
+	// leaving lock state the session never recorded. SELECT carries the same
+	// fact as the SelectLockFunc plan type instead.
 	KillsConnOnTimeout bool
 
 	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
@@ -359,10 +358,16 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	// the plan type stays as it is (dispatch is unchanged) but the timeout and
 	// reservation consequences carry over. See lockFuncs.
 	switch statement.(type) {
-	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete, *sqlparser.OtherAdmin:
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		mutating, acquiring := lockFuncs(statement)
 		plan.KillsConnOnTimeout = mutating
 		if acquiring {
+			plan.NeedsReservedConn = true
+		}
+	case *sqlparser.OtherAdmin:
+		// DO only needs the reservation: a plan of this type never keeps its
+		// connection on a query timeout, so KillsConnOnTimeout adds nothing.
+		if _, acquiring := lockFuncs(statement); acquiring {
 			plan.NeedsReservedConn = true
 		}
 	}
@@ -408,11 +413,11 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // (is_free_lock, is_used_lock) stay ordinary wherever they appear.
 func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
-		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
+		typ, isLFunc := sqlparser.LockingFuncTypeOf(in)
 		if !isLFunc {
 			return true, nil
 		}
-		switch lFunc.Type {
+		switch typ {
 		case sqlparser.GetLock:
 			mutating = true
 			acquiring = true

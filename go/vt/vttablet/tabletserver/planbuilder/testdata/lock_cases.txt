@@ -177,13 +177,23 @@
 
 # DO evaluates its expressions like a select list: a get_lock in it would
 # otherwise acquire the lock on a pooled connection and leak it to the
-# connection's next borrower
+# connection's next borrower. A DO never keeps its connection on a query
+# timeout, so unlike DML it needs no KillsConnOnTimeout
 "do get_lock('foo', 10)"
 {
   "PlanID": "OtherAdmin",
   "TableName": "",
   "NeedsReservedConn": true,
-  "KillsConnOnTimeout": true,
+  "TablesUndetermined": true
+}
+
+# the same function with its name in backticks, which the parser builds as a
+# plain function call and MySQL runs as the native function
+"do `get_lock`('foo', 10)"
+{
+  "PlanID": "OtherAdmin",
+  "TableName": "",
+  "NeedsReservedConn": true,
   "TablesUndetermined": true
 }
 
@@ -193,17 +203,21 @@
   "PlanID": "OtherAdmin",
   "TableName": "",
   "NeedsReservedConn": true,
-  "KillsConnOnTimeout": true,
   "TablesUndetermined": true
 }
 
-# a release function in DO kills the connection on timeout but stays
-# runnable on a pooled connection
+# a release function in DO stays runnable on a pooled connection
 "do release_lock('foo')"
 {
   "PlanID": "OtherAdmin",
   "TableName": "",
-  "KillsConnOnTimeout": true,
+  "TablesUndetermined": true
+}
+
+"do `release_lock`('foo')"
+{
+  "PlanID": "OtherAdmin",
+  "TableName": "",
   "TablesUndetermined": true
 }
 

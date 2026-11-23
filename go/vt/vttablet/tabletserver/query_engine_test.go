@@ -1044,6 +1044,22 @@ func TestAddQueryStats(t *testing.T) {
 	}
 }
 
+// TestPlanDoGetLockRefusedOnReservedConn checks that a DO containing get_lock is
+// refused on a reserved connection too, not only on a pooled one: isValid has
+// no arm for the OtherAdmin plan, so there is no connection it may run on, and
+// SELECT GET_LOCK covers the use.
+func TestPlanDoGetLockRefusedOnReservedConn(t *testing.T) {
+	statement, err := sqlparser.NewTestParser().Parse("do get_lock('foo', 10)")
+	require.NoError(t, err)
+	plan, err := planbuilder.Build(vtenv.NewTestEnv(), statement, map[string]*schema.Table{}, "dbName", false)
+	require.NoError(t, err)
+	require.True(t, plan.NeedsReservedConn)
+
+	tabletPlan := &TabletPlan{Plan: plan}
+	require.EqualError(t, tabletPlan.IsValid(false, false), "OtherAdmin not allowed without reserved connection")
+	require.EqualError(t, tabletPlan.IsValid(true, false), "OtherAdmin not allowed without reserved connection")
+}
+
 func TestPlanPoolUnsafe(t *testing.T) {
 	tcases := []struct {
 		name, query, err string
@@ -1074,6 +1090,10 @@ func TestPlanPoolUnsafe(t *testing.T) {
 			// connection.
 			"get_lock in a DO statement is unsafe with server-side connection pooling",
 			"do get_lock('foo', 10)",
+			"OtherAdmin not allowed without reserved connection",
+		}, {
+			"get_lock with its name in backticks in a DO statement is unsafe too",
+			"do `get_lock`('foo', 10)",
 			"OtherAdmin not allowed without reserved connection",
 		}, {
 			"release_lock in a DO statement is a safe no-op on a pooled connection",

@@ -329,6 +329,28 @@ func TestLockPlan(t *testing.T) {
 	}
 }
 
+// TestPlanDoTables checks that a DO finds the tables its subqueries read, so
+// that the table ACL and the denied tables rule apply to it as they do to a
+// SELECT, and that a DO with no table has none.
+func TestPlanDoTables(t *testing.T) {
+	testSchema := loadSchema("schema_test.json")
+	parser := sqlparser.NewTestParser()
+
+	build := func(query string) *Plan {
+		statement, err := parser.Parse(query)
+		require.NoError(t, err)
+		plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
+		require.NoError(t, err)
+		return plan
+	}
+
+	plan := build("do (select 1 from a)")
+	require.Len(t, plan.AllTables, 1)
+	assert.Equal(t, "a", plan.AllTables[0].Name.String())
+
+	assert.Empty(t, build("do 1").AllTables)
+}
+
 func loadSchema(name string) map[string]*schema.Table {
 	b, err := os.ReadFile(locateFile(name))
 	if err != nil {

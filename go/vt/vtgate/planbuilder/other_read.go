@@ -49,13 +49,13 @@ func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (*planResul
 func checkDoLockFuncs(stmt *sqlparser.OtherAdmin) error {
 	for _, expr := range stmt.Exprs {
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-			lockFunc, ok := node.(*sqlparser.LockingFunc)
+			typ, ok := sqlparser.LockingFuncTypeOf(node)
 			if !ok {
 				return true, nil
 			}
-			switch lockFunc.Type {
+			switch typ {
 			case sqlparser.GetLock, sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
-				return false, vterrors.VT12001(lockFunc.Type.ToString() + " in a DO statement, use SELECT instead")
+				return false, vterrors.VT12001(typ.ToString() + " in a DO statement, use SELECT instead")
 			}
 			return true, nil
 		}, expr)

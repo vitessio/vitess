@@ -2083,6 +2083,35 @@ func (ty JSONValueMergeType) ToString() string {
 	}
 }
 
+// LockingFuncTypeOf returns the type of the lock function that node calls, if
+// it calls one. That is a LockingFunc, or a FuncExpr without a qualifier that
+// names one: the parser builds a LockingFunc only for the unquoted keyword,
+// and a FuncExpr for the same name in backticks, but MySQL runs both as the
+// native function.
+func LockingFuncTypeOf(node SQLNode) (LockingFuncType, bool) {
+	switch node := node.(type) {
+	case *LockingFunc:
+		return node.Type, true
+	case *FuncExpr:
+		if !node.Qualifier.IsEmpty() {
+			return 0, false
+		}
+		switch node.Name.Lowered() {
+		case GetLockStr:
+			return GetLock, true
+		case IsFreeLockStr:
+			return IsFreeLock, true
+		case IsUsedLockStr:
+			return IsUsedLock, true
+		case ReleaseAllLocksStr:
+			return ReleaseAllLocks, true
+		case ReleaseLockStr:
+			return ReleaseLock, true
+		}
+	}
+	return 0, false
+}
+
 // ToString returns the type as a string
 func (ty LockingFuncType) ToString() string {
 	switch ty {

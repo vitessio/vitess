@@ -512,3 +512,33 @@ func TestVersionedCommentParsing(t *testing.T) {
 		})
 	}
 }
+
+func TestLockingFuncTypeOf(t *testing.T) {
+	parser := NewTestParser()
+	for _, tc := range []struct {
+		expr string
+		want LockingFuncType
+		ok   bool
+	}{
+		{"get_lock('l', 1)", GetLock, true},
+		{"`get_lock`('l', 1)", GetLock, true},
+		{"`GET_LOCK`('l', 1)", GetLock, true},
+		{"release_lock('l')", ReleaseLock, true},
+		{"`release_lock`('l')", ReleaseLock, true},
+		{"`release_all_locks`()", ReleaseAllLocks, true},
+		{"`is_free_lock`('l')", IsFreeLock, true},
+		{"`is_used_lock`('l')", IsUsedLock, true},
+		// a function of another database is not the native function
+		{"db.`get_lock`('l', 1)", 0, false},
+		{"concat('a', 'b')", 0, false},
+		{"1", 0, false},
+	} {
+		t.Run(tc.expr, func(t *testing.T) {
+			expr, err := parser.ParseExpr(tc.expr)
+			require.NoError(t, err)
+			got, ok := LockingFuncTypeOf(expr)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
