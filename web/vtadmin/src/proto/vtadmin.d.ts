@@ -23266,6 +23266,9 @@ export namespace topodata {
         /** ThrottlerConfig metric_thresholds. */
         metric_thresholds: { [k: string]: number };
 
+        /** ThrottlerConfig metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new ThrottlerConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -23370,6 +23373,9 @@ export namespace topodata {
 
             /** ThrottlerConfig metric_thresholds */
             metric_thresholds?: ({ [k: string]: number }|null);
+
+            /** ThrottlerConfig metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -25012,6 +25018,9 @@ export namespace querythrottler {
         /** TabletStrategyConfig tablet_rules. */
         tablet_rules: { [k: string]: querythrottler.StatementRuleSet.$Properties };
 
+        /** TabletStrategyConfig metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new TabletStrategyConfig instance using the specified properties.
          * @param [properties] Properties to set
@@ -25098,6 +25107,9 @@ export namespace querythrottler {
 
             /** TabletStrategyConfig tablet_rules */
             tablet_rules?: ({ [k: string]: querythrottler.StatementRuleSet.$Properties }|null);
+
+            /** TabletStrategyConfig metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -44173,6 +44185,9 @@ export namespace tabletmanagerdata {
         /** GetThrottlerStatusResponse throttler_type. */
         throttler_type: tabletmanagerdata.ThrottlerType;
 
+        /** GetThrottlerStatusResponse metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new GetThrottlerStatusResponse instance using the specified properties.
          * @param [properties] Properties to set
@@ -44313,6 +44328,9 @@ export namespace tabletmanagerdata {
 
             /** GetThrottlerStatusResponse throttler_type */
             throttler_type?: (tabletmanagerdata.ThrottlerType|null);
+
+            /** GetThrottlerStatusResponse metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -78184,6 +78202,9 @@ export namespace vtctldata {
         /** UpdateThrottlerConfigRequest app_checked_metrics. */
         app_checked_metrics: string[];
 
+        /** UpdateThrottlerConfigRequest metric_shard_percentiles. */
+        metric_shard_percentiles: { [k: string]: number };
+
         /**
          * Creates a new UpdateThrottlerConfigRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -78303,6 +78324,9 @@ export namespace vtctldata {
 
             /** UpdateThrottlerConfigRequest app_checked_metrics */
             app_checked_metrics?: (string[]|null);
+
+            /** UpdateThrottlerConfigRequest metric_shard_percentiles */
+            metric_shard_percentiles?: ({ [k: string]: number }|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

@@ -17,6 +17,7 @@ limitations under the License.
 package throttle
 
 import (
+	"maps"
 	"math"
 	"slices"
 	"time"
@@ -123,6 +124,10 @@ func convertQueryThrottlerConfigToThrottlerConfig(qtCfg *querythrottlerpb.Config
 
 	if len(metricThresholds) > 0 {
 		throttlerConfig.MetricThresholds = metricThresholds
+	}
+
+	if percentiles := qtCfg.GetTabletStrategyConfig().GetMetricShardPercentiles(); len(percentiles) > 0 {
+		throttlerConfig.MetricShardPercentiles = maps.Clone(percentiles)
 	}
 
 	return throttlerConfig

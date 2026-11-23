@@ -17,6 +17,7 @@ limitations under the License.
 package base
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -264,5 +265,32 @@ func TestKnownMetricNamesPascalCase(t *testing.T) {
 			assert.Equal(t, expect, metricName.Pascal())
 			assert.Equal(t, expect, textutil.PascalCase(metricName.String()))
 		})
+	}
+}
+
+func TestValidateShardPercentile(t *testing.T) {
+	tcs := []struct {
+		metricName string
+		percentile float64
+		expectErr  string
+	}{
+		{metricName: "lag", percentile: 75},
+		{metricName: "loadavg", percentile: 0},
+		{metricName: "lag", percentile: 100},
+		{metricName: "custom", percentile: 50},
+		{metricName: "lags", percentile: 75, expectErr: "unknown metric name for shard percentile: lags"},
+		{metricName: "shard/lag", percentile: 75, expectErr: "unknown metric name for shard percentile: shard/lag"},
+		{metricName: "default", percentile: 75, expectErr: "unknown metric name for shard percentile: default"},
+		{metricName: "lag", percentile: -1, expectErr: "shard percentile of lag must be between 0 and 100, got -1"},
+		{metricName: "lag", percentile: 100.5, expectErr: "shard percentile of lag must be between 0 and 100, got 100.5"},
+		{metricName: "lag", percentile: math.NaN(), expectErr: "shard percentile of lag must be between 0 and 100, got NaN"},
+	}
+	for _, tc := range tcs {
+		err := ValidateShardPercentile(tc.metricName, tc.percentile)
+		if tc.expectErr == "" {
+			assert.NoError(t, err, "%s=%v", tc.metricName, tc.percentile)
+		} else {
+			assert.EqualError(t, err, tc.expectErr)
+		}
 	}
 }

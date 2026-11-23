@@ -34,6 +34,7 @@ type throttlerTypeRecorder struct {
 	*tabletservermock.Controller
 	checkType  tabletmanagerdatapb.ThrottlerType
 	statusType tabletmanagerdatapb.ThrottlerType
+	status     *throttle.ThrottlerStatus
 }
 
 func (r *throttlerTypeRecorder) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.CheckResult {
@@ -43,6 +44,9 @@ func (r *throttlerTypeRecorder) CheckThrottler(ctx context.Context, appName stri
 
 func (r *throttlerTypeRecorder) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.ThrottlerStatus {
 	r.statusType = throttlerType
+	if r.status != nil {
+		return r.status
+	}
 	return &throttle.ThrottlerStatus{}
 }
 
@@ -123,4 +127,23 @@ func TestTabletManager_ThrottlerRPCsReportAnsweringThrottlerType(t *testing.T) {
 			assert.Equal(t, tt.answered, statusResp.ThrottlerType)
 		})
 	}
+}
+
+// GetThrottlerStatus must report the shard percentiles that the throttler uses.
+func TestTabletManager_GetThrottlerStatusReportsMetricShardPercentiles(t *testing.T) {
+	ctx := t.Context()
+	qsc := &throttlerTypeRecorder{
+		Controller: tabletservermock.NewController(),
+		status:     &throttle.ThrottlerStatus{MetricShardPercentiles: map[string]float64{"lag": 75}},
+	}
+	tm := &TabletManager{
+		QueryServiceControl: qsc,
+		Env:                 vtenv.NewTestEnv(),
+		BatchCtx:            ctx,
+	}
+	tm.tmState = newTMState(tm, newTestTablet(t, 100, "ks", "-80", nil))
+
+	resp, err := tm.GetThrottlerStatus(ctx, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]float64{"lag": 75}, resp.MetricShardPercentiles)
 }

@@ -17095,3 +17095,84 @@ func TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules(t *test
 		})
 	}
 }
+
+func TestUpdateThrottlerConfigMetricShardPercentiles(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{Name: "testkeyspace", Keyspace: &topodatapb.Keyspace{}})
+	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "zone1", "testkeyspace", &topodatapb.SrvKeyspace{}))
+
+	requireConfig := func(t *testing.T, wantPercentiles map[string]float64, wantThresholds map[string]float64) {
+		t.Helper()
+		ks, err := ts.GetKeyspace(ctx, "testkeyspace")
+		require.NoError(t, err)
+		srvKs, err := ts.GetSrvKeyspace(ctx, "zone1", "testkeyspace")
+		require.NoError(t, err)
+		for _, cfg := range []*topodatapb.ThrottlerConfig{ks.ThrottlerConfig, srvKs.ThrottlerConfig} {
+			assert.Equal(t, wantPercentiles, cfg.GetMetricShardPercentiles())
+			assert.Equal(t, wantThresholds, cfg.GetMetricThresholds())
+		}
+	}
+
+	steps := []struct {
+		name            string
+		req             *vtctldatapb.UpdateThrottlerConfigRequest
+		wantErr         string
+		wantPercentiles map[string]float64
+		wantThresholds  map[string]float64
+	}{
+		{
+			name:           "set a threshold",
+			req:            &vtctldatapb.UpdateThrottlerConfigRequest{MetricName: "lag", Threshold: 3},
+			wantThresholds: map[string]float64{"lag": 3},
+		},
+		{
+			name:            "set percentiles",
+			req:             &vtctldatapb.UpdateThrottlerConfigRequest{MetricShardPercentiles: map[string]float64{"lag": 75, "loadavg": 90}},
+			wantPercentiles: map[string]float64{"lag": 75, "loadavg": 90},
+			wantThresholds:  map[string]float64{"lag": 3},
+		},
+		{
+			name:            "other settings keep them",
+			req:             &vtctldatapb.UpdateThrottlerConfigRequest{Enable: true},
+			wantPercentiles: map[string]float64{"lag": 75, "loadavg": 90},
+			wantThresholds:  map[string]float64{"lag": 3},
+		},
+		{
+			name:            "unknown metric is refused",
+			req:             &vtctldatapb.UpdateThrottlerConfigRequest{MetricShardPercentiles: map[string]float64{"lags": 75}},
+			wantErr:         "unknown metric name for shard percentile: lags",
+			wantPercentiles: map[string]float64{"lag": 75, "loadavg": 90},
+			wantThresholds:  map[string]float64{"lag": 3},
+		},
+		{
+			name:            "above 100 is refused",
+			req:             &vtctldatapb.UpdateThrottlerConfigRequest{MetricShardPercentiles: map[string]float64{"lag": 150}},
+			wantErr:         "shard percentile of lag must be between 0 and 100, got 150",
+			wantPercentiles: map[string]float64{"lag": 75, "loadavg": 90},
+			wantThresholds:  map[string]float64{"lag": 3},
+		},
+		{
+			name:            "zero removes only that metric's percentile",
+			req:             &vtctldatapb.UpdateThrottlerConfigRequest{MetricShardPercentiles: map[string]float64{"lag": 0}},
+			wantPercentiles: map[string]float64{"loadavg": 90},
+			wantThresholds:  map[string]float64{"lag": 3},
+		},
+	}
+	for _, step := range steps {
+		t.Run(step.name, func(t *testing.T) {
+			step.req.Keyspace = "testkeyspace"
+			_, err := vtctld.UpdateThrottlerConfig(ctx, step.req)
+			if step.wantErr != "" {
+				require.EqualError(t, err, step.wantErr)
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			} else {
+				require.NoError(t, err)
+			}
+			requireConfig(t, step.wantPercentiles, step.wantThresholds)
+		})
+	}
+}

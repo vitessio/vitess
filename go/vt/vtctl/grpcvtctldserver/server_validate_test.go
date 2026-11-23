@@ -670,3 +670,44 @@ func TestTopoErrorf(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateQueryThrottlerConfigShardPercentile(t *testing.T) {
+	configWithPercentiles := func(enabled bool, percentiles map[string]float64) *querythrottlerpb.Config {
+		return &querythrottlerpb.Config{
+			Enabled:  enabled,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				MetricShardPercentiles: percentiles,
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {MetricRules: map[string]*querythrottlerpb.MetricRule{
+							"lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5, Throttle: 100}}},
+						}},
+					}},
+				},
+			},
+		}
+	}
+	tests := []struct {
+		name    string
+		config  *querythrottlerpb.Config
+		wantErr string
+	}{
+		{name: "unset", config: configWithPercentiles(true, nil)},
+		{name: "valid, including a metric that no rule uses", config: configWithPercentiles(true, map[string]float64{"lag": 75, "loadavg": 100})},
+		{name: "scoped metric name", config: configWithPercentiles(true, map[string]float64{"shard/lag": 75}), wantErr: "unknown metric name for shard percentile: shard/lag"},
+		{name: "above 100", config: configWithPercentiles(true, map[string]float64{"lag": 101}), wantErr: "shard percentile of lag must be between 0 and 100, got 101"},
+		{name: "disabled config is not validated", config: configWithPercentiles(false, map[string]float64{"lag": 150})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateQueryThrottlerConfigRequest(&vtctldatapb.UpdateQueryThrottlerConfigRequest{Keyspace: "ks1", QueryThrottlerConfig: tt.config})
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tt.wantErr)
+			require.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		})
+	}
+}

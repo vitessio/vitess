@@ -419,6 +419,11 @@ message ThrottlerConfig {
 
   // MetricThresholds maps metric names to the threshold values that should be used for that metric
   map <string, double> metric_thresholds = 7;
+
+  // MetricShardPercentiles maps metric names to the nearest-rank percentile of the tablets' values that
+  // the PRIMARY uses for that metric's shard scope. A missing metric, or a value outside (0, 100), means the
+  // worst tablet, which is also the behavior without this field.
+  map <string, double> metric_shard_percentiles = 8;
 }
 
 // SrvKeyspace is a rollup node for the keyspace itself.
