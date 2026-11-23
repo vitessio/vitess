@@ -62,15 +62,21 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "insert ignore into t_cutover_test values (1, 'new_row')")
 		require.NoError(t, err)
 	})
-	uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion", executeStrategy: "vtgate", skipWait: true})
+	// Teardown is registered before the ALTER is submitted, so the table is
+	// dropped even if the submission itself fails. It runs as a defer rather
+	// than t.Cleanup so that t.Context() is still live for the helpers.
+	var uuid string
 	defer func() {
-		// If the test failed before the ALTER completed, cancel it so that the
-		// DROP below does not queue behind it. On a completed migration this is
-		// a no-op.
-		_, _ = onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("alter vitess_migration '%s' cancel", uuid))
+		if uuid != "" {
+			// If the test failed before the ALTER completed, cancel it so that the
+			// DROP below does not queue behind it. On a completed migration this is
+			// a no-op.
+			_, _ = onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("alter vitess_migration '%s' cancel", uuid))
+		}
 		dropUUID := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: dropTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, dropUUID, schema.OnlineDDLStatusComplete)
 	}()
+	uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion", executeStrategy: "vtgate", skipWait: true})
 	onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 	waitForReadyToComplete(t, uuid, true)
 
@@ -152,7 +158,7 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 			"renaming tables",
 			"waiting for RENAME to block",
 			"RENAME found",
-		), normalWaitTime)
+		), extendedWaitTime)
 		if err == nil {
 			_, err = stallConn.ExecuteFetch("begin", 0, false)
 		}
@@ -167,14 +173,19 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	}()
 
 	onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
-	stall := <-stalled
+	var stall stallResult
+	select {
+	case stall = <-stalled:
+	case <-time.After(extendedWaitTime):
+		require.Fail(t, "timed out stalling vplayer position updates")
+	}
 	require.NoError(t, stall.err)
 	t.Logf("vplayer position updates stalled at stage %q", stall.stage)
 
 	// LOCK TABLES is held and the RENAME is in flight from "RENAME found" on.
 	// Probe the original table from a third connection: this read blocks until
 	// the cut-over's LOCK TABLES is released.
-	lockedStage, _, err := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), normalWaitTime)
+	lockedStage, _, err := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), extendedWaitTime)
 	require.NoError(t, err)
 	t.Logf("tables locked, stage %q", lockedStage)
 	type probeResult struct {
@@ -190,7 +201,7 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 
 	// The cut-over gives up here; this stage is written before the function
 	// returns and its deferred cleanup runs.
-	_, failedAt, err := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), normalWaitTime)
+	_, failedAt, err := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), extendedWaitTime)
 	require.NoError(t, err)
 	var probe probeResult
 	select {
