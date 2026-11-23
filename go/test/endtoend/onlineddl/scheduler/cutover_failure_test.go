@@ -62,12 +62,15 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		_, err := onlineddl.VtgateExecQuery(t.Context(), &vtParams, "insert ignore into t_cutover_test values (1, 'new_row')")
 		require.NoError(t, err)
 	})
-	defer func() {
-		uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: dropTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	}()
-
 	uuid := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion", executeStrategy: "vtgate", skipWait: true})
+	defer func() {
+		// If the test failed before the ALTER completed, cancel it so that the
+		// DROP below does not queue behind it. On a completed migration this is
+		// a no-op.
+		_, _ = onlineddl.VtgateExecQuery(t.Context(), &vtParams, fmt.Sprintf("alter vitess_migration '%s' cancel", uuid))
+		dropUUID := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: dropTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, dropUUID, schema.OnlineDDLStatusComplete)
+	}()
 	onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 	waitForReadyToComplete(t, uuid, true)
 
@@ -82,6 +85,8 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	defer stallConn.Close()
 	probeConn := newConn()
 	defer probeConn.Close()
+	barrierConn := newConn()
+	defer barrierConn.Close()
 
 	readStage := func() (string, error) {
 		rs, err := stageConn.ExecuteFetch(fmt.Sprintf("select stage from _vt.schema_migrations where migration_uuid='%s'", uuid), 1, false)
@@ -123,6 +128,14 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		}
 	}
 
+	// Barrier: a READ lock on the table from an external connection makes the
+	// cut-over's own LOCK TABLES ... WRITE block at the "locking tables" stage.
+	// It is released only once the vreplication row lock below is held, so the
+	// post-lock position is always read after vplayer can no longer persist
+	// its position. Without the barrier the stall could race with vplayer.
+	_, err := barrierConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableName), 0, false)
+	require.NoError(t, err)
+
 	// Stall vplayer position updates as soon as the cut-over is past the sentry
 	// wait, so that the post-lock waitForPos cannot be satisfied.
 	type stallResult struct {
@@ -145,6 +158,10 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		}
 		if err == nil {
 			_, err = stallConn.ExecuteFetch(fmt.Sprintf("select id from _vt.vreplication where workflow='%s' for update", uuid), 1, false)
+		}
+		if err == nil {
+			// Row lock held: let the cut-over proceed to LOCK TABLES.
+			_, err = barrierConn.ExecuteFetch("unlock tables", 0, false)
 		}
 		stalled <- stallResult{stage: stage, err: err}
 	}()
