@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"io"
+	"log/slog"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -367,7 +368,7 @@ func (stc *ScatterConn) runLockQuery(ctx context.Context, session *econtext.Safe
 	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
 	_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock)
 	if lockErr != nil {
-		log.Warn("Locking heartbeat failed, held locks might be released: " + lockErr.Error())
+		log.Warn("Locking heartbeat failed, held locks might be released", slog.Any("error", lockErr))
 	}
 }
 
@@ -434,8 +435,10 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines, through processOneStreamingResult.
+// Unlike MessageStream, the callback is not serialized through
+// processOneStreamingResult: each shard's stream runs in its own goroutine
+// and invokes the callback directly, so the callback must synchronize any
+// shared state it touches.
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
 	primitive engine.Primitive,
@@ -804,7 +807,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 		wg.Wait()
 		if pr, ok := panicRecord.Load().(*panicData); ok {
-			log.Error("caught a panic during parallel execution:\n" + string(pr.trace))
+			log.Error("caught a panic during parallel execution", slog.String("stack", string(pr.trace)))
 			panic(pr.p) // rethrow the captured panic in the main thread
 		}
 	}

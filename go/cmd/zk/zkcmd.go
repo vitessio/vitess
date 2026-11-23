@@ -18,7 +18,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 
@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func main() {
@@ -43,7 +44,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	// Run the command.
 	if err := command.Root.ExecuteContext(ctx); err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("command failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		exit.Return(1)
 	}
 }

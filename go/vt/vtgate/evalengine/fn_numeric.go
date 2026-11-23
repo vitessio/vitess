@@ -998,6 +998,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 	skip1 := c.compileNullCheck1(arg)
 	var skip2 *jump
 
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag), Size: arg.Size, Scale: arg.Scale}
 	if len(expr.Arguments) == 1 {
 		switch arg.Type {
 		case sqltypes.Int64:
@@ -1011,6 +1012,8 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND1_d()
 		default:
+			convt.Type = sqltypes.Float64
+			convt.Size, convt.Scale = 0, 0
 			c.asm.Convert_xf(1)
 			c.asm.Fn_ROUND1_f()
 		}
@@ -1021,6 +1024,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		}
 
 		skip2 = c.compileNullCheck1r(round)
+		convt.Flag |= nullableFlags(round.Flag)
 
 		switch round.Type {
 		case sqltypes.Int64:
@@ -1044,13 +1048,15 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND2_d()
 		default:
+			convt.Type = sqltypes.Float64
+			convt.Size, convt.Scale = 0, 0
 			c.asm.Convert_xf(2)
 			c.asm.Fn_ROUND2_f()
 		}
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return arg, nil
+	return convt, nil
 }
 
 type builtinTruncate struct {
@@ -1207,6 +1213,7 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xi(1)
 	}
 
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag | round.Flag), Size: arg.Size, Scale: arg.Scale}
 	switch arg.Type {
 	case sqltypes.Int64:
 		c.asm.Fn_TRUNCATE_i()
@@ -1219,12 +1226,14 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 		// the decimal fits into an integer.
 		c.asm.Fn_TRUNCATE_d()
 	default:
+		convt.Type = sqltypes.Float64
+		convt.Size, convt.Scale = 0, 0
 		c.asm.Convert_xf(2)
 		c.asm.Fn_TRUNCATE_f()
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return arg, nil
+	return convt, nil
 }
 
 type builtinCrc32 struct {
@@ -1263,7 +1272,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_CRC32()
 	c.asm.jumpDestination(skip)
-	return arg, nil
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinConv struct {

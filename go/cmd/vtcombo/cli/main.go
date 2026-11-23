@@ -24,6 +24,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -187,7 +188,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("unable to initialize env: %v", err))
+		log.Error("unable to initialize env", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -236,7 +237,7 @@ func run(cmd *cobra.Command, args []string) (err error) {
 	} else {
 		dbconfigs.GlobalDBConfigs.InitWithSocket("", env.CollationEnv())
 		mysqld.Mysqld = mysqlctl.NewMysqld(&dbconfigs.GlobalDBConfigs)
-		servenv.OnClose(mysqld.Close)
+		servenv.OnClose(mysqld.Mysqld.Close)
 	}
 
 	// Tablet configuration and init.
@@ -358,6 +359,10 @@ func run(cmd *cobra.Command, args []string) (err error) {
 type vtcomboMysqld struct {
 	*mysqlctl.Mysqld
 }
+
+// Close implements the MysqlDaemon interface. All tablets share this daemon,
+// so stopping one tablet must not close it; vtcombo closes it at shutdown.
+func (mysqld *vtcomboMysqld) Close() {}
 
 // SetReplicationSource implements the MysqlDaemon interface
 func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, heartbeatInterval float64, stopReplicationBefore bool, startReplicationAfter bool) error {

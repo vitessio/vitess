@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"slices"
@@ -66,6 +67,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -8423,6 +8425,63 @@ func TestGetSrvVSchemas(t *testing.T) {
 	}
 }
 
+// throttlerTypeTMClient records the throttler type of each throttler request it gets.
+type throttlerTypeTMClient struct {
+	tmclient.TabletManagerClient
+	checkType  tabletmanagerdatapb.ThrottlerType
+	statusType tabletmanagerdatapb.ThrottlerType
+}
+
+func (c *throttlerTypeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checkType = req.ThrottlerType
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (c *throttlerTypeTMClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c.statusType = req.ThrottlerType
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
+}
+
+// CheckThrottler and GetThrottlerStatus must pass the requested throttler type on to the
+// tablet, so a request for the dedicated query throttler doesn't reach the lag one.
+func TestThrottlerRPCsForwardThrottlerType(t *testing.T) {
+	t.Parallel()
+
+	for _, throttlerType := range []tabletmanagerdatapb.ThrottlerType{
+		tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+	} {
+		t.Run(throttlerType.String(), func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			// Start from the other value, so a forwarded zero value can't pass by accident.
+			initial := tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER
+			if throttlerType == initial {
+				initial = tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
+			}
+			tmc := &throttlerTypeTMClient{checkType: initial, statusType: initial}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			alias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+			testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+				Alias:    alias,
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			}, nil)
+
+			_, err := vtctld.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.checkType)
+
+			_, err = vtctld.GetThrottlerStatus(ctx, &vtctldatapb.GetThrottlerStatusRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.statusType)
+		})
+	}
+}
+
 func TestGetTablet(t *testing.T) {
 	t.Parallel()
 
@@ -8472,6 +8531,7 @@ func TestGetTablets(t *testing.T) {
 		cells            []string
 		unreachableCells []string // Cells that will return a ctx timeout error when trying to get tablets
 		tablets          []*topodatapb.Tablet
+		addTabletOptions *testutil.AddTabletOptions
 		req              *vtctldatapb.GetTabletsRequest
 		expected         []*topodatapb.Tablet
 		shouldErr        bool
@@ -8951,6 +9011,409 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name:  "tablet alias filtering single stale primary stays unknown",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Hostname:             "true.primary",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet alias filtering stale primaries across shards stay unknown",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Hostname:             "true.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Hostname:             "stale.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  201,
+					},
+					Hostname:             "true.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  200,
+					},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname:             "stale.primary.a",
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Hostname:             "stale.primary.b",
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "tablet alias filtering does not stale primaries across shards",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						Cell: "zone1",
+						Uid:  200,
+					},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			// 100 is a stale primary of -80 whose term is newer than 201, the
+			// current primary of 80-. Each must be judged against its own shard.
+			name:  "tablet alias filtering judges each primary against its own shard",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 201},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 201},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 201},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			// 101 was just promoted in -80, but the shard record still names the
+			// former primary 100 with its older term. The newer tablet term must
+			// win over the lagging shard record, and each shard is judged on its
+			// own: 200, the primary of 80-, has the newest term of all.
+			name:  "tablet alias filtering keeps newer tablet term when shard record lags",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 101},
+					{Cell: "zone1", Uid: 200},
+				},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			// 100 is a stale primary of -80; 101 is its current primary. Asking
+			// for 100 by alias with a primary tablet type must not return it.
+			name:  "tablet alias filtering with primary tablet type excludes stale primary",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 100},
+				},
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
+		},
+		{
+			// 100 is a stale primary of -80; 101 is its current primary. A primary
+			// tablet type filter must return only the current primary.
+			name:  "keyspace and shard filter with primary tablet type excludes stale primary",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace:   "testkeyspace",
+				Shard:      "-80",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
 			name:    "tablet alias filter with none found",
 			tablets: []*topodatapb.Tablet{},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -9119,7 +9582,7 @@ func TestGetTablets(t *testing.T) {
 				return NewVtctldServer(vtenv.NewTestEnv(), ts)
 			})
 
-			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
+			testutil.AddTablets(ctx, t, ts, tt.addTabletOptions, tt.tablets...)
 
 			for _, cell := range tt.cells {
 				if slices.Contains(tt.unreachableCells, cell) {
@@ -9149,6 +9612,118 @@ func TestGetTablets(t *testing.T) {
 
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp.Tablets)
+		})
+	}
+}
+
+// TestGetTabletsShardRecordReadError covers tablet alias requests whose shard
+// records can't be read: a strict request fails with a coded error, and a
+// non-strict one judges each shard by the fetched tablets alone.
+func TestGetTabletsShardRecordReadError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		strict     bool
+		tabletType topodatapb.TabletType
+		wantCode   vtrpc.Code
+		// expected types by tablet uid, when no error is expected
+		expected map[uint32]topodatapb.TabletType
+	}{
+		{
+			name:     "strict",
+			strict:   true,
+			wantCode: vtrpc.Code_UNAVAILABLE,
+		},
+		{
+			// Without the shard records, each shard falls back to the newest
+			// term among its fetched tablets: 99 is still judged against 100.
+			name:   "non-strict",
+			strict: false,
+			expected: map[uint32]topodatapb.TabletType{
+				99:  topodatapb.TabletType_UNKNOWN,
+				100: topodatapb.TabletType_PRIMARY,
+				101: topodatapb.TabletType_REPLICA,
+				200: topodatapb.TabletType_PRIMARY,
+			},
+		},
+		{
+			// A tablet type filter that can't return primaries needs no shard
+			// records, so their read error doesn't fail a strict request.
+			name:       "strict with replica tablet type",
+			strict:     true,
+			tabletType: topodatapb.TabletType_REPLICA,
+			expected: map[uint32]topodatapb.TabletType{
+				101: topodatapb.TabletType_REPLICA,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			// 99 is a stale primary of -80 and 100 its current primary; 200 is
+			// the current primary of 80-, with the newest term of all.
+			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true, ForceSetShardPrimary: true},
+				&topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 99},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				&topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+				&topodatapb.Tablet{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "testkeyspace",
+					Shard:    "-80",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				&topodatapb.Tablet{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace:             "testkeyspace",
+					Shard:                "80-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+				},
+			)
+			factory.AddOperationError(memorytopo.Get, "keyspaces/testkeyspace/shards/.*/Shard", errors.New("shard record unavailable"))
+
+			resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{Cell: "zone1", Uid: 99},
+					{Cell: "zone1", Uid: 100},
+					{Cell: "zone1", Uid: 101},
+					{Cell: "zone1", Uid: 200},
+				},
+				TabletType: tt.tabletType,
+				Strict:     tt.strict,
+			})
+			if tt.wantCode != vtrpc.Code_OK {
+				require.ErrorContains(t, err, "shard record unavailable")
+				assert.Equal(t, tt.wantCode, vterrors.Code(err))
+				return
+			}
+
+			require.NoError(t, err)
+			got := make(map[uint32]topodatapb.TabletType, len(resp.Tablets))
+			for _, tablet := range resp.Tablets {
+				got[tablet.Alias.Uid] = tablet.Type
+			}
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
@@ -16182,7 +16757,398 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
+func TestUpdateQueryThrottlerConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cells    []string
+		keyspace *vtctldatapb.Keyspace
+		req      *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		expected *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		// wantConfig is the config that the Keyspace and every SrvKeyspace must store, when it differs from
+		// the request's. The server normalizes the request in place, so comparing with tt.req can't show
+		// that it normalized anything.
+		wantConfig *querythrottler.Config
+		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
+		failSrvKeyspaceUpdate bool
+		// failCellListRead makes reading the list of cells time out after the Keyspace write.
+		failCellListRead bool
+		wantCode         vtrpc.Code
+		wantErrContains  string
+	}{
+		{
+			name:  "successfully update query throttler config",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   false,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "update with dry run enabled",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   true,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "thresholds are stored sorted by above",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"INSERT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													// Throttle descends as above ascends, so a sort on the wrong field fails.
+													{Above: 10, Throttle: 25},
+													{Above: 2, Throttle: 100},
+													{Above: 5, Throttle: 50},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			wantConfig: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 2, Throttle: 100},
+												{Above: 5, Throttle: 50},
+												{Above: 10, Throttle: 25},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "keyspace not found",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "otherkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "nonexistent",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCode:        vtrpc.Code_NOT_FOUND,
+			wantErrContains: "failed to lock keyspace nonexistent",
+		},
+		{
+			name:  "SrvKeyspace update fails",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			failSrvKeyspaceUpdate: true,
+			wantCode:              vtrpc.Code_UNAVAILABLE,
+			wantErrContains:       "re-run the command",
+		},
+		{
+			name:  "reading the cells times out after the keyspace update",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{Enabled: false},
+			},
+			failCellListRead: true,
+			wantCode:         vtrpc.Code_DEADLINE_EXCEEDED,
+			wantErrContains:  "re-run the command",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+
+			ts, factory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			// Add the keyspace
+			testutil.AddKeyspace(ctx, t, ts, tt.keyspace)
+
+			// Add SrvKeyspace for the keyspace in all cells
+			for _, cell := range tt.cells {
+				err := ts.UpdateSrvKeyspace(ctx, cell, tt.keyspace.Name, &topodatapb.SrvKeyspace{})
+				require.NoError(t, err)
+			}
+
+			if tt.failSrvKeyspaceUpdate {
+				factory.AddOperationError(memorytopo.Update, "SrvKeyspace$", errors.New("cell unreachable"))
+			}
+			if tt.failCellListRead {
+				factory.AddOperationError(memorytopo.ListDir, "cells$", topo.NewError(topo.Timeout, "cells"))
+			}
+
+			// Call the RPC
+			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
+
+			if tt.wantCode != vtrpc.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, vterrors.Code(err), "error: %v", err)
+				assert.ErrorContains(t, err, tt.wantErrContains)
+				if tt.failSrvKeyspaceUpdate || tt.failCellListRead {
+					// The Keyspace is written before the SrvKeyspaces, so it already holds the config.
+					ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+					require.NoError(t, err)
+					utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+
+			wantConfig := tt.wantConfig
+			if wantConfig == nil {
+				wantConfig = tt.req.QueryThrottlerConfig
+			}
+
+			// Verify the keyspace was updated
+			ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+			require.NoError(t, err)
+			utils.MustMatch(t, wantConfig, ks.QueryThrottlerConfig)
+
+			// Verify SrvKeyspace was updated in all cells
+			for _, cell := range tt.cells {
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, wantConfig, srvKs.QueryThrottlerConfig)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+// TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules covers configs that would be
+// accepted as enabled while containing a rule that can never throttle a query.
+func TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules(t *testing.T) {
+	// config builds an enabled TABLET_THROTTLER config with a single PRIMARY rule set.
+	config := func(stmtRules map[string]*querythrottler.MetricRuleSet) *querythrottler.Config {
+		return &querythrottler.Config{
+			Enabled:  true,
+			Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottler.StatementRuleSet{
+					"PRIMARY": {StatementRules: stmtRules},
+				},
+			},
+		}
+	}
+	// rule builds a single-metric rule set for stmtType.
+	rule := func(stmtType string, thresholds ...*querythrottler.ThrottleThreshold) map[string]*querythrottler.MetricRuleSet {
+		return map[string]*querythrottler.MetricRuleSet{
+			stmtType: {MetricRules: map[string]*querythrottler.MetricRule{
+				"lag": {Thresholds: thresholds},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		config  *querythrottler.Config
+		wantErr string
+	}{
+		{
+			name:    "empty statement_rules",
+			config:  config(nil),
+			wantErr: "statement_rules cannot be empty (tablet_type=PRIMARY)",
+		},
+		{
+			name:    "empty metric_rules",
+			config:  config(map[string]*querythrottler.MetricRuleSet{"SELECT": {}}),
+			wantErr: "metric_rules cannot be empty (tablet_type=PRIMARY, statement=SELECT)",
+		},
+		{
+			name: "nil metric rule",
+			config: config(map[string]*querythrottler.MetricRuleSet{
+				"SELECT": {MetricRules: map[string]*querythrottler.MetricRule{"lag": nil}},
+			}),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "empty thresholds",
+			config:  config(rule("SELECT")),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "NaN above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.NaN(), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got NaN",
+		},
+		{
+			name:    "positive infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got +Inf",
+		},
+		{
+			name:    "negative infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(-1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
+		},
+	}
+	// DDL plans can reach the throttler without a parsed query, and their rules still apply,
+	// so DDL is a valid statement type like the data-plane ones.
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL"} {
+		tests = append(tests, struct {
+			name    string
+			config  *querythrottler.Config
+			wantErr string
+		}{
+			name:   stmtType + " statement type is supported",
+			config: config(rule(stmtType, &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTabletThrottlerStrategyConfig(tt.config)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }

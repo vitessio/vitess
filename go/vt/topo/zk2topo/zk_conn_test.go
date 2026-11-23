@@ -17,16 +17,37 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/z-division/go-zookeeper/zk"
 
 	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/zkctl"
 )
+
+func TestMaybeAddAuthLogsMalformedAuthFile(t *testing.T) {
+	authFilePath := filepath.Join(t.TempDir(), "auth")
+	require.NoError(t, os.WriteFile(authFilePath, []byte("digest user/secret-sentinel\n"), 0o600))
+	oldAuthFile := authFile
+	authFile = authFilePath
+	t.Cleanup(func() { authFile = oldAuthFile })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	(&ZkConn{}).maybeAddAuth(context.Background())
+
+	record := logs.Record(t, "failed to parse topo-zk-auth-file contents, expected format <scheme>:<auth>")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, authFilePath, record["path"])
+	assert.NotContains(t, logs.String(), "secret-sentinel")
+}
 
 func TestZkConnClosedOnDisconnect(t *testing.T) {
 	if testing.Short() || os.Getenv("CI") == "true" {

@@ -17,16 +17,47 @@ limitations under the License.
 package policy
 
 import (
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
+
+func TestRegisterDurabilityTwice(t *testing.T) {
+	if os.Getenv("TEST_REGISTER_DURABILITY") == "1" {
+		log.SwapLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+		RegisterDurability(DurabilityNone, nil)
+		return
+	}
+
+	// RegisterDurability exits the process, so run it in a child process.
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRegisterDurabilityTwice$")
+	cmd.Env = append(os.Environ(), "TEST_REGISTER_DURABILITY=1")
+	stderr, err := cmd.Output()
+	if exitErr := (*exec.ExitError)(nil); errors.As(err, &exitErr) {
+		stderr = exitErr.Stderr
+		assert.Equal(t, 1, exitErr.ExitCode())
+	} else {
+		require.Fail(t, "unexpected process result", "process ran with err %v, want exit status 1", err)
+	}
+
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(stderr, &record), "stderr: %s", stderr)
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "durability policy already registered", record["msg"])
+	assert.Equal(t, DurabilityNone, record["durability_policy"])
+}
 
 func TestDurabilityNone(t *testing.T) {
 	durability, err := GetDurabilityPolicy(DurabilityNone)

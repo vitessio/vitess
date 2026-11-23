@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -369,37 +371,38 @@ func (mm *messageManager) Open() {
 
 // Close stops the messageManager service.
 func (mm *messageManager) Close() {
-	log.Info(fmt.Sprintf("messageManager (%v) - started execution of Close", mm.name))
+	table := slog.String("table", mm.name.String())
+	log.Info("messageManager - started execution of Close", table)
 	mm.pollerTicks.Stop()
 	mm.purgeTicks.Stop()
-	log.Info(fmt.Sprintf("messageManager (%v) - stopped the ticks. Acquiring mu Lock", mm.name))
+	log.Info("messageManager - stopped the ticks. Acquiring mu Lock", table)
 
 	mm.mu.Lock()
-	log.Info(fmt.Sprintf("messageManager (%v) - acquired mu Lock", mm.name))
+	log.Info("messageManager - acquired mu Lock", table)
 	if !mm.isOpen {
-		log.Info(fmt.Sprintf("messageManager (%v) - manager is not open", mm.name))
+		log.Info("messageManager - manager is not open", table)
 		mm.mu.Unlock()
 		return
 	}
 	mm.isOpen = false
-	log.Info(fmt.Sprintf("messageManager (%v) - cancelling all receivers", mm.name))
+	log.Info("messageManager - cancelling all receivers", table)
 	for _, rcvr := range mm.receivers {
 		rcvr.receiver.cancel()
 	}
 	mm.receivers = nil
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
-	log.Info(fmt.Sprintf("messageManager (%v) - clearing cache", mm.name))
+	log.Info("messageManager - clearing cache", table)
 	mm.cache.Clear()
-	log.Info(fmt.Sprintf("messageManager (%v) - sending a broadcast", mm.name))
+	log.Info("messageManager - sending a broadcast", table)
 	// This broadcast will cause runSend to exit.
 	mm.cond.Broadcast()
-	log.Info(fmt.Sprintf("messageManager (%v) - stopping VStream", mm.name))
+	log.Info("messageManager - stopping VStream", table)
 	mm.stopVStream()
 	mm.mu.Unlock()
 
-	log.Info(fmt.Sprintf("messageManager (%v) - Waiting for the wait group", mm.name))
+	log.Info("messageManager - Waiting for the wait group", table)
 	mm.wg.Wait()
-	log.Info(fmt.Sprintf("messageManager (%v) - closed", mm.name))
+	log.Info("messageManager - closed", table)
 }
 
 // Subscribe registers the send function as a receiver of messages
@@ -417,7 +420,7 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 	}
 
 	if err := receiver.Send(mm.fieldResult); err != nil {
-		log.Error(fmt.Sprintf("messageManager (%v) - Terminating connection due to error sending field info: %v", mm.name, err))
+		log.Error("messageManager - Terminating connection due to error sending field info", slog.String("table", mm.name.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		receiver.cancel()
 		return done
 	}
@@ -581,7 +584,7 @@ func (mm *messageManager) runSend() {
 		go func() {
 			err := mm.send(context.Background(), receiver, &sqltypes.Result{Rows: rows}) // calls the offsetting mm.wg.Done()
 			if err != nil {
-				log.Error(fmt.Sprintf("messageManager (%v) - send failed: %v", mm.name, err))
+				log.Error("messageManager - send failed", slog.String("table", mm.name.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}()
 	}
@@ -624,7 +627,11 @@ func (mm *messageManager) send(ctx context.Context, receiver *receiverWithStatus
 		// Log the error, but we still want to postpone the message.
 		// Otherwise, if this is a chronic failure like "message too
 		// big", we'll end up spamming non-stop.
-		log.Error(fmt.Sprintf("messageManager (%v) - Error sending messages: %v: %v", mm.name, qr, err))
+		log.Error("messageManager - Error sending messages",
+			slog.String("table", mm.name.String()),
+			slog.String("result", fmt.Sprint(qr)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 	}
 	return mm.postpone(ctx, mm.tsv, mm.ackWaitTime, ids)
 }
@@ -655,7 +662,7 @@ func (mm *messageManager) startVStream() {
 }
 
 func (mm *messageManager) stopVStream() {
-	log.Info(fmt.Sprintf("messageManager (%v) - calling stream cancel", mm.name))
+	log.Info("messageManager - calling stream cancel", slog.String("table", mm.name.String()))
 	if mm.streamCancel != nil {
 		mm.streamCancel()
 		mm.streamCancel = nil
@@ -667,12 +674,16 @@ func (mm *messageManager) runVStream(ctx context.Context) {
 		err := mm.runOneVStream(ctx)
 		select {
 		case <-ctx.Done():
-			log.Info(fmt.Sprintf("messageManager (%v) - Context canceled, exiting vstream", mm.name))
+			log.Info("messageManager - Context canceled, exiting vstream", slog.String("table", mm.name.String()))
 			return
 		default:
 		}
 		MessageStats.Add([]string{mm.name.String(), "VStreamFailed"}, 1)
-		log.Info(fmt.Sprintf("messageManager (%v) - VStream ended: %v, retrying in 5 seconds", mm.name, err))
+		attrs := []slog.Attr{slog.String("table", mm.name.String())}
+		if err != nil {
+			attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		}
+		log.Info("messageManager - VStream ended, retrying in 5 seconds", attrs...)
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -818,7 +829,7 @@ func (mm *messageManager) runPoller() {
 		mr, err := BuildMessageRow(row)
 		if err != nil {
 			mm.tsv.Stats().InternalErrors.Add("Messages", 1)
-			log.Error(fmt.Sprintf("messageManager (%v) - Error reading message row: %v", mm.name, err))
+			log.Error("messageManager - Error reading message row", slog.String("table", mm.name.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 		if !mm.cache.Add(mr) {
@@ -839,7 +850,7 @@ func (mm *messageManager) runPurge() {
 			count, err := mm.tsv.PurgeMessages(ctx, nil, mm, time.Now().Add(-mm.purgeAfter).UnixNano())
 			if err != nil {
 				MessageStats.Add([]string{mm.name.String(), "PurgeFailed"}, 1)
-				log.Error(fmt.Sprintf("messageManager (%v) - Unable to delete messages: %v", mm.name, err))
+				log.Error("messageManager - Unable to delete messages", slog.String("table", mm.name.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			} else {
 				MessageStats.Add([]string{mm.name.String(), "Purged"}, count)
 			}
@@ -942,7 +953,7 @@ func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*
 	query, err := mm.readByPriorityAndTimeNext.GenerateQuery(bindVars, nil)
 	if err != nil {
 		mm.tsv.Stats().InternalErrors.Add("Messages", 1)
-		log.Error(fmt.Sprintf("messageManager (%v) - Error reading rows from message table: %v", mm.name, err))
+		log.Error("messageManager - Error reading rows from message table", slog.String("table", mm.name.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 	qr := &sqltypes.Result{}

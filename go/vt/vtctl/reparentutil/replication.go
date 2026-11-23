@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -108,13 +109,18 @@ func haveReciprocallyContainedPositions(a, b replication.Position) bool {
 	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
 }
 
-func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+// combinedPositionList returns each candidate as alias=combined position, sorted.
+func combinedPositionList(candidates map[string]*RelayLogPositions) []string {
 	parts := make([]string, 0, len(candidates))
 	for alias, pos := range candidates {
 		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
 	}
 	slices.Sort(parts)
-	return strings.Join(parts, ", ")
+	return parts
+}
+
+func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+	return strings.Join(combinedPositionList(candidates), ", ")
 }
 
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
@@ -176,8 +182,10 @@ func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logg
 		}
 		slices.Sort(excluded)
 		slices.Sort(kept)
-		logger.Infof("excluding %d candidate(s) strictly behind the most-advanced received relay log position from the relay-log-apply wait: %s (still repointed after promotion); waiting on: %s",
-			len(excluded), strings.Join(excluded, ", "), strings.Join(kept, ", "))
+		logger.Info("excluding candidates strictly behind the most-advanced received relay log position from the relay-log-apply wait (still repointed after promotion)",
+			slog.Int("excluded_count", len(excluded)),
+			slog.Any("excluded_tablets", excluded),
+			slog.Any("waiting_tablets", kept))
 	}
 
 	return result
@@ -324,26 +332,47 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 // tabletmanager RPC.
 //
 // It does not start the replication forcefully.
-// If we are unable to find the shard primary of the tablet from the topo server
-// we exit out without any error.
-func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
+// If the shard has no primary, it returns without any error.
+//
+// It holds the shard lock from reading the shard primary through the RPC, so a
+// reparent holding the lock is not overridden with the primary it replaces. The
+// work under the lock is bounded by topo.RemoteOperationTimeout.
+func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) (err error) {
+	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "SetReplicationSource")
+	if err != nil {
+		return err
+	}
+	defer unlock(&err)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	if si.PrimaryAlias == nil {
+		return nil
+	}
 	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
 	if err != nil {
-		// If we didn't find the shard primary, we return without any error
-		return nil
+		return err
 	}
 
 	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
 	}
 
 	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
+	// Not a fencing token: the lock can still be lost during the RPC.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+		return err
+	}
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
 }
 
@@ -466,7 +495,7 @@ func stopReplicationAndBuildStatusMaps(
 			errChan <- concurrencyErr
 		}()
 
-		logger.Infof("getting replication position from %v", alias)
+		logger.Info("getting replication position", slog.String("tablet", alias))
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
@@ -478,7 +507,7 @@ func stopReplicationAndBuildStatusMaps(
 				if err != nil {
 					err = vterrors.Wrapf(err, "replica %v thinks it's primary but we failed to demote it", alias)
 
-					logger.Warningf("replica %v thinks it's primary but we failed to demote it: %v", alias, err)
+					logger.Warn("replica thinks it's primary but we failed to demote it", slog.String("tablet", alias), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 					return
 				}
 
@@ -490,14 +519,14 @@ func stopReplicationAndBuildStatusMaps(
 						res.mysqlVersions[alias] = v
 						res.mysqlFlavors[alias] = flavor
 					} else {
-						logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", primaryStatus.ServerVersion, alias, parseErr)
+						logger.Warn("failed to parse MySQL version for tablet", slog.String("tablet", alias), slog.String("mysql_version", primaryStatus.ServerVersion), slog.Any("error", parseErr))
 					}
 				} else {
-					logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", alias)
+					logger.Warn("could not determine MySQL version for tablet; it will not be preferred by version-aware election", slog.String("tablet", alias))
 				}
 				m.Unlock()
 			} else {
-				logger.Warningf("failed to get replication status from %v: %v", alias, err)
+				logger.Warn("failed to get replication status", slog.String("tablet", alias), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				err = vterrors.Wrapf(err, "error when getting replication status for alias %v", alias)
 			}
 		} else {
@@ -520,10 +549,10 @@ func stopReplicationAndBuildStatusMaps(
 					res.mysqlVersions[alias] = v
 					res.mysqlFlavors[alias] = flavor
 				} else {
-					logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", stopReplicationStatus.Before.ServerVersion, alias, parseErr)
+					logger.Warn("failed to parse MySQL version for tablet", slog.String("tablet", alias), slog.String("mysql_version", stopReplicationStatus.Before.ServerVersion), slog.Any("error", parseErr))
 				}
 			} else {
-				logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", alias)
+				logger.Warn("could not determine MySQL version for tablet; it will not be preferred by version-aware election", slog.String("tablet", alias))
 			}
 			m.Unlock()
 		}

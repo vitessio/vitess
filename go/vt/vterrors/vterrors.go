@@ -82,6 +82,21 @@ limitations under the License.
 //	%v    extended format. Each Frame of the error's StackTrace will
 //	      be printed in detail.
 //
+// # Logging errors
+//
+// The errors returned by New, Errorf, NewError, NewErrorf, Wrap and Wrapf
+// implement slog.LogValuer, so that --log-err-stacks also applies to such an
+// error logged as an attribute, such as slog.Any("error", err):
+//
+//   - Handlers that log an error's Error() text, such as slog's JSON handler,
+//     log that text, followed by the error's stack traces when the flag is set.
+//   - Handlers that format an error with %+v, such as the text handlers, log
+//     the error's %v format, which includes the stack traces when the flag is
+//     set. This is what they log for any error.
+//
+// The *VitessError values returned by the VT* functions, such as VT13001, do
+// not implement slog.LogValuer, and are logged without a stack trace.
+//
 // Most but not all of the code in this file was originally copied from
 // https://github.com/pkg/errors/blob/v0.8.0/errors.go
 package vterrors
@@ -91,6 +106,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -116,6 +133,47 @@ func setLogErrStacks(val bool) {
 	muLogErrStacks.Lock()
 	defer muLogErrStacks.Unlock()
 	logErrStacks = val
+}
+
+// logError is the slog value of an error from this package. Its Format is the
+// error's own, so handlers that format it with %+v log what they would log
+// for the error itself. Its Error adds the stack traces when --log-err-stacks
+// is set, for handlers that only use Error(). It must not implement
+// slog.LogValuer, or slog would keep resolving it and log an error in place
+// of the value.
+type logError struct {
+	err error
+}
+
+func (e logError) Unwrap() error { return e.err }
+
+func (e logError) Error() string {
+	if !getLogErrStacks() {
+		return e.err.Error()
+	}
+	var b strings.Builder
+	b.WriteString(e.err.Error())
+	writeStacks(&b, e.err)
+	return b.String()
+}
+
+func (e logError) Format(s fmt.State, verb rune) {
+	e.err.(fmt.Formatter).Format(s, verb)
+}
+
+// writeStacks writes the stack trace of each error in err's chain from this
+// package, innermost first, each after its own message. It follows the same
+// causes as the %v format, so it writes the same stack traces.
+func writeStacks(b *strings.Builder, err error) {
+	switch err := err.(type) {
+	case *fundamental:
+		b.WriteString("\n" + err.msg)
+		fmt.Fprintf(b, "%v", err.stack)
+	case *wrapping:
+		writeStacks(b, err.cause)
+		b.WriteString("\n" + err.msg)
+		fmt.Fprintf(b, "%v", err.stack)
+	}
 }
 
 // RegisterFlags registers the command-line options that control vterror
@@ -178,6 +236,14 @@ type fundamental struct {
 }
 
 func (f *fundamental) Error() string { return f.msg }
+
+// LogValue implements slog.LogValuer.
+func (f *fundamental) LogValue() slog.Value {
+	if f == nil {
+		return slog.StringValue("<nil>")
+	}
+	return slog.AnyValue(logError{f})
+}
 
 func (f *fundamental) Format(s fmt.State, verb rune) {
 	switch verb {
@@ -288,6 +354,14 @@ type wrapping struct {
 
 func (w *wrapping) Error() string { return w.msg + ": " + w.cause.Error() }
 func (w *wrapping) Cause() error  { return w.cause }
+
+// LogValue implements slog.LogValuer.
+func (w *wrapping) LogValue() slog.Value {
+	if w == nil {
+		return slog.StringValue("<nil>")
+	}
+	return slog.AnyValue(logError{w})
+}
 
 func (w *wrapping) Format(s fmt.State, verb rune) {
 	if rune('v') == verb {

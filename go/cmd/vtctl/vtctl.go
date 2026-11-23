@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -139,7 +141,7 @@ func main() {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("cannot initialize sql parser: %v", err))
+		log.Error("cannot initialize sql parser", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -173,7 +175,7 @@ func main() {
 
 		os.Args = append([]string{"vtctldclient"}, args[1:]...)
 		if err := command.Root.ExecuteContext(ctx); err != nil {
-			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
+			log.Error("action failed", slog.String("action", action), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			exit.Return(255)
 		}
 	case strings.EqualFold(action, "LegacyVtctlCommand"):
@@ -200,7 +202,7 @@ func main() {
 		case nil:
 			// keep going
 		default:
-			log.Error(fmt.Sprintf("action failed: %v %v", action, err))
+			log.Error("action failed", slog.String("action", action), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			exit.Return(255)
 		}
 	}

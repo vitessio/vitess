@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -157,7 +158,10 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			return "", vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		logger.Infof("Using base_keyspace %v to restore keyspace %v using a backup time of %v", keyspace, tablet.Keyspace, protoutil.TimeFromProto(request.BackupTime).UTC())
+		logger.Info("Using base_keyspace to restore keyspace using a backup time",
+			slog.String("base_keyspace", keyspace),
+			slog.String("keyspace", tablet.Keyspace),
+			slog.Time("backup_time", protoutil.TimeFromProto(request.BackupTime).UTC()))
 	}
 
 	startTime := protoutil.TimeFromProto(request.BackupTime).UTC()
@@ -198,6 +202,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 
 	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
+	rsm.dryRun = params.DryRun
 
 	if ok, err := rsm.start(ctx); !ok || err != nil {
 		if err != nil {
@@ -216,7 +221,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			statsRestoreBackup.Set(replication.EncodePosition(backupManifest.Position))
 			statsRestoreBackupTime.Set(backupManifest.BackupTime)
 		}
-		logger.Infof("Restore: got a restore manifest: %v, err=%v, waitForBackupInterval=%v", backupManifest, err, waitForBackupInterval)
+		logger.Info("Restore: got a restore manifest", restoreManifestAttrs(backupManifest, err, waitForBackupInterval)...)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -225,7 +230,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			break
 		}
 
-		log.Info(fmt.Sprintf("No backup found. Waiting %v (from -wait-for-backup-interval flag) to check again.", waitForBackupInterval))
+		log.Info("No backup found. Waiting (from --wait-for-backup-interval flag) to check again.", slog.Duration("retry_delay", waitForBackupInterval))
 		select {
 		case <-ctx.Done():
 			return "", ctx.Err()
@@ -236,7 +241,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	var pos replication.Position
 	if backupManifest != nil {
 		pos = backupManifest.Position
-		logger.Infof("Restore: pos=%v", replication.EncodePosition(pos))
+		logger.Info("Restore: position", slog.String("position", replication.EncodePosition(pos)))
 	}
 
 	var replCmd replicationCommand
@@ -253,7 +258,6 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			// Reconnect to primary only for "NORMAL" keyspaces
 			replCmd.action = replicationActionStart
 			replCmd.position = &pos
-			replCmd.keepBinlogs = backupManifest.IncludesBinlogs
 		}
 	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
@@ -261,10 +265,10 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 		replCmd.action = replicationActionInitialize
 	case err == nil && params.DryRun:
 		// Do nothing here, let the rest of code run
-		logger.Infof("Dry run. No changes made")
+		logger.Info("Dry run. No changes made")
 	default:
 		if err := rsm.abort(); err != nil {
-			logger.Errorf("Failed to abort restore: %v", err)
+			logger.Error("Failed to abort restore", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		var engine string
 		if backupManifest != nil {
@@ -275,7 +279,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 
 	if params.IsIncrementalRecovery() && !params.DryRun {
 		// override
-		logger.Infof("Restore: will set tablet type to DRAINED as this is a point in time recovery")
+		logger.Info("Restore: will set tablet type to DRAINED as this is a point in time recovery")
 		rsm.setNextTabletType(topodatapb.TabletType_DRAINED)
 	}
 
@@ -289,6 +293,54 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 
 	return backupEngine, nil
+}
+
+// restoreManifestAttrs returns the attributes of a restore attempt: the
+// fields of the restored backup's manifest m, if there is one, its error, if
+// any, and how long the restore waits for a backup before trying again. The
+// positions and the backup m was taken from are left out when empty.
+// IncrementalDetails is left out too: it is a pointer, which the manifest's
+// %v printed as an address.
+func restoreManifestAttrs(m *mysqlctl.BackupManifest, err error, waitForBackupInterval time.Duration) []slog.Attr {
+	var attrs []slog.Attr
+	if m != nil {
+		attrs = manifestAttrs(m)
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	}
+	return append(attrs, slog.Duration("retry_delay", waitForBackupInterval))
+}
+
+func manifestAttrs(m *mysqlctl.BackupManifest) []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("backup_name", m.BackupName),
+		slog.String("backup_engine", m.BackupMethod),
+	}
+	if !m.Position.IsZero() {
+		attrs = append(attrs, slog.String("position", replication.EncodePosition(m.Position)))
+	}
+	if !m.PurgedPosition.IsZero() {
+		attrs = append(attrs, slog.String("purged_position", replication.EncodePosition(m.PurgedPosition)))
+	}
+	if !m.FromPosition.IsZero() {
+		attrs = append(attrs, slog.String("from_position", replication.EncodePosition(m.FromPosition)))
+	}
+	if m.FromBackup != "" {
+		attrs = append(attrs, slog.String("from_backup", m.FromBackup))
+	}
+	return append(attrs,
+		slog.Bool("incremental", m.Incremental),
+		slog.String("manifest_backup_time", m.BackupTime),
+		slog.String("manifest_finished_time", m.FinishedTime),
+		slog.String("server_uuid", m.ServerUUID),
+		slog.String("backup_tablet", m.TabletAlias),
+		slog.String("hostname", m.Hostname),
+		slog.String("keyspace", m.Keyspace),
+		slog.String("shard", m.Shard),
+		slog.String("backup_mysql_version", m.MySQLVersion),
+		slog.Bool("upgrade_safe", m.UpgradeSafe),
+		slog.Bool("includes_binlogs", m.IncludesBinlogs))
 }
 
 // restoreFromClone handles the clone-based restore path. It uses the same
@@ -346,7 +398,7 @@ func (tm *TabletManager) restoreFromCloneLocked(
 	if err != nil {
 		err = vterrors.Wrap(err, "failed to clone from donor")
 		if err := rsm.abort(); err != nil {
-			logger.Errorf("Failed to abort restore: %v", err)
+			logger.Error("Failed to abort restore", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		return err
 	}
@@ -378,9 +430,12 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType, keepBinlogs bool) error {
-	// The first three steps of stopping replication, and setting the replication position,
-	// we want to do even if the context expires, so we use a background context for these tasks.
+// startReplication connects restored data to the primary. Restore has already
+// set the GTID position to pos, so this only stops and clears the copied
+// replication configuration before initializing replication.
+func (tm *TabletManager) startReplication(ctx context.Context, logger logutil.Logger, pos replication.Position, tabletType topodatapb.TabletType) error {
+	// Stopping and clearing replication cannot revive a receiver, so they do not
+	// need the shard lock. Do them even if the context expires.
 	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
@@ -388,15 +443,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	// Set the position at which to resume from the primary, unless the restored
-	// binlogs already put gtid_executed there: setting it would RESET them away.
-	if !keepBinlogs {
-		if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
-			return vterrors.Wrap(err, "failed to set replication position")
-		}
-	}
-
-	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
+	primaryPosStr, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tabletType, &pos)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
 	if err != nil || primaryPosStr == "" {
@@ -460,9 +507,9 @@ func (tm *TabletManager) invokeRestoreDoneHook(startTime time.Time, err error, b
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Info("No vttablet_restore_done hook.")
 	case hook.HOOK_TIMEOUT_ERROR:
-		log.Warn(fmt.Sprintf("vttablet_restore_done hook timed out (exit status %d), stderr: %s", hr.ExitStatus, hr.Stderr))
+		log.Warn("vttablet_restore_done hook timed out", slog.Int("exit_status", hr.ExitStatus), slog.String("stderr", hr.Stderr))
 	default:
-		log.Warn(fmt.Sprintf("vttablet_restore_done hook failed with exit status %d, stderr: %s", hr.ExitStatus, hr.Stderr))
+		log.Warn("vttablet_restore_done hook failed", slog.Int("exit_status", hr.ExitStatus), slog.String("stderr", hr.Stderr))
 	}
 }
 
@@ -492,8 +539,6 @@ type replicationCommand struct {
 	action replicationAction
 	// position is used by the replicationActionStart action.
 	position *replication.Position
-	// keepBinlogs is set when the restore installed the backup's binlogs, which setting the position would delete.
-	keepBinlogs bool
 }
 
 // restoreState represents the state of a restoreStateManager.
@@ -514,8 +559,10 @@ const (
 // RESTORE, and setting up replication.
 type restoreStateManager struct {
 	deleteBeforeRestore bool
-	logger              logutil.Logger
-	tm                  *TabletManager
+	// dryRun is set when the restore does not change any data.
+	dryRun bool
+	logger logutil.Logger
+	tm     *TabletManager
 
 	state restoreState
 
@@ -548,23 +595,30 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be finished in current state")
 	}
 
+	// The restored data replaces what an earlier deferred replication
+	// initialization was for, and replCmd decides replication for it. A dry
+	// run leaves the data, and the deferred initialization, unchanged.
+	if !rt.dryRun {
+		rt.tm.tmState.cancelReplicationInit(ctx)
+	}
+
 	// Perform replication command.
 	switch replCmd.action {
 	case replicationActionDisable:
-		rt.logger.Infof("Restore: disabling replication")
+		rt.logger.Info("Restore: disabling replication")
 		if err := rt.tm.disableReplication(context.Background()); err != nil {
 			return vterrors.Wrap(err, "failed to disable replication")
 		}
 	case replicationActionInitialize:
-		if _, err := rt.tm.initializeReplication(ctx, rt.prevTabletType); err != nil {
+		if _, err := rt.tm.initializeReplicationUnlessShardLocked(ctx, rt.logger, rt.prevTabletType, nil); err != nil {
 			return vterrors.Wrap(err, "failed to initialize replication")
 		}
 	case replicationActionStart:
 		if replCmd.position == nil {
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "cannot start replication with nil position")
 		}
-		rt.logger.Infof("Restore: starting replication at position %v", *replCmd.position)
-		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType, replCmd.keepBinlogs); err != nil {
+		rt.logger.Info("Restore: starting replication at position", slog.String("position", replication.EncodePosition(*replCmd.position)))
+		if err := rt.tm.startReplication(ctx, rt.logger, *replCmd.position, rt.prevTabletType); err != nil {
 			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
 		}
 	}
@@ -608,7 +662,7 @@ func (rt *restoreStateManager) start(ctx context.Context) (bool, error) {
 		return false, vterrors.Wrap(err, "failed to check if should restore")
 	}
 	if !ok {
-		rt.logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
+		rt.logger.Info("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
 		return false, nil
 	}
 

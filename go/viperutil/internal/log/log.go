@@ -15,50 +15,32 @@ limitations under the License.
 */
 
 /*
-Package log provides dual-use logging between vitess's vt/log package and
-viper's jww log.
+Package log provides logging to viper's jww log. Callers that also log to
+vitess's vt/log package call it directly, with a constant message and the
+values in slog attributes.
 */
 package log
 
 import (
-	"fmt"
-	"log/slog"
 	"os"
 
 	jww "github.com/spf13/jwalterweatherman"
-
-	vtlog "vitess.io/vitess/go/vt/log"
 )
 
 var (
-	jwwlog = func(printer interface {
-		Printf(format string, args ...any)
-	}, vtlogger func(string, ...slog.Attr),
-	) func(format string, args ...any) {
-		switch vtlogger {
-		case nil:
-			return printer.Printf
-		default:
-			return func(format string, args ...any) {
-				printer.Printf(format, args...)
-				vtlogger(fmt.Sprintf(format, args...))
-			}
-		}
-	}
-
-	// TRACE logs to viper's TRACE level, and nothing to vitess logs.
-	TRACE = jwwlog(jww.TRACE, nil)
-	// DEBUG logs to viper's DEBUG level, and nothing to vitess logs.
-	DEBUG = jwwlog(jww.DEBUG, nil)
-	// INFO logs to viper and vitess at INFO levels.
-	INFO = jwwlog(jww.INFO, vtlog.Info)
-	// WARN logs to viper and vitess at WARN levels.
-	WARN = jwwlog(jww.WARN, vtlog.Warn)
-	// ERROR logs to viper and vitess at ERROR levels.
-	ERROR = jwwlog(jww.ERROR, vtlog.Error)
+	// TRACE logs to viper's TRACE level.
+	TRACE = jww.TRACE.Printf
+	// DEBUG logs to viper's DEBUG level.
+	DEBUG = jww.DEBUG.Printf
+	// INFO logs to viper's INFO level.
+	INFO = jww.INFO.Printf
+	// WARN logs to viper's WARN level.
+	WARN = jww.WARN.Printf
+	// ERROR logs to viper's ERROR level.
+	ERROR = jww.ERROR.Printf
 	// CRITICAL logs to viper at CRITICAL level, and then fatally exits.
-	CRITICAL = jwwlog(jww.CRITICAL, func(msg string, attrs ...slog.Attr) {
-		vtlog.Error(msg, attrs...)
+	CRITICAL = func(format string, args ...any) {
+		jww.CRITICAL.Printf(format, args...)
 		os.Exit(1)
-	})
+	}
 )

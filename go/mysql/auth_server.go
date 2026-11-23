@@ -23,7 +23,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -579,7 +579,7 @@ func RegisterAuthServer(name string, authServer AuthServer) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := authServers[name]; ok {
-		log.Error(fmt.Sprintf("AuthServer named %v already exists", name))
+		log.Error("AuthServer already exists", slog.String("auth_server", name))
 		os.Exit(1)
 	}
 	authServers[name] = authServer
@@ -591,7 +591,7 @@ func GetAuthServer(name string) AuthServer {
 	defer mu.Unlock()
 	authServer, ok := authServers[name]
 	if !ok {
-		log.Error(fmt.Sprintf("no AuthServer name %v registered", name))
+		log.Error("no AuthServer registered", slog.String("auth_server", name))
 		os.Exit(1)
 	}
 	return authServer

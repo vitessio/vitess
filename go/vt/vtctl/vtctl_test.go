@@ -19,6 +19,7 @@ package vtctl
 import (
 	_ "embed"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -465,4 +467,89 @@ func TestGenerateOnlineDDLQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestNewVReplicationWorkflowErrorLog checks that a failure to set up the
+// workflow logs the error rather than the workflow, which is always nil then.
+func TestNewVReplicationWorkflowErrorLog(t *testing.T) {
+	ctx := t.Context()
+	env := newTestVTCtlEnv(ctx)
+	t.Cleanup(env.close)
+	env.addTablet(200, "targetks", "0", &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	err := commandVReplicationWorkflow(ctx, env.wr, subFlags, []string{"Progress", "targetks.testwf"}, wrangler.MoveTablesWorkflow)
+	require.Error(t, err)
+
+	record := logs.Record(t, "NewVReplicationWorkflow returned error")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "targetks", record["keyspace"])
+	assert.Equal(t, "testwf", record["workflow"])
+	assert.Equal(t, err.Error(), record["error"])
+	assert.NotContains(t, logs.String(), "<nil>")
+}
+
+// TestVReplicationWorkflowActionErrorLog checks that a failed workflow action
+// logs the error, which the old line left out.
+func TestVReplicationWorkflowActionErrorLog(t *testing.T) {
+	ctx := t.Context()
+	env := newTestVTCtlEnv(ctx)
+	t.Cleanup(env.close)
+	env.addTablet(100, "sourceks", "0", &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+	target := env.addTablet(200, "targetks", "0", &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+	sourceCol := `keyspace:"sourceks" shard:"0" filter:{rules:{match:"customer" filter:"select * from customer"}}`
+	env.tmc.setVRResults(
+		target.tablet,
+		"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='testwf' and db_name='vt_targetks'",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
+			fmt.Sprintf("1|%s||%s|primary|%d|%d", sourceCol, env.cell, binlogdatapb.VReplicationWorkflowType_MoveTables, binlogdatapb.VReplicationWorkflowSubType_None),
+		),
+	)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	err := commandVReplicationWorkflow(ctx, env.wr, subFlags, []string{"SwitchTraffic", "targetks.testwf"}, wrangler.MoveTablesWorkflow)
+	require.Error(t, err)
+
+	record := logs.Record(t, "workflow action error")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "SwitchTraffic", record["action"])
+	assert.Equal(t, "testwf", record["workflow"])
+	assert.Equal(t, err.Error(), record["error"])
+}
+
+// TestNewVReplicationWorkflowNoStateLog checks that the state of a workflow
+// that doesn't exist yet is left off both of its lines rather than logged as
+// <nil>.
+func TestNewVReplicationWorkflowNoStateLog(t *testing.T) {
+	ctx := t.Context()
+	env := newTestVTCtlEnv(ctx)
+	t.Cleanup(env.close)
+	target := env.addTablet(200, "targetks", "0", &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+	env.tmc.setVRResults(
+		target.tablet,
+		"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='testwf' and db_name='vt_targetks'",
+		&sqltypes.Result{},
+	)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	wf, err := env.wr.NewVReplicationWorkflow(ctx, wrangler.MoveTablesWorkflow, &wrangler.VReplicationWorkflowParams{TargetKeyspace: "targetks", Workflow: "testwf"})
+	require.NoError(t, err)
+	assertNoState := func() {
+		t.Helper()
+		record := logs.Record(t, "Workflow state")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, "testwf", record["workflow"])
+		assert.NotContains(t, record, "workflow_state")
+		assert.NotContains(t, logs.String(), "<nil>")
+	}
+	assertNoState()
+
+	// Create reads the cached state, which logs it again.
+	logs.Reset()
+	wf.CachedState()
+	assertNoState()
 }

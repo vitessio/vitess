@@ -18,9 +18,12 @@ package mysqlctl
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
+	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +37,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
@@ -474,6 +478,74 @@ func TestGetMycnfTemplateMySQL9(t *testing.T) {
 	assert.NotContains(t, template, "mysql_native_password = ON")
 }
 
+// TestStartNoWaitLogs checks that the started command is logged without its
+// environment and that a clean exit of mysqld_safe logs no error.
+func TestStartNoWaitLogs(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte("#!/bin/sh\n"), 0o755))
+	t.Setenv("VTROOT", root)
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("VT_MYSQL_BASEDIR", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, (&Mysqld{}).startNoWait(&Mycnf{Path: path.Join(root, "my.cnf")}))
+
+	assert.NotContains(t, logs.Wait(t, "mysqld exited"), "error")
+	starting := logs.Record(t, "Starting mysqld")
+	assert.Equal(t, path.Join(root, "bin", "mysqld_safe")+" --defaults-file="+path.Join(root, "my.cnf")+" --basedir="+root, starting["exec_cmd"])
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+}
+
+// TestApplyBinlogFileLogs checks that the mysqlbinlog and mysql commands are
+// logged without their environment.
+func TestApplyBinlogFileLogs(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	params := *db.ConnParams()
+	// NewMysqld detects the version with the real mysqld, so VT_MYSQL_ROOT is set after it.
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	for _, binary := range []string{"mysqlbinlog", "mysql"} {
+		require.NoError(t, os.WriteFile(path.Join(root, "bin", binary), []byte("#!/bin/sh\n"), 0o755))
+	}
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, mysqld.ApplyBinlogFile(t.Context(), &mysqlctlpb.ApplyBinlogFileRequest{BinlogFileName: "binlog.000001"}))
+
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+	mysqlbinlog := logs.Record(t, "ApplyBinlogFile: running mysqlbinlog command")
+	assert.Equal(t, path.Join(root, "bin", "mysqlbinlog")+" binlog.000001", mysqlbinlog["exec_cmd"])
+	mysql := logs.Record(t, "ApplyBinlogFile: running mysql command")
+	assert.Regexp(t, "^"+regexp.QuoteMeta(path.Join(root, "bin", "mysql")+" --defaults-extra-file=")+`\S+$`, mysql["exec_cmd"])
+}
+
+// TestReadBinlogFilesTimestampsLogs checks that the mysqlbinlog command is
+// logged without its environment.
+func TestReadBinlogFilesTimestampsLogs(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	// A timestamp lets the scan for the last timestamp reuse the first scan, so mysqlbinlog runs once.
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqlbinlog"), []byte("#!/bin/sh\necho '# original_committed_timestamp=1'\n"), 0o755))
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err := (&Mysqld{}).ReadBinlogFilesTimestamps(t.Context(), &mysqlctlpb.ReadBinlogFilesTimestampsRequest{BinlogFileNames: []string{"binlog.000001"}})
+	require.NoError(t, err)
+
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+	running := logs.Record(t, "ReadBinlogFilesTimestamps: running mysqlbinlog command")
+	assert.Equal(t, path.Join(root, "bin", "mysqlbinlog")+" binlog.000001", running["exec_cmd"])
+}
+
 func TestBuildLdPathsTZ(t *testing.T) {
 	os.Setenv("TZ", "Europe/Berlin")
 	defer os.Unsetenv("TZ")
@@ -600,4 +672,42 @@ func TestMysqlApplyArgsStayBinlogged(t *testing.T) {
 		assert.NotContains(t, arg, "sql_log_bin")
 		assert.NotContains(t, arg, "init-command")
 	}
+}
+
+// TestStartNoWaitMysqldOutput checks that each line the started mysqld_safe
+// writes to stdout or stderr is logged as an INFO record with its start_id.
+func TestStartNoWaitMysqldOutput(t *testing.T) {
+	const (
+		outLine = "mysqld_safe Logging to '/vt/output-sentinel.err'."
+		errLine = `{ "prio" : 1, "msg" : "Duplicate entry 'output-sentinel' for key 't.PRIMARY'", "label" : "Error" }`
+	)
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	outFile, errFile := path.Join(root, "out"), path.Join(root, "err")
+	require.NoError(t, os.WriteFile(outFile, []byte(outLine+"\n"), 0o644))
+	require.NoError(t, os.WriteFile(errFile, []byte(errLine+"\n"), 0o644))
+	script := "#!/bin/sh\ncat '" + outFile + "'\ncat '" + errFile + "' >&2\n"
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte(script), 0o755))
+	t.Setenv("VTROOT", root)
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("VT_MYSQL_BASEDIR", root)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	exited := make(chan struct{})
+	mysqld := &Mysqld{}
+	mysqld.OnTerm(func() { close(exited) })
+	require.NoError(t, mysqld.startNoWait(&Mycnf{Path: path.Join(root, "my.cnf")}))
+	select {
+	case <-exited:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "mysqld_safe did not exit")
+	}
+
+	stdout, stderr := logs.Wait(t, "mysqld stdout"), logs.Wait(t, "mysqld stderr")
+	assert.Equal(t, "INFO", stdout["level"])
+	assert.Equal(t, "INFO", stderr["level"])
+	assert.Equal(t, outLine, stdout["stdout"])
+	assert.Equal(t, errLine, stderr["stderr"])
+	assert.NotEmpty(t, stderr["start_id"])
+	assert.Equal(t, stdout["start_id"], stderr["start_id"])
 }

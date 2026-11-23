@@ -23,7 +23,47 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestDynamicPacketSizerMaxSize(t *testing.T) {
+	base := 25000
+	ps := newDynamicPacketSizer(base, true).(*dynamicPacketSizer)
+	for range 1000 {
+		ps.growCandidate()
+	}
+	require.Equal(t, base*dynamicPacketSizerMaxGrowthFactor, ps.candidateSize)
+	require.LessOrEqual(t, ps.candidateSize, ps.maxSize)
+}
+
+// TestDynamicPacketSizerCapsGrowthThroughRecord drives the sizer the way a stream does: every packet is
+// Limit() bytes and takes about the same time, so throughput keeps improving with the packet size and
+// nothing but the cap can stop the growth. Limit() must never pass the cap and must reach it.
+func TestDynamicPacketSizerCapsGrowthThroughRecord(t *testing.T) {
+	base := 25000
+	maxSize := base * dynamicPacketSizerMaxGrowthFactor
+	ps := newDynamicPacketSizer(base, true)
+
+	reached := false
+	for i := range 20000 {
+		// A near-constant duration with a little jitter, so the throughput samples of two packet sizes
+		// differ as the t-test needs them to.
+		d := time.Millisecond + time.Duration(i%7)*time.Microsecond
+		ps.Record(ps.Limit(), d)
+		require.LessOrEqual(t, ps.Limit(), maxSize, "call %d: the packet size grew past the cap", i)
+		if ps.Limit() == maxSize {
+			reached = true
+		}
+	}
+	require.True(t, reached, "the packet size never reached the cap: %d", ps.Limit())
+
+	// Without the memory bounds the sizer grows as it did before the cap.
+	unbounded := newDynamicPacketSizer(base, false)
+	for i := range 20000 {
+		unbounded.Record(unbounded.Limit(), time.Millisecond+time.Duration(i%7)*time.Microsecond)
+	}
+	require.Greater(t, unbounded.Limit(), maxSize, "the unbounded sizer stopped at the cap")
+}
 
 type polynomial []float64
 
@@ -92,7 +132,7 @@ func TestPacketSizeSimulation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Simulate a replication using the given polynomial and the dynamic packet sizer
-			ps1 := newDynamicPacketSizer(tc.baseSize)
+			ps1 := newDynamicPacketSizer(tc.baseSize, true)
 			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
 			// Simulate the same polynomial using a fixed packet size

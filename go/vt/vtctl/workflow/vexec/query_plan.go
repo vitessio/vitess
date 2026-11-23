@@ -19,6 +19,7 @@ package vexec
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -61,7 +62,11 @@ func (qp *FixedQueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) 
 
 	defer func() {
 		if err != nil {
-			log.Warn(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
+			log.Warn("Result on tablet",
+				slog.String("workflow", qp.workflow),
+				slog.String("tablet", targetAliasStr),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 	}()
@@ -147,7 +152,10 @@ func (qp *PerTargetQueryPlan) Execute(ctx context.Context, target *topo.TabletIn
 
 	defer func() {
 		if err != nil {
-			log.Warn(fmt.Sprintf("Result on %v: %v", targetAliasStr, err))
+			log.Warn("Result on tablet",
+				slog.String("tablet", targetAliasStr),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 	}()
