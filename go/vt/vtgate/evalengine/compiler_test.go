@@ -1195,6 +1195,45 @@ func TestChangeCaseBindVarLiteral(t *testing.T) {
 	}
 }
 
+// TestChangeCaseExplicitCollationBindVar checks that a hex literal bind variable
+// with an explicit COLLATE keeps it through LOWER, so that the comparison with a
+// value of another explicit collation is refused in the compiler, as it is in
+// the interpreter, instead of becoming a comparison in the collation of the
+// other side.
+func TestChangeCaseExplicitCollationBindVar(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	expr, err := venv.Parser().ParseExpr(`LOWER(:vtg1 COLLATE binary) = 'a' COLLATE utf8mb4_0900_ai_ci`)
+	require.NoError(t, err)
+	require.NoError(t, sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if arg, ok := node.(*sqlparser.Argument); ok {
+			arg.Type = sqltypes.HexNum
+		}
+		return true, nil
+	}, expr))
+
+	cfg := &evalengine.Config{
+		Collation:         collations.CollationUtf8mb4ID,
+		Environment:       venv,
+		NoConstantFolding: true,
+	}
+
+	// the compiler refuses the expression when it compiles it
+	_, compileErr := evalengine.Translate(expr, cfg)
+	require.Error(t, compileErr, "the compiler refuses to mix the two explicit collations")
+
+	// and the interpreter, when it evaluates it
+	cfg.NoCompilation = true
+	converted, err := evalengine.Translate(expr, cfg)
+	require.NoError(t, err)
+	env := evalengine.EmptyExpressionEnv(venv)
+	env.BindVars = map[string]*querypb.BindVariable{"vtg1": sqltypes.HexNumBindVariable([]byte("0x41"))}
+	_, astErr := env.EvaluateAST(converted)
+	require.Error(t, astErr, "the interpreter refuses to mix the two explicit collations")
+
+	assert.Equal(t, astErr.Error(), compileErr.Error())
+}
+
 func TestBindVarLiteral(t *testing.T) {
 	testCases := []struct {
 		expression string

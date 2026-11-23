@@ -2673,9 +2673,9 @@ func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 
 // Fn_LUCASE changes the case of the string on the stack. When col is set, it
 // becomes the collation of the string (for a value that was just converted to
-// text), and asciiFallback allows such a value to be case-mapped as ASCII when
-// its collation has no case mapping of its own.
-func (asm *assembler) Fn_LUCASE(upcase bool, col *collations.TypedCollation, asciiFallback bool) {
+// text), and utf8Fallback allows such a value to be case-mapped with the unicase
+// table of utf8mb4_bin when its collation has no case mapping of its own.
+func (asm *assembler) Fn_LUCASE(upcase bool, col *collations.TypedCollation, utf8Fallback bool) {
 	name := "LOWER"
 	if upcase {
 		name = "UPPER"
@@ -2686,7 +2686,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool, col *collations.TypedCollation, asc
 			str.col = *col
 		}
 
-		newcase, err := changeCaseBytes(str.col.Collation, str.bytes, upcase, asciiFallback)
+		newcase, err := changeCaseBytes(str.col.Collation, str.bytes, upcase, utf8Fallback)
 		if err != nil {
 			env.vm.err = err
 		} else {

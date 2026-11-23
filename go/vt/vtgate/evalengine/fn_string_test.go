@@ -171,6 +171,9 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 		// utf8mb4_general_ci and utf8mb3_general_ci have no case mapping of their own
 		{"set upper utf8mb4_general_ci", sqltypes.Set, 45, `UPPER(column0)`, "ab,c", "AB,C"},
 		{"enum lower utf8mb3_general_ci", sqltypes.Enum, 33, `LOWER(column0)`, "AB", "ab"},
+		// the mapping is MySQL's unicase table, not Go's: U+0180 has no upper case in it
+		{"enum upper utf8mb4_general_ci non-ASCII", sqltypes.Enum, 45, `UPPER(column0)`, "ƀé", "ƀÉ"},
+		{"set lower utf8mb3_general_ci non-ASCII", sqltypes.Set, 33, `LOWER(column0)`, "É,ƀ", "é,ƀ"},
 	} {
 		for _, typed := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s/typed=%v", tc.name, typed), func(t *testing.T) {
