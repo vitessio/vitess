@@ -596,11 +596,22 @@ func changeCaseType(col collations.ID) sqltypes.Type {
 	return sqltypes.VarChar
 }
 
+// isUTF8Collation reports whether the collation is one of utf8mb4 or utf8mb3,
+// whose text is valid UTF-8, so that Go's case mapping applies to it.
+func isUTF8Collation(id collations.ID) bool {
+	switch colldata.Lookup(id).Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
+		return true
+	}
+	return false
+}
+
 // changeCaseBytes changes the case of src using the case mapping of its
 // collation. With asciiFallback, a collation without a case mapping falls back
 // to bytes.ToUpper and bytes.ToLower, which use Go's Unicode tables and replace
 // malformed UTF-8 with U+FFFD. That is only right for valid utf8mb4 text, such
-// as the text of a number or a date.
+// as the text of a number or a date, or the labels of an ENUM or SET column in a
+// utf8mb4 or utf8mb3 collation that has no case mapping.
 func changeCaseBytes(col collations.ID, src []byte, upcase, asciiFallback bool) ([]byte, error) {
 	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
 	switch {
@@ -638,11 +649,20 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	case *evalEnum, *evalSet:
 		// The label bytes are in the character set of the column, which the value does not
 		// carry: take the collation from the column.
+		// A column the planner has no type for takes it from the fields of the row, as
+		// Column.typeof does, and has none to take otherwise.
 		col := typedCoercionCollation(sqltypes.VarChar, call.collate)
-		if column, ok := call.Arguments[0].(*Column); ok && column.Collation.Collation != collations.Unknown {
-			col = column.Collation
+		if column, ok := call.Arguments[0].(*Column); ok && (column.typed() || column.Offset < len(env.Fields)) {
+			typ, err := column.typeof(env)
+			if err != nil {
+				return nil, err
+			}
+			if typ.Col.Collation != collations.Unknown {
+				col = typ.Col
+			}
 		}
 		b = newEvalText(e.ToRawBytes(), col)
+		converted = isUTF8Collation(col.Collation)
 
 	default:
 		b, err = evalToVarchar(e, call.collate, true)
@@ -677,6 +697,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xc(1, sqltypes.VarChar, str.Col.Collation, nil)
 		res.Size = 0
 		col = &res.Col
+		asciiFallback = isUTF8Collation(str.Col.Collation)
 	case str.isHexOrBitLiteral():
 		// A hex or bit literal, such as a bind variable the normalizer made out
 		// of one, is a binary value whatever collation its static type names.
