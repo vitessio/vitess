@@ -1024,6 +1024,26 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(1)`,
 		},
 		{
+			// The result of LOWER is no longer a hex literal, so it is not a number.
+			expression: `LOWER(0x41) + 0`,
+			result:     `FLOAT64(0)`,
+		},
+		{
+			// The result of UPPER is no longer a bit literal, so it is not a number.
+			expression: `UPPER(b'1100001') + 0`,
+			result:     `FLOAT64(0)`,
+		},
+		{
+			// The collation of the text converted from JSON is that of the JSON text, not the
+			// one of the string it is compared with, which is not case-insensitive.
+			expression: `CONVERT(column0 USING utf16) IN (LOWER(column1))`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`{"A": "B"}`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"A": "B"}`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
 			// A BLOB in the binary collation is a VARBINARY result, in both paths.
 			expression: `BIT_COUNT(LOWER(CAST(column0 AS BINARY)))`,
 			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`123`))},
@@ -1125,6 +1145,53 @@ func TestChangeCaseNumericGeneralCI(t *testing.T) {
 				assert.Equal(t, tc.result, res.String())
 			})
 		}
+	}
+}
+
+// TestChangeCaseBindVarLiteral checks that LOWER and UPPER keep a hex or bit
+// literal bind variable binary, as the normalizer turns 0x61 into one, so the
+// functions that read the static type of the result agree with its value.
+func TestChangeCaseBindVarLiteral(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	for _, tc := range []struct {
+		expression string
+		bindVar    *querypb.BindVariable
+		result     string
+	}{
+		{`HEX(~UPPER(:vtg1))`, sqltypes.HexNumBindVariable([]byte("0x61")), `VARCHAR("9E")`},
+		{`BIT_COUNT(UPPER(:vtg1))`, sqltypes.HexNumBindVariable([]byte("0x61")), `INT64(3)`},
+		{`JSON_ARRAY(UPPER(:vtg1))`, sqltypes.HexValBindVariable([]byte("x'61'")), `JSON("[\"base64:type15:YQ==\"]")`},
+		{`BIT_COUNT(UPPER(:vtg1))`, sqltypes.BitNumBindVariable([]byte("0b1100001")), `INT64(3)`},
+	} {
+		t.Run(tc.expression+"/"+tc.bindVar.Type.String(), func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			require.NoError(t, sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+				if arg, ok := node.(*sqlparser.Argument); ok {
+					arg.Type = tc.bindVar.Type
+				}
+				return true, nil
+			}, expr))
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = map[string]*querypb.BindVariable{"vtg1": tc.bindVar}
+
+			expected, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, expected.String(), "bad evaluation from eval engine")
+
+			res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "bad evaluation from compiler")
+		})
 	}
 }
 

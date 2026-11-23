@@ -598,7 +598,9 @@ func changeCaseType(col collations.ID) sqltypes.Type {
 
 // changeCaseBytes changes the case of src using the case mapping of its
 // collation. With asciiFallback, a collation without a case mapping falls back
-// to ASCII, which is enough for text that came from a number or a date.
+// to bytes.ToUpper and bytes.ToLower, which use Go's Unicode tables and replace
+// malformed UTF-8 with U+FFFD. That is only right for valid utf8mb4 text, such
+// as the text of a number, a date, or an ENUM or SET value.
 func changeCaseBytes(col collations.ID, src []byte, upcase, asciiFallback bool) ([]byte, error) {
 	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
 	switch {
@@ -638,7 +640,6 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		b.col = typedCoercionCollation(sqltypes.VarChar, call.collate)
 		converted = true
 	}
 
@@ -660,6 +661,10 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	var col *collations.TypedCollation
 	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag)}
 	switch {
+	case str.isHexOrBitLiteral():
+		// A hex or bit literal, such as a bind variable the normalizer made out
+		// of one, is a binary value whatever collation its static type names.
+		res.Col = collationBinary
 	case str.isTextual():
 	case str.Type == sqltypes.TypeJSON:
 		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
@@ -669,7 +674,13 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 		res.Size = 0
-		res.Col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+		// Convert_xc gives the converted value this collation: the text of a
+		// number or a date is ASCII, as in MySQL.
+		res.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 		col = &res.Col
 	}
 	res.Type = changeCaseType(res.Col.Collation)

@@ -109,3 +109,39 @@ func TestReverseAndOrdOnMalformedInput(t *testing.T) {
 	require.Equal(t, []byte{0x00, 0x31, 0xD8, 0x00}, reverse(input))
 	require.Equal(t, int64(0xD800), charOrd(input.bytes, collation.Collation))
 }
+
+// TestChangeCaseNumericRepertoire checks that the text LOWER and UPPER make out
+// of a number or a date keeps the ASCII repertoire, as it does in MySQL, in
+// both the interpreter and the compiler. A Unicode repertoire makes a merge with
+// text in another character set fail where it did not before.
+func TestChangeCaseNumericRepertoire(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	for _, expression := range []string{`LOWER(1)`, `UPPER(1e20)`, `LOWER(DATE '2020-01-02')`} {
+		t.Run(expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(expression)
+			require.NoError(t, err)
+			converted, err := Translate(expr, &Config{
+				Collation:         collations.ID(8), // latin1_swedish_ci
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := EmptyExpressionEnv(venv)
+			want := collations.TypedCollation{
+				Collation:    8,
+				Coercibility: collations.CoerceCoercible,
+				Repertoire:   collations.RepertoireASCII,
+			}
+
+			ast, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			require.Equal(t, want, ast.v.(*evalBytes).col, "bad collation from eval engine")
+
+			vm, err := env.EvaluateVM(converted.(*CompiledExpr))
+			require.NoError(t, err)
+			require.Equal(t, want, vm.v.(*evalBytes).col, "bad collation from compiler")
+		})
+	}
+}
