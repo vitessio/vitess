@@ -689,7 +689,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
-				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
+				if err := vs.se.ReloadAtDDL(vs.ctx, vs.pos, vs.eventGTID); err != nil {
 					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
 				}
 				if err := vs.rebuildPlans(); err != nil {
