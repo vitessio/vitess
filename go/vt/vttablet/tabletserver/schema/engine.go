@@ -515,8 +515,8 @@ func (se *Engine) waitForGTID(ctx context.Context, gtid replication.Mysql56GTID)
 			"failed to wait for the DDL with GTID %v to commit before reloading the schema", gtid)
 	}
 	if waited := time.Since(start); waited > slowDDLCommitWait {
-		log.Warn("Waited for MySQL to commit a DDL before reloading the schema",
-			slog.String("gtid", gtid.String()), slog.Duration("waited", waited))
+		log.Warningf("Waited %v for MySQL to commit the DDL with GTID %v before reloading the schema",
+			waited, gtid)
 	}
 	return nil
 }
