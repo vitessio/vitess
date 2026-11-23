@@ -1336,7 +1336,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` limit 9223372036854775807"
+            "Query": "select id from `user` limit 9223372036854775808"
           }
         ]
       },
@@ -1365,7 +1365,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` limit 9223372036854775807"
+            "Query": "select id from `user` limit 18446744073709551615"
           }
         ]
       },
@@ -1384,7 +1384,7 @@
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "0",
-        "Offset": "9223372036854775807",
+        "Offset": "9223372036854775808",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1394,7 +1394,7 @@
               "Sharded": true
             },
             "FieldQuery": "select id from (select id from `user` where 1 != 1) as t where 1 != 1",
-            "Query": "select id from (select id from `user`) as t limit 9223372036854775807"
+            "Query": "select id from (select id from `user`) as t limit 9223372036854775808"
           }
         ]
       },

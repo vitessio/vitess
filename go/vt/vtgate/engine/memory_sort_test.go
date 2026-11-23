@@ -54,6 +54,10 @@ func TestMemorySortExecute(t *testing.T) {
 		Input: fp,
 	}
 
+	count, err := ms.fetchCount(t.Context(), &noopVCursor{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), count)
+
 	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
@@ -85,6 +89,9 @@ func TestMemorySortExecute(t *testing.T) {
 	// An unsigned upper limit above math.MaxInt64 returns every row.
 	fp.rewind()
 	ms.UpperLimit = evalengine.NewLiteralUint(math.MaxUint64)
+	count, err = ms.fetchCount(t.Context(), &noopVCursor{}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(math.MaxUint64), count)
 
 	result, err = ms.TryExecute(t.Context(), &noopVCursor{}, nil, false)
 	require.NoError(t, err)

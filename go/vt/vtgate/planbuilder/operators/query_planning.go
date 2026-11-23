@@ -435,12 +435,12 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 		if !ok {
 			return nil, true
 		}
-		if v1 > math.MaxInt64-v2 {
+		if v1 > math.MaxUint64-v2 {
 			// Saturate instead of overflowing: no result can hold this many rows,
 			// so both offsets skip every row
-			return sqlparser.NewIntLiteral(strconv.FormatInt(math.MaxInt64, 10)), false
+			return sqlparser.NewIntLiteral(strconv.FormatUint(math.MaxUint64, 10)), false
 		}
-		return sqlparser.NewIntLiteral(strconv.FormatInt(v1+v2, 10)), false
+		return sqlparser.NewIntLiteral(strconv.FormatUint(v1+v2, 10)), false
 	}
 }
 
@@ -470,7 +470,7 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 		if !ok1 || !ok2 {
 			return nil, true
 		}
-		return sqlparser.NewIntLiteral(strconv.FormatInt(max(v1-offset, 0), 10)), false
+		return sqlparser.NewIntLiteral(strconv.FormatUint(v1-min(v1, offset), 10)), false
 
 	default:
 		// Validate both row counts before either can be discarded by the merge.
@@ -487,7 +487,7 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 			// If the second limit is "1", it dominates, so return it.
 			return l2, false
 		}
-		var offset int64
+		var offset uint64
 		if off2 != nil {
 			var ok bool
 			offset, ok = limitLiteral(off2)
@@ -496,10 +496,8 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 			}
 		}
 
-		lim := max(min(v2, v1-offset),
-			// If the combined limit is negative, set it to zero.
-			0)
-		return sqlparser.NewIntLiteral(strconv.FormatInt(lim, 10)), false
+		lim := min(v2, v1-min(v1, offset))
+		return sqlparser.NewIntLiteral(strconv.FormatUint(lim, 10)), false
 	}
 }
 
@@ -509,7 +507,7 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 		// we can't push down an offset, so we need to convert it to a rowcount
 		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest
 		// this way we can still limit the number of rows that are returned
-		if upper, ok := saturatedUpperLimit(pushedLimit.Rowcount, pushedLimit.Offset); ok {
+		if upper, ok := literalUpperLimit(pushedLimit.Rowcount, pushedLimit.Offset); ok {
 			pushedLimit.Rowcount = upper
 		} else {
 			plus := &sqlparser.BinaryExpr{
@@ -524,26 +522,26 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 	return newLimit(src, pushedLimit, false)
 }
 
-// saturatedUpperLimit returns math.MaxInt64 as a literal when rowcount and offset
-// are integer literals whose sum does not fit in a BIGINT. The Limit primitive
-// saturates its upper limit in the same way: no result can hold that many rows,
-// so the pushed down limit still returns every row the LIMIT on top needs.
-func saturatedUpperLimit(rowcount, offset sqlparser.Expr) (sqlparser.Expr, bool) {
+// literalUpperLimit adds integer rowcount and offset literals, saturating at
+// math.MaxUint64 on overflow, like the Limit primitive.
+func literalUpperLimit(rowcount, offset sqlparser.Expr) (sqlparser.Expr, bool) {
 	count, ok := limitLiteral(rowcount)
 	if !ok {
 		return nil, false
 	}
 	off, ok := limitLiteral(offset)
-	if !ok || count <= math.MaxInt64-off {
+	if !ok {
 		return nil, false
 	}
-	return sqlparser.NewIntLiteral(strconv.FormatInt(math.MaxInt64, 10)), true
+	if count > math.MaxUint64-off {
+		return sqlparser.NewIntLiteral(strconv.FormatUint(math.MaxUint64, 10)), true
+	}
+	return sqlparser.NewIntLiteral(strconv.FormatUint(count+off, 10)), true
 }
 
 // limitLiteral returns the value of a non-negative integer literal used as a LIMIT
-// row count or offset. MySQL accepts values up to 18446744073709551615; values above
-// math.MaxInt64 saturate at math.MaxInt64, like they do in the Limit primitive.
-func limitLiteral(expr sqlparser.Expr) (int64, bool) {
+// row count or offset. MySQL accepts values up to 18446744073709551615.
+func limitLiteral(expr sqlparser.Expr) (uint64, bool) {
 	lit, ok := expr.(*sqlparser.Literal)
 	if !ok || lit.Type != sqlparser.IntVal {
 		return 0, false
@@ -552,7 +550,7 @@ func limitLiteral(expr sqlparser.Expr) (int64, bool) {
 	if err != nil {
 		return 0, false
 	}
-	return int64(min(val, math.MaxInt64)), true
+	return val, true
 }
 
 // getLimitExpression is a helper function to simplify an expression using the evalengine

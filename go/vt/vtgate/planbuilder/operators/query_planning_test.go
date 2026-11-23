@@ -40,11 +40,17 @@ func TestMergeOffsetExpressions(t *testing.T) {
 			expectedFailed: false,
 		},
 		{
-			name:           "offsets beyond BIGINT saturate",
+			name:           "offsets beyond BIGINT UNSIGNED saturate",
 			offset1:        sqlparser.NewIntLiteral("18446744073709551615"),
 			offset2:        sqlparser.NewIntLiteral("1"),
-			expectedExpr:   sqlparser.NewIntLiteral("9223372036854775807"),
+			expectedExpr:   sqlparser.NewIntLiteral("18446744073709551615"),
 			expectedFailed: false,
+		},
+		{
+			name:         "offset sum above signed range remains exact",
+			offset1:      sqlparser.NewIntLiteral("9223372036854775807"),
+			offset2:      sqlparser.NewIntLiteral("1"),
+			expectedExpr: sqlparser.NewIntLiteral("9223372036854775808"),
 		},
 		{
 			name:           "offset beyond BIGINT UNSIGNED",
@@ -186,6 +192,25 @@ func TestMergeLimitExpressions(t *testing.T) {
 			limit1:         sqlparser.NewIntLiteral("1"),
 			limit2:         sqlparser.NewIntLiteral("18446744073709551616"),
 			expectedFailed: true,
+		},
+		{
+			name:         "unsigned limits remain exact after offset",
+			limit1:       sqlparser.NewIntLiteral("18446744073709551615"),
+			limit2:       sqlparser.NewIntLiteral("18446744073709551615"),
+			offset2:      sqlparser.NewIntLiteral("3"),
+			expectedExpr: sqlparser.NewIntLiteral("18446744073709551612"),
+		},
+		{
+			name:         "unsigned first limit and no second limit",
+			limit1:       sqlparser.NewIntLiteral("18446744073709551615"),
+			offset2:      sqlparser.NewIntLiteral("3"),
+			expectedExpr: sqlparser.NewIntLiteral("18446744073709551612"),
+		},
+		{
+			name:         "offset exhausts first limit and no second limit",
+			limit1:       sqlparser.NewIntLiteral("3"),
+			offset2:      sqlparser.NewIntLiteral("18446744073709551615"),
+			expectedExpr: sqlparser.NewIntLiteral("0"),
 		},
 		{
 			name:           "first limit is argument",

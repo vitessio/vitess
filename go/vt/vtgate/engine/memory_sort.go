@@ -58,7 +58,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if err = ms.OrderBy.SortResult(result); err != nil {
 		return nil, err
 	}
-	if int64(len(result.Rows)) > count {
+	if uint64(len(result.Rows)) > count {
 		result.Rows = result.Rows[:int(count)]
 	}
 	return result.Truncate(ms.TruncateColumnCount), nil
@@ -120,9 +120,9 @@ func (ms *MemorySort) NeedsTransaction() bool {
 	return ms.Input.NeedsTransaction()
 }
 
-func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (int64, error) {
+func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (uint64, error) {
 	if ms.UpperLimit == nil {
-		return math.MaxInt64, nil
+		return math.MaxUint64, nil
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ms.UpperLimit)

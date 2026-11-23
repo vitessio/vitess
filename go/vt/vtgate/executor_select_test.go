@@ -2519,7 +2519,7 @@ func TestSelectScatterLimit(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
-		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
+		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Uint64BindVariable(3)},
 	}}
 	for _, conn := range conns {
 		utils.MustMatch(t, wantQueries, conn.Queries)
@@ -2591,7 +2591,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{{
 		Sql:           "select col1, col2, weight_string(col2) from `user` order by `user`.col2 desc limit 3",
-		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
+		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Uint64BindVariable(3)},
 	}}
 	for _, conn := range conns {
 		utils.MustMatch(t, wantQueries, conn.Queries)
@@ -2624,56 +2624,58 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 // accepts to return all rows, with an offset against a scatter route, through
 // Execute and StreamExecute, with and without normalization.
 func TestSelectScatterLimitAboveBigint(t *testing.T) {
-	query := "select col1 from user limit 18446744073709551615 offset 1"
-	for _, normalize := range []bool{false, true} {
-		for _, stream := range []bool{false, true} {
-			t.Run(fmt.Sprintf("normalize=%t stream=%t", normalize, stream), func(t *testing.T) {
-				ctx := utils.LeakCheckContext(t)
+	for _, offset := range []int{0, 1} {
+		query := fmt.Sprintf("select col1 from user limit 18446744073709551615 offset %d", offset)
+		for _, normalize := range []bool{false, true} {
+			for _, stream := range []bool{false, true} {
+				t.Run(fmt.Sprintf("offset=%d normalize=%t stream=%t", offset, normalize, stream), func(t *testing.T) {
+					ctx := utils.LeakCheckContext(t)
 
-				cell := "aa"
-				hc := discovery.NewFakeHealthCheck(nil)
-				u := createSandbox(KsTestUnsharded)
-				s := createSandbox(KsTestSharded)
-				s.VSchema = executorVSchema
-				u.VSchema = unshardedVSchema
-				serv := newSandboxForCells(ctx, []string{cell})
-				resolver := newTestResolver(ctx, hc, serv, cell)
-				shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
-				var conns []*sandboxconn.SandboxConn
-				for i, shard := range shards {
-					sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
-					sbc.SetResults([]*sqltypes.Result{{
-						Fields: []*querypb.Field{
-							{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
-						},
-						Rows: [][]sqltypes.Value{{sqltypes.NewInt32(int32(i))}},
-					}})
-					conns = append(conns, sbc)
-				}
-				executor := createExecutor(ctx, serv, cell, resolver)
-				defer executor.Close()
-				executor.config.Normalize = normalize
+					cell := "aa"
+					hc := discovery.NewFakeHealthCheck(nil)
+					u := createSandbox(KsTestUnsharded)
+					s := createSandbox(KsTestSharded)
+					s.VSchema = executorVSchema
+					u.VSchema = unshardedVSchema
+					serv := newSandboxForCells(ctx, []string{cell})
+					resolver := newTestResolver(ctx, hc, serv, cell)
+					shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+					var conns []*sandboxconn.SandboxConn
+					for i, shard := range shards {
+						sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+						sbc.SetResults([]*sqltypes.Result{{
+							Fields: []*querypb.Field{
+								{Name: "col1", Type: sqltypes.Int32, Charset: collations.CollationBinaryID, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)},
+							},
+							Rows: [][]sqltypes.Value{{sqltypes.NewInt32(int32(i))}},
+						}})
+						conns = append(conns, sbc)
+					}
+					executor := createExecutor(ctx, serv, cell, resolver)
+					defer executor.Close()
+					executor.config.Normalize = normalize
 
-				var result *sqltypes.Result
-				var err error
-				if stream {
-					result, err = executorStream(ctx, executor, query)
-				} else {
-					result, err = executorExec(ctx, executor, &vtgatepb.Session{TargetString: "@primary"}, query, nil)
-				}
-				require.NoError(t, err)
-				assert.Len(t, result.Rows, len(shards)-1)
+					var result *sqltypes.Result
+					var err error
+					if stream {
+						result, err = executorStream(ctx, executor, query)
+					} else {
+						result, err = executorExec(ctx, executor, &vtgatepb.Session{TargetString: "@primary"}, query, nil)
+					}
+					require.NoError(t, err)
+					assert.Len(t, result.Rows, len(shards)-offset)
 
-				wantSQL := "select col1 from `user` limit 9223372036854775807"
-				if normalize {
-					wantSQL = "select col1 from `user` limit :__upper_limit"
-				}
-				for _, conn := range conns {
-					require.Len(t, conn.Queries, 1)
-					assert.Equal(t, wantSQL, conn.Queries[0].Sql)
-					utils.MustMatch(t, sqltypes.Int64BindVariable(math.MaxInt64), conn.Queries[0].BindVariables["__upper_limit"])
-				}
-			})
+					wantSQL := "select col1 from `user` limit 18446744073709551615"
+					if normalize {
+						wantSQL = "select col1 from `user` limit :__upper_limit"
+					}
+					for _, conn := range conns {
+						require.Len(t, conn.Queries, 1)
+						assert.Equal(t, wantSQL, conn.Queries[0].Sql)
+						utils.MustMatch(t, sqltypes.Uint64BindVariable(math.MaxUint64), conn.Queries[0].BindVariables["__upper_limit"])
+					}
+				})
+			}
 		}
 	}
 }
@@ -3165,12 +3167,12 @@ func TestSubQueryAndQueryWithLimit(t *testing.T) {
 	require.Len(t, sbc2.Queries, 2)
 
 	// sub query is evaluated first, and sees a limit of 1
-	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
-	assert.Equal(t, sqltypes.Int64BindVariable(1), sbc2.Queries[0].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Uint64BindVariable(1), sbc1.Queries[0].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Uint64BindVariable(1), sbc2.Queries[0].BindVariables["__upper_limit"])
 
 	// outer limit is only applied to the outer query
-	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc1.Queries[1].BindVariables["__upper_limit"])
-	assert.Equal(t, sqltypes.Int64BindVariable(100), sbc2.Queries[1].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Uint64BindVariable(100), sbc1.Queries[1].BindVariables["__upper_limit"])
+	assert.Equal(t, sqltypes.Uint64BindVariable(100), sbc2.Queries[1].BindVariables["__upper_limit"])
 }
 
 func TestSelectUsingMultiEqualOnLookupColumn(t *testing.T) {

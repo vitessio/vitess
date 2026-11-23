@@ -1439,7 +1439,7 @@ func TestCompareSorter(t *testing.T) {
 				want = want[:tc.Limit]
 			}
 
-			sorter := &Sorter{Compare: tc.Cmp, Limit: int64(tc.Limit)}
+			sorter := &Sorter{Compare: tc.Cmp, Limit: uint64(tc.Limit)}
 			for _, v := range unsorted {
 				sorter.Push(v)
 			}

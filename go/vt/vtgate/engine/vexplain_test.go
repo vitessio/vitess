@@ -82,11 +82,11 @@ func TestVExplainMySQLNoRoutesSpecialHandling(t *testing.T) {
 func TestVExplainMySQLPushedDownLimit(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
-		count, offset int64
+		count, offset uint64
 		upper         string
 	}{
 		{name: "in range", count: 5, offset: 10, upper: "15"},
-		{name: "overflow", count: 1, offset: math.MaxInt64, upper: "9223372036854775807"},
+		{name: "overflow", count: 1, offset: math.MaxUint64, upper: "18446744073709551615"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			route := NewRoute(
@@ -96,8 +96,8 @@ func TestVExplainMySQLPushedDownLimit(t *testing.T) {
 				"dummy_select_field",
 			)
 			limit := &Limit{
-				Count:  evalengine.NewLiteralInt(tc.count),
-				Offset: evalengine.NewLiteralInt(tc.offset),
+				Count:  evalengine.NewLiteralUint(tc.count),
+				Offset: evalengine.NewLiteralUint(tc.offset),
 				Input:  route,
 			}
 
@@ -119,8 +119,8 @@ func TestVExplainMySQLPushedDownLimit(t *testing.T) {
 			// either order; assert membership rather than a fixed order.
 			vc.ExpectLogUnordered(t, []string{
 				`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"%s" ks -20`, tc.upper),
-				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:INT64 value:"%s" ks 20-`, tc.upper),
+				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:UINT64 value:"%s" ks -20`, tc.upper),
+				fmt.Sprintf(`ExecuteMultiShardPerShard explain format = json dummy_select limit :__upper_limit __upper_limit: type:UINT64 value:"%s" ks 20-`, tc.upper),
 			})
 		})
 	}

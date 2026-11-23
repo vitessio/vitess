@@ -333,8 +333,8 @@ func TestLimitOffsetExecute(t *testing.T) {
 }
 
 // TestLimitOffsetUpperLimitOverflow checks that count + offset does not wrap
-// around when the sum is larger than the largest int64, and that unsigned values
-// above the largest int64 saturate instead of failing.
+// around when the sum exceeds the unsigned 64-bit range. Values in that range
+// are passed to the input unchanged.
 func TestLimitOffsetUpperLimitOverflow(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"col1|col2",
@@ -347,32 +347,43 @@ func TestLimitOffsetUpperLimitOverflow(t *testing.T) {
 		offset evalengine.Expr
 		input  []string
 		want   []string
+		upper  string
 	}{{
 		name:   "offset beyond empty input",
 		count:  evalengine.NewLiteralInt(1),
 		offset: evalengine.NewLiteralInt(math.MaxInt64),
+		upper:  "9223372036854775808",
 	}, {
 		name:   "count beyond input",
+		upper:  "9223372036854775808",
 		count:  evalengine.NewLiteralInt(math.MaxInt64),
 		offset: evalengine.NewLiteralInt(1),
 		input:  []string{"a|1", "b|2", "c|3"},
 		want:   []string{"b|2", "c|3"},
 	}, {
 		name:   "unsigned count above MaxInt64",
+		upper:  "18446744073709551615",
 		count:  evalengine.NewLiteralUint(math.MaxUint64),
 		offset: evalengine.NewLiteralInt(1),
 		input:  []string{"a|1", "b|2", "c|3"},
 		want:   []string{"b|2", "c|3"},
 	}, {
 		name:   "unsigned offset above MaxInt64",
+		upper:  "18446744073709551615",
 		count:  evalengine.NewLiteralInt(1),
 		offset: evalengine.NewLiteralUint(math.MaxUint64),
 		input:  []string{"a|1", "b|2", "c|3"},
+	}, {
+		name:  "unsigned count without offset",
+		count: evalengine.NewLiteralUint(math.MaxUint64),
+		input: []string{"a|1", "b|2", "c|3"},
+		want:  []string{"a|1", "b|2", "c|3"},
+		upper: "18446744073709551615",
 	}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wantLog := `__upper_limit: type:INT64 value:"9223372036854775807" false`
+			wantLog := `__upper_limit: type:UINT64 value:"` + tt.upper + `" false`
 			wantResult := sqltypes.MakeTestResult(fields, tt.want...)
 			l := &Limit{
 				Count:  tt.count,
@@ -656,7 +667,7 @@ func TestLimitInvalidCount(t *testing.T) {
 	l.Count = evalengine.NewLiteralUint(18446744073709551615)
 	count, offset, err := l.getCountAndOffset(t.Context(), &noopVCursor{}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, int64(math.MaxInt64), count)
+	assert.Equal(t, uint64(math.MaxUint64), count)
 	assert.Zero(t, offset)
 
 	l.Count = evalengine.NewLiteralInt(-1)
