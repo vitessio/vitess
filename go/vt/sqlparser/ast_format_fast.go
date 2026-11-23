@@ -1127,29 +1127,33 @@ func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
 	indexesBefore, constraintsBefore := ts.keysBefore()
 	indexes, constraints := 0, 0
-	for i, col := range ts.Columns {
-		if i == 0 {
-			buf.WriteByte('\t')
-		} else {
-			buf.WriteString(",\n\t")
-		}
+	// The first element can be a key or a constraint rather than a column: MySQL
+	// accepts keys before every column, and a table with no column parses too.
+	separator := "\t"
+	for _, col := range ts.Columns {
 		for end := indexesBefore[col.Name.Lowered()]; indexes < end; indexes++ {
+			buf.WriteString(separator)
 			ts.Indexes[indexes].FormatFast(buf)
-			buf.WriteString(",\n\t")
+			separator = ",\n\t"
 		}
 		for end := constraintsBefore[col.Name.Lowered()]; constraints < end; constraints++ {
+			buf.WriteString(separator)
 			ts.Constraints[constraints].FormatFast(buf)
-			buf.WriteString(",\n\t")
+			separator = ",\n\t"
 		}
+		buf.WriteString(separator)
 		col.FormatFast(buf)
+		separator = ",\n\t"
 	}
 	for _, idx := range ts.Indexes[indexes:] {
-		buf.WriteString(",\n\t")
+		buf.WriteString(separator)
 		idx.FormatFast(buf)
+		separator = ",\n\t"
 	}
 	for _, c := range ts.Constraints[constraints:] {
-		buf.WriteString(",\n\t")
+		buf.WriteString(separator)
 		c.FormatFast(buf)
+		separator = ",\n\t"
 	}
 
 	buf.WriteString("\n)")

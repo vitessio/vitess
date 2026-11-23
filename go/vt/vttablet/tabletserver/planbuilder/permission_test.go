@@ -797,6 +797,16 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// A key before every column is parsed, so the source tables are known.
+		input: "create table ct (key k (id)) select id from secret",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		// A CREATE TABLE the parser could not fully parse is forwarded to
 		// MySQL as the client's raw text, so its source tables are unknown:
 		// it must be flagged like any other opaque statement, not derived from

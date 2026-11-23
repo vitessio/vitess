@@ -1361,6 +1361,7 @@ func TestExecutorDDL(t *testing.T) {
 func TestExecutorDDLFk(t *testing.T) {
 	stmts := []string{
 		"create table t1(id bigint primary key, foreign key (id) references t2(id))",
+		"create table t1(foreign key (id) references t2(id), id bigint primary key)",
 		"alter table t2 add foreign key (id) references t1(id) on delete cascade",
 	}
 

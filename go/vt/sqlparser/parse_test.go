@@ -1976,6 +1976,31 @@ var validSQL = []struct {
 	input:  "create table t (check (a > 0), key (a), a int, b int, unique key k (b), c int unique)",
 	output: "create table t (\n\tkey (a),\n\ta int,\n\tb int,\n\tunique key k (b),\n\tc int unique,\n\tcheck (a > 0)\n)",
 }, {
+	// MySQL accepts a key before every column, and names the column's inline key a_2
+	input:  "create table t (unique key a (b), a int unique, b int)",
+	output: "create table t (\n\tunique key a (b),\n\ta int unique,\n\tb int\n)",
+}, {
+	input:  "create table t (primary key (x), x int)",
+	output: "create table t (\n\tprimary key (x),\n\tx int\n)",
+}, {
+	// and a foreign key, named or not
+	input:  "create table t (constraint fk foreign key (x) references p (id), x int)",
+	output: "create table t (\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
+}, {
+	input:  "create table t (foreign key (x) references p (id), x int)",
+	output: "create table t (\n\tforeign key (x) references p (id),\n\tx int\n)",
+}, {
+	// a named key shares the CONSTRAINT prefix with a named foreign key and check
+	input:  "create table t (constraint c unique key (x), x int)",
+	output: "create table t (\n\tconstraint c unique key (x),\n\tx int\n)",
+}, {
+	// a table with no column parses, as it does in MySQL
+	input:  "create table t (key k (x))",
+	output: "create table t (\n\tkey k (x)\n)",
+}, {
+	input:  "create table t (check (x > 0))",
+	output: "create table t (\n\tcheck (x > 0)\n)",
+}, {
 	input: "alter table t add column id bigint serial default value",
 }, {
 	input: "alter table t modify column id serial first",
@@ -4361,6 +4386,15 @@ func TestValid(t *testing.T) {
 			require.NoError(t, err, tcase.input)
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
+
+			// A fully parsed CREATE TABLE must also fully parse once formatted.
+			// ParseStrictDDL has no fallback to a partially parsed DDL, which would
+			// hide a syntax error in the formatted statement.
+			if _, ok := tree.(*CreateTable); ok && !tcase.partialDDL {
+				reparsed, err := parser.ParseStrictDDL(out)
+				require.NoError(t, err, out)
+				assert.Equal(t, out, String(reparsed))
+			}
 
 			// Some statements currently only have 5.7 specifications.
 			// For mysql 8.0 syntax, the query is not entirely parsed.

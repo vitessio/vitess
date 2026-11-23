@@ -883,25 +883,28 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ts, "(\n")
 	indexesBefore, constraintsBefore := ts.keysBefore()
 	indexes, constraints := 0, 0
-	for i, col := range ts.Columns {
-		if i == 0 {
-			buf.astPrintf(ts, "\t")
-		} else {
-			buf.astPrintf(ts, ",\n\t")
-		}
+	// The first element can be a key or a constraint rather than a column: MySQL
+	// accepts keys before every column, and a table with no column parses too.
+	separator := "\t"
+	for _, col := range ts.Columns {
 		for end := indexesBefore[col.Name.Lowered()]; indexes < end; indexes++ {
-			buf.astPrintf(ts, "%v,\n\t", ts.Indexes[indexes])
+			buf.astPrintf(ts, "%s%v", separator, ts.Indexes[indexes])
+			separator = ",\n\t"
 		}
 		for end := constraintsBefore[col.Name.Lowered()]; constraints < end; constraints++ {
-			buf.astPrintf(ts, "%v,\n\t", ts.Constraints[constraints])
+			buf.astPrintf(ts, "%s%v", separator, ts.Constraints[constraints])
+			separator = ",\n\t"
 		}
-		buf.astPrintf(ts, "%v", col)
+		buf.astPrintf(ts, "%s%v", separator, col)
+		separator = ",\n\t"
 	}
 	for _, idx := range ts.Indexes[indexes:] {
-		buf.astPrintf(ts, ",\n\t%v", idx)
+		buf.astPrintf(ts, "%s%v", separator, idx)
+		separator = ",\n\t"
 	}
 	for _, c := range ts.Constraints[constraints:] {
-		buf.astPrintf(ts, ",\n\t%v", c)
+		buf.astPrintf(ts, "%s%v", separator, c)
+		separator = ",\n\t"
 	}
 
 	buf.astPrintf(ts, "\n)")

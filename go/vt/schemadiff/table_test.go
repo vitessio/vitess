@@ -2698,6 +2698,19 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, i2 bigint not null, key i_idx(i))",
 		},
 		{
+			// the key is written before i2, which is now the first column
+			name:  "drop the column before a key",
+			from:  "create table t (i int, key i2_idx (i2), i2 int)",
+			alter: "alter table t drop column i",
+			to:    "create table t (i2 int, key i2_idx (i2))",
+		},
+		{
+			name:  "move the column after a key first",
+			from:  "create table t (i int, key i_idx (i), i2 int)",
+			alter: "alter table t modify column i2 int first",
+			to:    "create table t (i2 int, i int, key i_idx (i))",
+		},
+		{
 			name:  "drop column, affect keys",
 			from:  "create table t (id int primary key, i int, key i_idx(i))",
 			alter: "alter table t drop column i",
@@ -3249,6 +3262,11 @@ func TestValidate(t *testing.T) {
 				c, ok := applied.(*CreateTableEntity)
 				require.True(t, ok)
 				applied = c.normalize()
+
+				// The applied table's statement must parse again.
+				appliedStatement := applied.Create().CanonicalStatementString()
+				_, err = env.Parser().ParseStrictDDL(appliedStatement)
+				require.NoError(t, err, appliedStatement)
 
 				stmt, err := env.Parser().ParseStrictDDL(ts.to)
 				require.NoError(t, err)
