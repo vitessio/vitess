@@ -8666,6 +8666,87 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			// 100 is a stale primary of -80; 101 is its current primary. A keyspace
+			// filter with a primary tablet type, and no shard, goes through the
+			// cells path. It must return only the current primary.
+			name:  "keyspace filter with primary tablet type excludes stale primary",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Keyspace:   "testkeyspace",
+				TabletType: topodatapb.TabletType_PRIMARY,
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			// 100 is a stale primary of -80 in zone1; 200, its current primary, is
+			// in zone2. A zone1 cell filter leaves out 200, so only the shard
+			// record shows that 100 is stale.
+			name:  "cell filter excludes current primary in another cell",
+			cells: []string{"zone1", "zone2"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone2", Uid: 200},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+				},
+			},
+			addTabletOptions: &testutil.AddTabletOptions{
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells: []string{"zone1"},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace:             "testkeyspace",
+					Shard:                "-80",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+				},
+			},
+			shouldErr: false,
+		},
+		{
 			name:    "tablet alias filter with none found",
 			tablets: []*topodatapb.Tablet{},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -8869,9 +8950,202 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
-// TestGetTabletsShardRecordReadError covers tablet alias requests whose shard
-// records can't be read: a strict request fails with a coded error, and a
-// non-strict one judges each shard by the fetched tablets alone.
+// TestGetTabletsStalePrimaryWithFailedCell covers GetTablets calls where the
+// cell holding a shard's current primary can't be read. 100, in zone1, is a
+// stale primary of -80; 200, its current primary, is in zone2. A non-strict
+// request can only tell from the shard record that 100 is stale; a strict one
+// fails.
+func TestGetTabletsStalePrimaryWithFailedCell(t *testing.T) {
+	t.Parallel()
+
+	stalePrimary := &topodatapb.Tablet{
+		Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Keyspace:             "testkeyspace",
+		Shard:                "-80",
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+	}
+	currentPrimary := &topodatapb.Tablet{
+		Alias:                &topodatapb.TabletAlias{Cell: "zone2", Uid: 200},
+		Keyspace:             "testkeyspace",
+		Shard:                "-80",
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+	}
+
+	// zone2's topo server can't be reached: zone2 is registered in the global
+	// topo but has no topo server, so connecting to it fails right away. The
+	// shard record says the current primary is 200, in zone2.
+	unreachableCell := func(ctx context.Context, t *testing.T) *topo.Server {
+		ts := memorytopo.NewServer(ctx, "zone1")
+		testutil.AddTablets(ctx, t, ts, nil, stalePrimary)
+		require.NoError(t, ts.CreateCellInfo(ctx, "zone2", &topodatapb.CellInfo{ServerAddress: "zone2-topo", Root: "/vitess/zone2"}))
+		_, err := ts.UpdateShardFields(ctx, "testkeyspace", "-80", func(si *topo.ShardInfo) error {
+			si.PrimaryAlias = currentPrimary.Alias
+			si.PrimaryTermStartTime = currentPrimary.PrimaryTermStartTime
+			return nil
+		})
+		require.NoError(t, err)
+		return ts
+	}
+
+	// zone2's topo server is up, but reading the tablet records in it fails,
+	// so the shard's tablet list for zone2 can't be turned into tablets.
+	unreadableTablets := func(ctx context.Context, t *testing.T) *topo.Server {
+		ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
+		testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true, ForceSetShardPrimary: true}, stalePrimary, currentPrimary)
+		factory.AddOperationError(memorytopo.Get, "tablets/zone2-", errors.New("zone2 tablet records unavailable"))
+		return ts
+	}
+
+	tests := []struct {
+		name  string
+		setup func(ctx context.Context, t *testing.T) *topo.Server
+		req   *vtctldatapb.GetTabletsRequest
+	}{
+		{
+			name:  "all cells",
+			setup: unreachableCell,
+			req:   &vtctldatapb.GetTabletsRequest{},
+		},
+		{
+			name:  "keyspace and shard",
+			setup: unreadableTablets,
+			req:   &vtctldatapb.GetTabletsRequest{Keyspace: "testkeyspace", Shard: "-80"},
+		},
+	}
+
+	for _, tt := range tests {
+		for _, strict := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/strict=%t", tt.name, strict), func(t *testing.T) {
+				t.Parallel()
+
+				ctx := t.Context()
+				ts := tt.setup(ctx, t)
+				vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return NewVtctldServer(vtenv.NewTestEnv(), ts)
+				})
+
+				req := proto.Clone(tt.req).(*vtctldatapb.GetTabletsRequest)
+				req.Strict = strict
+				resp, err := vtctld.GetTablets(ctx, req)
+				if strict {
+					require.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				require.Len(t, resp.Tablets, 1)
+				assert.Equal(t, "zone1-0000000100", topoproto.TabletAliasString(resp.Tablets[0].Alias))
+				assert.Equal(t, topodatapb.TabletType_UNKNOWN, resp.Tablets[0].Type)
+			})
+		}
+	}
+}
+
+// TestGetTabletsStalePrimaryWithoutCurrentPrimaryRecord covers a stale primary
+// whose shard's current primary was deleted with DeleteTablets --allow-primary,
+// so no tablet record holds the newest term. A request for primaries only must
+// still leave the stale primary out, since GetSchemaMigrations runs a query on
+// every tablet it gets back.
+func TestGetTabletsStalePrimaryWithoutCurrentPrimaryRecord(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	// 100 is a stale primary of -80; 101 is its current primary.
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true, ForceSetShardPrimary: true},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Keyspace:             "testkeyspace",
+			Shard:                "-80",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+		},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+			Keyspace:             "testkeyspace",
+			Shard:                "-80",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+		},
+	)
+	// Deleting 101 clears the shard's primary alias and starts a new term in
+	// the shard record.
+	_, err := vtctld.DeleteTablets(ctx, &vtctldatapb.DeleteTabletsRequest{
+		TabletAliases: []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 101}},
+		AllowPrimary:  true,
+	})
+	require.NoError(t, err)
+
+	si, err := ts.GetShard(ctx, "testkeyspace", "-80")
+	require.NoError(t, err)
+	require.Nil(t, si.PrimaryAlias)
+
+	resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Keyspace:   "testkeyspace",
+		TabletType: topodatapb.TabletType_PRIMARY,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Tablets)
+}
+
+// TestGetTabletsMissingShardRecord covers a PRIMARY tablet record left behind
+// after its shard was deleted. A missing shard record isn't a partial read,
+// so even a strict request succeeds and judges that shard by its fetched
+// tablets alone.
+func TestGetTabletsMissingShardRecord(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			Keyspace:             "testkeyspace",
+			Shard:                "-80",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+		},
+		&topodatapb.Tablet{
+			Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+			Keyspace:             "testkeyspace",
+			Shard:                "80-",
+			Type:                 topodatapb.TabletType_PRIMARY,
+			PrimaryTermStartTime: protoutil.TimeToProto(time.Date(2006, time.January, 2, 17, 4, 5, 0, time.UTC)),
+		},
+	)
+	// 80- is deleted, but 200's tablet record is left behind.
+	require.NoError(t, ts.DeleteShard(ctx, "testkeyspace", "80-"))
+
+	resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		TabletAliases: []*topodatapb.TabletAlias{{Cell: "zone1", Uid: 100}, {Cell: "zone1", Uid: 200}},
+		Strict:        true,
+	})
+	require.NoError(t, err)
+
+	types := make(map[uint32]topodatapb.TabletType, len(resp.Tablets))
+	for _, tablet := range resp.Tablets {
+		types[tablet.Alias.Uid] = tablet.Type
+	}
+	assert.Equal(t, map[uint32]topodatapb.TabletType{
+		100: topodatapb.TabletType_PRIMARY,
+		200: topodatapb.TabletType_PRIMARY,
+	}, types)
+}
+
+// TestGetTabletsShardRecordReadError covers tablet alias and cell filter
+// requests whose shard records can't be read: a strict request fails with a
+// coded error, and a non-strict one judges each shard by the fetched tablets
+// alone.
 func TestGetTabletsShardRecordReadError(t *testing.T) {
 	t.Parallel()
 
@@ -8879,13 +9153,23 @@ func TestGetTabletsShardRecordReadError(t *testing.T) {
 		name       string
 		strict     bool
 		tabletType topodatapb.TabletType
-		wantCode   vtrpc.Code
+		// byCell lists the tablets with a cell filter instead of by alias.
+		byCell   bool
+		wantCode vtrpc.Code
 		// expected types by tablet uid, when no error is expected
 		expected map[uint32]topodatapb.TabletType
 	}{
 		{
 			name:     "strict",
 			strict:   true,
+			wantCode: vtrpc.Code_UNAVAILABLE,
+		},
+		{
+			// A cell filter can leave out a shard's current primary too, so a
+			// strict request with one fails when the shard records can't be read.
+			name:     "strict with cell filter",
+			strict:   true,
+			byCell:   true,
 			wantCode: vtrpc.Code_UNAVAILABLE,
 		},
 		{
@@ -8906,6 +9190,16 @@ func TestGetTabletsShardRecordReadError(t *testing.T) {
 			name:       "strict with replica tablet type",
 			strict:     true,
 			tabletType: topodatapb.TabletType_REPLICA,
+			expected: map[uint32]topodatapb.TabletType{
+				101: topodatapb.TabletType_REPLICA,
+			},
+		},
+		{
+			// The same holds with a cell filter.
+			name:       "strict with replica tablet type and cell filter",
+			strict:     true,
+			tabletType: topodatapb.TabletType_REPLICA,
+			byCell:     true,
 			expected: map[uint32]topodatapb.TabletType{
 				101: topodatapb.TabletType_REPLICA,
 			},
@@ -8955,7 +9249,7 @@ func TestGetTabletsShardRecordReadError(t *testing.T) {
 			)
 			factory.AddOperationError(memorytopo.Get, "keyspaces/testkeyspace/shards/.*/Shard", errors.New("shard record unavailable"))
 
-			resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+			req := &vtctldatapb.GetTabletsRequest{
 				TabletAliases: []*topodatapb.TabletAlias{
 					{Cell: "zone1", Uid: 99},
 					{Cell: "zone1", Uid: 100},
@@ -8964,7 +9258,12 @@ func TestGetTabletsShardRecordReadError(t *testing.T) {
 				},
 				TabletType: tt.tabletType,
 				Strict:     tt.strict,
-			})
+			}
+			if tt.byCell {
+				req.TabletAliases = nil
+				req.Cells = []string{"zone1"}
+			}
+			resp, err := vtctld.GetTablets(ctx, req)
 			if tt.wantCode != vtrpc.Code_OK {
 				require.ErrorContains(t, err, "shard record unavailable")
 				assert.Equal(t, tt.wantCode, vterrors.Code(err))
