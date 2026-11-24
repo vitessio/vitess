@@ -165,8 +165,10 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	}
 
 	junitOutput := fmt.Sprintf("_test/junit/report-%s-%d.xml", t.name, t.runIndex+1)
+	jsonOutput := fmt.Sprintf("_test/json/report-%s-%d.json", t.name, t.runIndex+1)
 	if *docker {
 		junitOutput = path.Join("/tmp/src", junitOutput)
+		jsonOutput = path.Join("/tmp/src", jsonOutput)
 	}
 
 	testCmd := t.Command
@@ -217,6 +219,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		// https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 		"GRPC_ARG_HTTP2_MAX_PINGS_WITHOUT_DATA": "0",
 		"JUNIT_OUTPUT":                          junitOutput,
+		"JSON_OUTPUT":                           jsonOutput,
 		"PACKAGES":                              strings.Join(t.Packages, " "),
 		"VTROOT":                                "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":                            dataDir,
@@ -335,6 +338,11 @@ func main() {
 	junitDir := path.Join("_test", "junit")
 	if err := os.MkdirAll(junitDir, os.FileMode(0o755)); err != nil {
 		log.Fatalf("Can't create junit directory: %v", err)
+	}
+
+	jsonDir := path.Join("_test", "json")
+	if err := os.MkdirAll(jsonDir, os.FileMode(0o755)); err != nil {
+		log.Fatalf("Can't create json directory: %v", err)
 	}
 
 	logFile, err := os.OpenFile(path.Join(outDir, "test.log"), os.O_RDWR|os.O_CREATE, 0o0644)
