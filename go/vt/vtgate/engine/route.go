@@ -129,6 +129,20 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 
 var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
+func (route *Route) findRoute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	// Resolve IN fallbacks while the evaluated tuples are still available, so
+	// routing and fallback bindings use the same values.
+	if route.NoRoutesSpecialHandling && route.Opcode == IN {
+		switch route.Vindex.(type) {
+		case vindexes.MultiColumn:
+			return route.inMultiCol(ctx, vcursor, bindVars, true)
+		default:
+			return route.in(ctx, vcursor, bindVars, true)
+		}
+	}
+	return route.RoutingParameters.findRoute(ctx, vcursor, bindVars)
+}
+
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)

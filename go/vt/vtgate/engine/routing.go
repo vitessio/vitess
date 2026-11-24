@@ -161,9 +161,9 @@ func (rp *RoutingParameters) findRoute(ctx context.Context, vcursor VCursor, bin
 	case IN:
 		switch rp.Vindex.(type) {
 		case vindexes.MultiColumn:
-			return rp.inMultiCol(ctx, vcursor, bindVars)
+			return rp.inMultiCol(ctx, vcursor, bindVars, false)
 		default:
-			return rp.in(ctx, vcursor, bindVars)
+			return rp.in(ctx, vcursor, bindVars, false)
 		}
 	case Between:
 		switch rp.Vindex.(type) {
@@ -457,21 +457,36 @@ func (rp *RoutingParameters) equalMultiCol(ctx context.Context, vcursor VCursor,
 	return rss, multiBindVars, nil
 }
 
-func (rp *RoutingParameters) in(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (rp *RoutingParameters) in(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, fallback bool) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
 	}
-	rss, values, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, value.TupleValues())
+	tuple := value.TupleValues()
+	rss, values, err := resolveShards(ctx, vcursor, rp.Vindex.(vindexes.SingleColumn), rp.Keyspace, tuple)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(rss) == 0 && fallback {
+		rss, _, err = rp.anyShard(ctx, vcursor, bindVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		protoValues := make([]*querypb.Value, len(tuple))
+		for i, value := range tuple {
+			protoValues[i] = sqltypes.ValueToProto(value)
+		}
+		values = make([][]*querypb.Value, len(rss))
+		for i := range values {
+			values[i] = protoValues
+		}
 	}
 	return rss, shardVars(bindVars, values), nil
 }
 
-func (rp *RoutingParameters) inMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	rowColValues, isSingleVal, err := generateRowColValues(ctx, vcursor, bindVars, rp.Values)
+func (rp *RoutingParameters) inMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, fallback bool) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rowColValues, columnValues, isSingleVal, err := generateRowColValues(ctx, vcursor, bindVars, rp.Values)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -479,6 +494,22 @@ func (rp *RoutingParameters) inMultiCol(ctx context.Context, vcursor VCursor, bi
 	rss, mapVals, err := resolveShardsMultiCol(ctx, vcursor, rp.Vindex.(vindexes.MultiColumn), rp.Keyspace, rowColValues, true /* shardIdsNeeded */)
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(rss) == 0 && fallback {
+		rss, _, err = rp.anyShard(ctx, vcursor, bindVars)
+		if err != nil {
+			return nil, nil, err
+		}
+		columns := make([][]*querypb.Value, len(columnValues))
+		for i, values := range columnValues {
+			for _, value := range values {
+				columns[i] = append(columns[i], sqltypes.ValueToProto(value))
+			}
+		}
+		mapVals = make([][][]*querypb.Value, len(rss))
+		for i := range mapVals {
+			mapVals[i] = columns
+		}
 	}
 	return rss, shardVarsMultiCol(bindVars, mapVals, isSingleVal), nil
 }
@@ -677,7 +708,7 @@ func shardVarsMultiCol(bv map[string]*querypb.BindVariable, mapVals [][][]*query
 	return shardVars
 }
 
-func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, map[int]any, error) {
+func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, values []evalengine.Expr) ([][]sqltypes.Value, [][]sqltypes.Value, map[int]any, error) {
 	// gather values from all the column in the vindex
 	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
@@ -686,16 +717,12 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		lv = result.TupleValues()
 		if lv == nil {
-			v, err := env.Evaluate(rvalue)
-			if err != nil {
-				return nil, nil, err
-			}
 			isSingleVal[colIdx] = nil
-			lv = []sqltypes.Value{v.Value(vcursor.ConnCollation())}
+			lv = []sqltypes.Value{result.Value(vcursor.ConnCollation())}
 		}
 		multiColValues = append(multiColValues, lv)
 	}
@@ -715,7 +742,7 @@ func generateRowColValues(ctx context.Context, vcursor VCursor, bindVars map[str
 	for idx := 1; idx < len(multiColValues); idx++ {
 		rowColValues = buildRowColValues(rowColValues, multiColValues[idx])
 	}
-	return rowColValues, isSingleVal, nil
+	return rowColValues, multiColValues, isSingleVal, nil
 }
 
 // buildRowColValues will take [1,2][1,3] as left input and [4,5] as right input
