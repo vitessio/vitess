@@ -668,6 +668,24 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	tw.Stop()
 }
 
+// grpcPortCheckingHealthCheck is a FakeHealthCheck that, like HealthCheckImpl,
+// skips tablets without a grpc port in AddTablet and ReplaceTablet.
+type grpcPortCheckingHealthCheck struct {
+	*FakeHealthCheck
+}
+
+func (hc *grpcPortCheckingHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
+	if !hasGRPCPort(tablet) {
+		return
+	}
+	hc.FakeHealthCheck.AddTablet(tablet)
+}
+
+func (hc *grpcPortCheckingHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
+	hc.RemoveTablet(old)
+	hc.AddTablet(new)
+}
+
 // TestNoRefreshKnownRetriesTabletWithoutGRPCPort covers a tablet that is first seen while
 // vttablet is shutting down: TabletManager.Close() clears the hostname and port map in topo,
 // so HealthCheck.AddTablet skips it. With refreshKnownTablets turned off, the TopologyWatcher
@@ -678,7 +696,7 @@ func TestNoRefreshKnownRetriesTabletWithoutGRPCPort(t *testing.T) {
 
 	ts := memorytopo.NewServer(ctx, "aa")
 	defer ts.Close()
-	fhc := NewFakeHealthCheck(nil)
+	fhc := &grpcPortCheckingHealthCheck{FakeHealthCheck: NewFakeHealthCheck(nil)}
 	defer fhc.Close()
 	tw := NewTopologyWatcher(t.Context(), ts, fhc, nil, "aa", 10*time.Minute, false /*refreshKnownTablets*/)
 
@@ -706,6 +724,9 @@ func TestNoRefreshKnownRetriesTabletWithoutGRPCPort(t *testing.T) {
 	require.NoError(t, err)
 
 	tw.loadTablets()
+
+	// Like HealthCheckImpl, the healthcheck skips the tablet because it has no grpc port.
+	assert.Empty(t, fhc.GetAllTablets())
 
 	// Simulate vttablet restarting and re-publishing its tablet record.
 	_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(tb *topodatapb.Tablet) error {
