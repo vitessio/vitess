@@ -298,6 +298,16 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	}
 }
 
+// evalToLengthInt64 converts a position or length argument to an int64.
+// Unlike a SIGNED cast, an unsigned value above MaxInt64 saturates instead of
+// wrapping to a negative number, as MySQL treats it as a very large length.
+func evalToLengthInt64(e eval) int64 {
+	if u, ok := e.(*evalUint64); ok && u.u > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return evalToInt64(e).i
+}
+
 func evalToInt64(e eval) *evalInt64 {
 	switch e := e.(type) {
 	case *evalInt64:
