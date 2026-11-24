@@ -1323,6 +1323,12 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
+	// MySQL returns NULL for an empty string, which it distinguishes from a
+	// string without digits such as ' '.
+	if b, ok := n.(*evalBytes); ok && len(b.bytes) == 0 {
+		return nil, nil
+	}
+
 	var u uint64
 	if b, ok := n.(*evalBytes); ok && b.isHexOrBitLiteral() {
 		nh, _ := b.toNumericHex()

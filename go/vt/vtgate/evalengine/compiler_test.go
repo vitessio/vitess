@@ -224,6 +224,29 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			// MySQL returns NULL for an empty string, but 0 for a blank one.
+			expression: "conv('', 10, 2) <=> null",
+			result:     "INT64(1)",
+		},
+		{
+			expression: "ifnull(bin(column0), 'n')",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("")},
+			result:     `VARCHAR("n")`,
+		},
+		{
+			expression: "ifnull(oct(binary column0), 'n')",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("")},
+			result:     `VARCHAR("n")`,
+		},
+		{
+			expression: "ifnull(conv(x'', 16, 10), 'n')",
+			result:     `VARCHAR("n")`,
+		},
+		{
+			expression: "conv(' ', 10, 2)",
+			result:     `VARCHAR("0")`,
+		},
+		{
 			// A NULL string operand must collapse both LOCATE operands before outer
 			// expressions consume the result.
 			expression: "null <=> locate('foo', column0)",
