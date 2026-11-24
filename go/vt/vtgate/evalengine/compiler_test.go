@@ -1063,6 +1063,18 @@ func TestCompilerSingle(t *testing.T) {
 			},
 			result: `INT64(1)`,
 		},
+		{
+			// LOWER keeps the explicit collation of its argument, so the mix with a binary
+			// value is text, as in MySQL.
+			expression: `CASE WHEN 1 THEN LOWER('a' COLLATE utf8mb4_0900_as_cs) ELSE CAST('b' AS BINARY) END`,
+			result:     `VARCHAR("a")`,
+		},
+		{
+			// and so does UPPER, for a binary column
+			expression: `CASE WHEN 1 THEN UPPER('a' COLLATE utf8mb4_0900_as_cs) ELSE column0 END`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("b"))},
+			result:     `VARCHAR("A")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

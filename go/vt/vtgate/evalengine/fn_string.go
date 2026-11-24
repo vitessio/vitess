@@ -690,7 +690,11 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newEvalRaw(changeCaseType(b.col.Collation), newcase, b.col), nil
+	res := newEvalRaw(changeCaseType(b.col.Collation), newcase, b.col)
+	// the result keeps the explicit collation of its argument, but is no longer a
+	// hex or bit literal
+	res.flag = b.flag & flagExplicitCollation
+	return res, nil
 }
 
 func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
@@ -703,7 +707,9 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	var col *collations.TypedCollation
 	var utf8Fallback bool
-	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag)}
+	// The result keeps the explicit collation of its argument, as in MySQL, and
+	// is no longer a hex or bit literal.
+	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag) | str.Flag&flagExplicitCollation}
 	switch {
 	case (str.Type == sqltypes.Enum || str.Type == sqltypes.Set) && str.Col.Collation != collations.Unknown:
 		// The labels of an ENUM or SET are in the character set of the column: keep

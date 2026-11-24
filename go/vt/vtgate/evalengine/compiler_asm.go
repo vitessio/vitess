@@ -2693,8 +2693,8 @@ func (asm *assembler) Fn_LUCASE(upcase bool, col *collations.TypedCollation, utf
 			str.bytes = newcase
 		}
 		str.tt = int16(changeCaseType(str.col.Collation))
-		// The result is no longer a hex or bit literal.
-		str.flag = 0
+		// The result is no longer a hex or bit literal, but keeps an explicit collation.
+		str.flag &= flagExplicitCollation
 		return 1
 	}, "FN "+name+" VARCHAR(SP-1)")
 }
