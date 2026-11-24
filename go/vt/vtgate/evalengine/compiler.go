@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"math"
 	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -282,10 +281,11 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 
 // compileToLengthInt64 is the compiled counterpart of evalToLengthInt64.
 func (c *compiler) compileToLengthInt64(ct ctype, offset int) ctype {
-	if ct.Type == sqltypes.Uint64 {
-		c.asm.Clamp_u(offset, math.MaxInt64)
+	if ct.Type == sqltypes.Int64 {
+		return ct
 	}
-	return c.compileToInt64(ct, offset)
+	c.asm.Convert_xl(offset)
+	return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 }
 
 func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
