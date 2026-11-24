@@ -247,20 +247,22 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 // TestChangeCaseCastHexLiteral checks that LOWER and UPPER of a hex or bit
 // literal that was cast to another type follow the conversion of that type: the
 // cast keeps the literal flag of its argument, which only holds for a binary
-// value.
+// value. It checks the type of the result, the one the compiler computes and the
+// one of the value, as well as its bytes.
 func TestChangeCaseCastHexLiteral(t *testing.T) {
 	venv := vtenv.NewTestEnv()
 
 	for _, tc := range []struct {
 		expression string
+		typ        sqltypes.Type
 		want       string
 	}{
-		{`LOWER(CAST(0x31 AS SIGNED))`, "49"},
-		{`UPPER(CAST(0x31 AS UNSIGNED))`, "49"},
-		{`LOWER(CAST(0x41 AS CHAR))`, "a"},
-		{`UPPER(CAST(0x61 AS CHAR))`, "A"},
-		{`LOWER(CAST(b'1000001' AS SIGNED))`, "65"},
-		{`LOWER(0x41)`, "A"},
+		{`LOWER(CAST(0x31 AS SIGNED))`, sqltypes.VarChar, "49"},
+		{`UPPER(CAST(0x31 AS UNSIGNED))`, sqltypes.VarChar, "49"},
+		{`LOWER(CAST(0x41 AS CHAR))`, sqltypes.VarChar, "a"},
+		{`UPPER(CAST(0x61 AS CHAR))`, sqltypes.VarChar, "A"},
+		{`LOWER(CAST(b'1000001' AS SIGNED))`, sqltypes.VarChar, "65"},
+		{`LOWER(0x41)`, sqltypes.VarBinary, "A"},
 	} {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
@@ -283,6 +285,15 @@ func TestChangeCaseCastHexLiteral(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.want, string(ast.v.ToRawBytes()), "bad value from eval engine")
 			require.Equal(t, tc.want, string(vm.v.ToRawBytes()), "bad value from compiler")
+
+			// the type of the value
+			require.Equal(t, tc.typ, ast.v.(*evalBytes).SQLType(), "bad type from eval engine")
+			require.Equal(t, tc.typ, vm.v.(*evalBytes).SQLType(), "bad type from compiler")
+
+			// and the static type the compiler computes for the expression
+			static, err := env.TypeOf(compiled)
+			require.NoError(t, err)
+			require.Equal(t, tc.typ, static.Type(), "bad static type from compiler")
 		})
 	}
 }
