@@ -596,9 +596,19 @@ func changeCaseType(col collations.ID) sqltypes.Type {
 	return sqltypes.VarChar
 }
 
-// isUTF8Collation reports whether the collation is one of utf8mb4 or utf8mb3,
-// whose text is valid UTF-8, so that Go's case mapping applies to it.
-func isUTF8Collation(id collations.ID) bool {
+// hasUnicaseFallback reports whether MySQL changes the case of text in the
+// collation with its default unicase table, which is the one of utf8mb4_bin,
+// although the collation has no case mapping in Vitess. That is the case of the
+// utf8mb4 and utf8mb3 collations other than the _unicode_520_ci and the _turkish_ci
+// ones, which have case mappings of their own in MySQL. A collation of another
+// character set is not one: the table is for UTF-8 text.
+func hasUnicaseFallback(id collations.ID) bool {
+	switch id {
+	case 201, 214, 233, 246:
+		// utf8mb3_turkish_ci, utf8mb3_unicode_520_ci, utf8mb4_turkish_ci and
+		// utf8mb4_unicode_520_ci
+		return false
+	}
 	switch colldata.Lookup(id).Charset().(type) {
 	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
 		return true
@@ -608,11 +618,10 @@ func isUTF8Collation(id collations.ID) bool {
 
 // changeCaseBytes changes the case of src using the case mapping of its
 // collation. With utf8Fallback, a collation without a case mapping of its own
-// uses the mapping of utf8mb4_bin, which is MySQL's default unicase table, the
-// one the utf8mb4 and utf8mb3 collations without a mapping of their own use in
-// MySQL. That is only right for valid utf8mb4 or utf8mb3 text, such as the text
-// of a number or a date, or the labels of an ENUM or SET column in one of those
-// collations.
+// uses the mapping of utf8mb4_bin, which is MySQL's default unicase table. That
+// is right for valid UTF-8 text, such as the text of a number or a date, and
+// for the labels of an ENUM or SET column in a collation that
+// hasUnicaseFallback.
 func changeCaseBytes(col collations.ID, src []byte, upcase, utf8Fallback bool) ([]byte, error) {
 	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
 	if !ok && utf8Fallback {
@@ -662,7 +671,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 		b = newEvalText(e.ToRawBytes(), col)
-		converted = isUTF8Collation(col.Collation)
+		converted = hasUnicaseFallback(col.Collation)
 
 	default:
 		b, err = evalToVarchar(e, call.collate, true)
@@ -697,7 +706,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xc(1, sqltypes.VarChar, str.Col.Collation, nil)
 		res.Size = 0
 		col = &res.Col
-		utf8Fallback = isUTF8Collation(str.Col.Collation)
+		utf8Fallback = hasUnicaseFallback(str.Col.Collation)
 	case str.isHexOrBitLiteral() && str.Flag&flagExplicitCollation == 0:
 		// A hex or bit literal, such as a bind variable the normalizer made out
 		// of one, is a binary value whatever collation its static type names,

@@ -152,7 +152,7 @@ func TestChangeCaseNumericRepertoire(t *testing.T) {
 // connection character set, and keep the collation of the column on the result,
 // in both the interpreter and the compiler, for a column the planner has a type
 // for and for one it has none for. A collation of utf8mb4 or utf8mb3 without a
-// case mapping of its own changes the case as Go does, instead of failing.
+// case mapping of its own changes the case as MySQL does, instead of failing.
 func TestChangeCaseEnumSetCollation(t *testing.T) {
 	venv := vtenv.NewTestEnv()
 
@@ -162,18 +162,29 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 		collation  collations.ID
 		expression string
 		in, out    string
+		// err is the error of both paths, when the case cannot be changed
+		err string
 	}{
 		// 0xC9 is E acute and 0xE9 is e acute in latin1, and neither is valid utf8mb4.
-		{"enum lower", sqltypes.Enum, 8, `LOWER(column0)`, "\xC9A", "\xE9a"},
-		{"enum upper", sqltypes.Enum, 8, `UPPER(column0)`, "\xE9a", "\xC9A"},
-		{"set lower", sqltypes.Set, 8, `LOWER(column0)`, "\xC9A,B", "\xE9a,b"},
-		{"set upper", sqltypes.Set, 8, `UPPER(column0)`, "\xE9a,b", "\xC9A,B"},
+		{"enum lower", sqltypes.Enum, 8, `LOWER(column0)`, "\xC9A", "\xE9a", ""},
+		{"enum upper", sqltypes.Enum, 8, `UPPER(column0)`, "\xE9a", "\xC9A", ""},
+		{"set lower", sqltypes.Set, 8, `LOWER(column0)`, "\xC9A,B", "\xE9a,b", ""},
+		{"set upper", sqltypes.Set, 8, `UPPER(column0)`, "\xE9a,b", "\xC9A,B", ""},
 		// utf8mb4_general_ci and utf8mb3_general_ci have no case mapping of their own
-		{"set upper utf8mb4_general_ci", sqltypes.Set, 45, `UPPER(column0)`, "ab,c", "AB,C"},
-		{"enum lower utf8mb3_general_ci", sqltypes.Enum, 33, `LOWER(column0)`, "AB", "ab"},
+		{"set upper utf8mb4_general_ci", sqltypes.Set, 45, `UPPER(column0)`, "ab,c", "AB,C", ""},
+		{"enum lower utf8mb3_general_ci", sqltypes.Enum, 33, `LOWER(column0)`, "AB", "ab", ""},
 		// the mapping is MySQL's unicase table, not Go's: U+0180 has no upper case in it
-		{"enum upper utf8mb4_general_ci non-ASCII", sqltypes.Enum, 45, `UPPER(column0)`, "ƀé", "ƀÉ"},
-		{"set lower utf8mb3_general_ci non-ASCII", sqltypes.Set, 33, `LOWER(column0)`, "É,ƀ", "é,ƀ"},
+		{"enum upper utf8mb4_general_ci non-ASCII", sqltypes.Enum, 45, `UPPER(column0)`, "ƀé", "ƀÉ", ""},
+		{"set lower utf8mb3_general_ci non-ASCII", sqltypes.Set, 33, `LOWER(column0)`, "É,ƀ", "é,ƀ", ""},
+		// MySQL has case mappings of its own for these collations, which the unicase
+		// table is not: there is none to use here, as for a VARCHAR
+		{"enum upper utf8mb4_unicode_520_ci", sqltypes.Enum, 246, `UPPER(column0)`, "ƀ", "", "not implemented"},
+		{"enum lower utf8mb4_turkish_ci", sqltypes.Enum, 233, `LOWER(column0)`, "I", "", "not implemented"},
+		{"set upper utf8mb3_unicode_520_ci", sqltypes.Set, 214, `UPPER(column0)`, "ƀ,ⱥ", "", "not implemented"},
+		{"set lower utf8mb3_turkish_ci", sqltypes.Set, 201, `LOWER(column0)`, "I,i", "", "not implemented"},
+		// the table is for UTF-8 text, not for the UTF-16 bytes of these labels
+		{"enum upper utf16_general_ci", sqltypes.Enum, 54, `UPPER(column0)`, "\x00a", "", "not implemented"},
+		{"set lower utf16_general_ci", sqltypes.Set, 54, `LOWER(column0)`, "\x00A", "", "not implemented"},
 	} {
 		for _, typed := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s/typed=%v", tc.name, typed), func(t *testing.T) {
@@ -202,11 +213,26 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 				}
 
 				ast, err := env.EvaluateAST(converted)
-				require.NoError(t, err)
-				require.Equal(t, tc.out, string(ast.v.(*evalBytes).bytes), "bad value from eval engine")
-				require.Equal(t, want, ast.v.(*evalBytes).col, "bad collation from eval engine")
+				if tc.err != "" {
+					require.ErrorContains(t, err, tc.err, "bad error from eval engine")
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tc.out, string(ast.v.(*evalBytes).bytes), "bad value from eval engine")
+					require.Equal(t, want, ast.v.(*evalBytes).col, "bad collation from eval engine")
+				}
 
-				vm, err := env.Evaluate(converted)
+				// An expression that could not be typed ahead of time is compiled
+				// with the types of the row.
+				if untyped, ok := converted.(*UntypedExpr); ok {
+					converted, err = untyped.Compile(env)
+					require.NoError(t, err)
+				}
+				require.IsType(t, &CompiledExpr{}, converted)
+				vm, err := env.EvaluateVM(converted.(*CompiledExpr))
+				if tc.err != "" {
+					require.ErrorContains(t, err, tc.err, "bad error from compiler")
+					return
+				}
 				require.NoError(t, err)
 				require.Equal(t, tc.out, string(vm.v.(*evalBytes).bytes), "bad value from compiler")
 				require.Equal(t, want, vm.v.(*evalBytes).col, "bad collation from compiler")
