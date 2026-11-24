@@ -118,11 +118,11 @@ func TestUnionSortMetadataStatement(t *testing.T) {
 	vschema := loadSchema(t, "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(t, err)
-	statement, err := env.Parser().Parse("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t group by id for update")
+	statement, err := env.Parser().Parse("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t for update")
 	require.NoError(t, err)
 	route := &engine.Route{
 		QueryStatement: statement,
-		FieldQuery:     "select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t where 1 != 1 group by id",
+		FieldQuery:     "select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t where 1 != 1",
 	}
 	query, err := unionSortCollationQuery(&plancontext.PlanningContext{VSchema: vw}, route, []int{0})
 	require.NoError(t, err)
@@ -137,4 +137,25 @@ func TestUnionSortMetadataStatement(t *testing.T) {
 	assert.Equal(t, metadata.Query, sqlparser.String(metadata.QueryStatement), "replica warming must use the metadata statement")
 	assert.Equal(t, sqlparser.NoLock, metadata.QueryStatement.(*sqlparser.Select).Lock)
 	assert.Equal(t, sqlparser.ForUpdateLock, statement.(*sqlparser.Select).Lock, "leave the data route untouched")
+}
+
+func TestUnionSortExcludesRowShapingRoutes(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	for _, query := range []string{
+		"select name from unsharded group by id",
+		"select distinct name from unsharded",
+		"select name from (select name from unsharded group by id) t",
+		"select name from unsharded union all select name from user",
+	} {
+		t.Run(query, func(t *testing.T) {
+			route := &engine.Route{FieldQuery: query}
+			metadata, err := unionSortCollationQuery(&plancontext.PlanningContext{VSchema: vw}, route, []int{0})
+			require.NoError(t, err)
+			assert.Nil(t, metadata, "avoid probes and added keys that alter grouping or duplicate equality")
+			assert.Equal(t, query, route.FieldQuery)
+		})
+	}
 }

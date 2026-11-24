@@ -19,16 +19,12 @@ package engine
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // resolveUnionCollations asks MySQL about expression collations rather than
@@ -126,7 +122,7 @@ func mergeUnionSortCollations(env *collations.Environment, left, right collation
 		}
 		return collations.TypedCollation{Collation: binary, Coercibility: collations.CoerceNone, Repertoire: left.Repertoire | right.Repertoire}, nil
 	}
-	if leftCS == "binary" && left.Coercibility <= right.Coercibility || rightCS == "binary" && right.Coercibility < left.Coercibility {
+	if leftCS == "binary" && left.Coercibility <= right.Coercibility || rightCS == "binary" && right.Coercibility > left.Coercibility {
 		return left, nil
 	}
 	if rightCS == "binary" && right.Coercibility <= left.Coercibility || leftCS == "binary" && left.Coercibility > right.Coercibility {
@@ -159,66 +155,4 @@ func mergeUnionSortCollations(env *collations.Environment, left, right collation
 		return right, nil
 	}
 	return collations.TypedCollation{}, fmt.Errorf("Illegal mix of collations (%d,%s) and (%d,%s)", left.Collation, left.Coercibility, right.Collation, right.Coercibility)
-}
-
-type unionSortKey struct {
-	column   int
-	from, to colldata.Collation
-}
-
-// prepareUnionSort compares original UNION values under the common collation.
-// Temporary keys are encoded in that collation's charset; original values and
-// their wire encoding remain intact for the caller.
-func prepareUnionSort(orderBy evalengine.Comparison, fields []*querypb.Field, resolved []collations.TypedCollation) (evalengine.Comparison, []*querypb.Field, []unionSortKey, error) {
-	orderBy = slices.Clone(orderBy)
-	fields = slices.Clone(fields)
-	width := len(fields)
-	var keys []unionSortKey
-	for i := range resolved {
-		order := &orderBy[i]
-		if order.Col < 0 || order.Col >= width {
-			return nil, nil, nil, vterrors.VT13001("UNION ordering column is outside the result")
-		}
-		field := fields[order.Col]
-		order.Type = evalengine.NewTypeFromField(field)
-		order.WeightStringCol = -1
-		if !sqltypes.IsText(field.Type) {
-			continue
-		}
-		from := colldata.Lookup(collations.ID(field.Charset))
-		to := colldata.Lookup(resolved[i].Collation)
-		if from == nil || to == nil {
-			return nil, nil, nil, vterrors.VT12001("UNION ordering requires supported result and expression collations")
-		}
-		keys = append(keys, unionSortKey{column: order.Col, from: from, to: to})
-		order.Col = len(fields)
-		order.Type = evalengine.NewType(field.Type, resolved[i].Collation)
-		fields = append(fields, &querypb.Field{Name: field.Name, Type: field.Type, Charset: uint32(resolved[i].Collation)})
-	}
-	return orderBy, fields, keys, nil
-}
-
-func appendUnionSortKeys(row sqltypes.Row, keys []unionSortKey) (sqltypes.Row, error) {
-	if len(keys) == 0 {
-		return row, nil
-	}
-	out := make(sqltypes.Row, len(row), len(row)+len(keys))
-	copy(out, row)
-	for _, key := range keys {
-		value := row[key.column]
-		if value.IsNull() {
-			out = append(out, sqltypes.NULL)
-			continue
-		}
-		data := value.Raw()
-		if key.from.Charset().Name() != key.to.Charset().Name() && key.to.ID() != collations.CollationBinaryID {
-			var err error
-			data, err = charset.Convert(nil, key.to.Charset(), data, key.from.Charset())
-			if err != nil {
-				return nil, vterrors.Wrapf(vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, err.Error()), "converting UNION sort key")
-			}
-		}
-		out = append(out, sqltypes.MakeTrusted(value.Type(), data))
-	}
-	return out, nil
 }

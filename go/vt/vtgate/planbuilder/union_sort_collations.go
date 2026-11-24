@@ -37,7 +37,7 @@ func addUnionSortCollationQueries(ctx *plancontext.PlanningContext, sort *engine
 	}
 	needed := false
 	for _, order := range sort.OrderBy {
-		needed = needed || order.Type.Type() == sqltypes.Unknown || sqltypes.IsText(order.Type.Type())
+		needed = needed || order.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(order.Type.Type())
 	}
 	if !needed {
 		return nil
@@ -102,6 +102,23 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		selectStmt, ok := statement.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.VT13001("UNION sort input is not a SELECT")
+		}
+		// Adding mandatory probes or hidden keys must not change GROUP BY
+		// validation, DISTINCT equality, or a locally merged UNION's semantics.
+		supported := true
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *sqlparser.Union:
+				supported = false
+			case *sqlparser.Select:
+				if node.GroupBy != nil || node.Distinct {
+					supported = false
+				}
+			}
+			return supported, nil
+		}, selectStmt)
+		if !supported {
+			return nil, nil
 		}
 		selectStmt.SetLimit(&sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("0")})
 		selectStmt.SetLock(sqlparser.NoLock)

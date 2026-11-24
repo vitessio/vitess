@@ -598,15 +598,27 @@ func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
 		return "", false
 	}
 
-	lock := sel.GetLock()
-	if lock != sqlparser.ForUpdateLock &&
-		lock != sqlparser.ForUpdateLockNoWait &&
-		lock != sqlparser.ForUpdateLockSkipLocked {
+	forUpdate := func(lock sqlparser.Lock) bool {
+		return lock == sqlparser.ForUpdateLock || lock == sqlparser.ForUpdateLockNoWait || lock == sqlparser.ForUpdateLockSkipLocked
+	}
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if block, ok := node.(sqlparser.SelectStatement); ok && forUpdate(block.GetLock()) {
+			found = true
+		}
+		return !found, nil
+	}, sel)
+	if !found {
 		return "", false
 	}
 
 	clonedSel := sqlparser.CloneSelectStatement(sel)
-	clonedSel.SetLock(sqlparser.NoLock)
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if block, ok := node.(sqlparser.SelectStatement); ok && forUpdate(block.GetLock()) {
+			block.SetLock(sqlparser.NoLock)
+		}
+		return true, nil
+	}, clonedSel)
 
 	return sqlparser.String(clonedSel), true
 }

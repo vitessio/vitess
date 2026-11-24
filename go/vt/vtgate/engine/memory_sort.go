@@ -21,12 +21,15 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -60,24 +63,21 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if err != nil {
 		return nil, err
 	}
-	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
+	input, err := ms.unionSortInput(resolved, vcursor.Environment().CollationEnv())
+	if err != nil {
+		return nil, err
+	}
+	result, err := vcursor.ExecutePrimitive(ctx, input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
 	orderBy := ms.OrderBy
-	width := len(result.Fields)
+	width := len(result.Fields) - len(resolved)
 	if len(resolved) > 0 {
-		var keys []unionSortKey
-		orderBy, result.Fields, keys, err = prepareUnionSort(orderBy, result.Fields, resolved)
+		orderBy, err = unionSortComparison(orderBy, result.Fields, width)
 		if err != nil {
 			return nil, err
-		}
-		for i, row := range result.Rows {
-			result.Rows[i], err = appendUnionSortKeys(row, keys)
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 	if err = orderBy.SortResult(result); err != nil {
@@ -105,9 +105,15 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	var keys []unionSortKey
+	input, err := ms.unionSortInput(resolved, vcursor.Environment().CollationEnv())
+	if err != nil {
+		return err
+	}
 	var width int
 	cb := func(qr *sqltypes.Result) error {
+		if len(resolved) > 0 {
+			qr = qr.Truncate(width)
+		}
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
@@ -117,14 +123,14 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	}
 
 	var mu sync.Mutex
-	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
 			if len(resolved) > 0 {
-				width = len(qr.Fields)
+				width = len(qr.Fields) - len(resolved)
 				var err error
-				sorter.Compare, _, keys, err = prepareUnionSort(ms.OrderBy, qr.Fields, resolved)
+				sorter.Compare, err = unionSortComparison(ms.OrderBy, qr.Fields, width)
 				if err != nil {
 					return err
 				}
@@ -134,11 +140,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 			}
 		}
 		for _, row := range qr.Rows {
-			keyed, err := appendUnionSortKeys(row, keys)
-			if err != nil {
-				return err
-			}
-			sorter.Push(keyed)
+			sorter.Push(row)
 		}
 		if vcursor.ExceedsMaxMemoryRows(sorter.Len()) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
@@ -148,13 +150,28 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	rows := sorter.Sorted()
-	if len(keys) > 0 {
-		for i := range rows {
-			rows[i] = rows[i][:width]
+	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
+}
+
+// Concatenate can aggregate TEXT to Blob. The server-generated binary key
+// captures the common collation independently of that result type and of any
+// lossy character_set_results conversion. Numeric values keep numeric ordering.
+func unionSortComparison(orderBy evalengine.Comparison, fields []*querypb.Field, width int) (evalengine.Comparison, error) {
+	orderBy = slices.Clone(orderBy)
+	for i := range orderBy {
+		order := &orderBy[i]
+		if order.Col < 0 || order.Col >= width {
+			return nil, vterrors.VT13001("UNION ordering column is outside the result")
+		}
+		field := fields[order.Col]
+		order.Type = evalengine.NewTypeFromField(field)
+		order.WeightStringCol = -1
+		if sqltypes.IsTextOrBinary(field.Type) {
+			order.Col = width + i
+			order.Type = evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID)
 		}
 	}
-	return cb(&sqltypes.Result{Rows: rows})
+	return orderBy, nil
 }
 
 // GetFields satisfies the Primitive interface.

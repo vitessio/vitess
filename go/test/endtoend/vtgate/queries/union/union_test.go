@@ -120,6 +120,7 @@ func TestUnionOrderByCollationReviewCases(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			for _, arms := range [][2]string{
 				{"select convert('All' using big5) as name from union_collations where id = 1", "select name_general collate utf8mb4_0900_ai_ci as name from union_collations where id = 4"},
+				{"select convert(0xa4a4 using big5) as name from union_collations where id = 1", "select name_general collate utf8mb4_0900_ai_ci as name from union_collations where id = 4"},
 				{"select name_ascii as name from union_collations where id = 1", "select name_latin1 as name from union_collations where id = 4"},
 			} {
 				for _, reverse := range []bool{false, true} {
@@ -132,10 +133,104 @@ func TestUnionOrderByCollationReviewCases(t *testing.T) {
 					}
 				}
 			}
-			// The metadata SELECT must inherit statement-scoped sql_mode,
-			// even though its expression probes nest the arm in subqueries.
-			mcmp.Exec("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ 'All' as name from union_collations where id = 1 union all select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ name_general as name from union_collations where id = 4 group by name_bin order by name")
+			// Grouped arms keep their existing execution path and hints.
+			mcmp.Exec("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ 'All' collate utf8mb4_general_ci as name from union_collations where id = 1 union all select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ name_general as name from union_collations where id = 4 group by name_bin order by name")
 		})
+	}
+}
+
+func TestUnionOrderByCollationInputs(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	for _, workload := range []string{"oltp", "olap"} {
+		for _, name := range []string{"text", "blob", "grouped", "binary_precedence", "null"} {
+			t.Run(workload+"/"+name, func(t *testing.T) {
+				mcmp, closer := start(t)
+				t.Cleanup(closer)
+				mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+				utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+				mcmp.Exec("insert into union_collations(id,name_general,name_bin,name_text,name_blob) values (1,'a','é','a','a'),(4,'B','z','B','B')")
+				column := "name_text"
+				switch name {
+				case "blob":
+					column = "name_blob"
+				case "grouped", "null":
+					column = "name_general"
+				case "binary_precedence":
+					column = "name_blob"
+				}
+				left := "select " + column + " as name from union_collations where id = 1"
+				right := "select " + column + " as name from union_collations where id = 4"
+				if name == "grouped" {
+					right += " group by name_bin"
+				}
+				if name == "binary_precedence" {
+					left = "select convert('All' using big5) as name from union_collations where id = 1"
+				}
+				if name == "null" {
+					left = "select null as name from union_collations where id = 1"
+				}
+				for _, arms := range []string{left + " union all " + right, right + " union all " + left} {
+					for _, order := range []string{"asc", "desc"} {
+						query := arms + " order by name " + order
+						if name != "text" && name != "null" {
+							mcmp.Exec(query)
+							continue
+						}
+						// Check ordering and NULLs independently of UNION field
+						// type aggregation (which exposes TEXT as Blob).
+						vt, my := utils.Exec(t, mcmp.VtConn, query), utils.Exec(t, mcmp.MySQLConn, query)
+						require.Len(t, vt.Fields, 1)
+						require.Len(t, vt.Rows, len(my.Rows))
+						for i := range my.Rows {
+							assert.Equal(t, my.Rows[i][0].IsNull(), vt.Rows[i][0].IsNull())
+							assert.Equal(t, my.Rows[i][0].ToString(), vt.Rows[i][0].ToString())
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestUnionOrderByLossyBackendResults(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+	mcmp.Exec("insert into union_collations(id,name_bin) values (1,convert(0xc3a9 using utf8mb4)),(4,'z')")
+	// VTGate ignores SET character_set_results. Change the isolated tablets'
+	// backend connection charset instead, and restore it before other tests.
+	t.Cleanup(func() { assert.NoError(t, clusterInstance.WaitForTabletsToHealthyInVtgate()) })
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			process := tablet.VttabletProcess
+			previous := process.Charset
+			require.NoError(t, process.TearDown())
+			process.Charset = "ascii"
+			t.Cleanup(func() {
+				assert.NoError(t, process.TearDown())
+				process.Charset = previous
+				assert.NoError(t, process.Setup())
+				assert.NoError(t, process.WaitForTabletStatus("SERVING"))
+			})
+			require.NoError(t, process.Setup())
+			require.NoError(t, process.WaitForTabletStatus("SERVING"))
+		}
+	}
+	require.NoError(t, clusterInstance.WaitForTabletsToHealthyInVtgate())
+	utils.Exec(t, mcmp.MySQLConn, "set character_set_results=ascii")
+	probe := utils.Exec(t, mcmp.VtConn, "select name_bin from union_collations where id=1")
+	require.Equal(t, "?", probe.Rows[0][0].ToString(), "the regression must use genuinely lossy backend bytes")
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload="+workload)
+		left := "select name_bin as name from union_collations where id=1"
+		right := "select name_bin as name from union_collations where id=4"
+		for _, arms := range []string{left + " union all " + right, right + " union all " + left} {
+			result := mcmp.Exec(arms + " order by name asc limit 1")
+			require.Equal(t, "z", result.Rows[0][0].ToString())
+			result = mcmp.Exec(arms + " order by name desc limit 1")
+			require.Equal(t, "?", result.Rows[0][0].ToString(), "keep the result encoding separate from the key")
+		}
 	}
 }
 
