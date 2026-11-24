@@ -267,6 +267,7 @@ type mysqlCode struct {
 }
 
 var stateToMysqlCode = map[vterrors.State]mysqlCode{
+	vterrors.CantAggregateCollations:             {num: ERCantAggregateNCollations, state: SSUnknownSQLState},
 	vterrors.Undefined:                           {num: ERUnknownError, state: SSUnknownSQLState},
 	vterrors.AccessDeniedError:                   {num: ERAccessDeniedError, state: SSAccessDeniedError},
 	vterrors.BadDb:                               {num: ERBadDb, state: SSClientError},

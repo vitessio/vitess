@@ -129,6 +129,8 @@ const (
 
 	UnsupportedSQLMode
 
+	CantAggregateCollations
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )

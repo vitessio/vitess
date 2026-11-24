@@ -577,6 +577,11 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		debugNoRewrite("limit push blocked: upper limit already set")
 		return in, NoRewrite
 	}
+	// A UNION's common comparator can differ from every arm's local
+	// comparison. Keep all arm rows until the global sort has resolved it.
+	if hasOrderingOverUnion(in.Source) {
+		return in, NoRewrite
+	}
 	in.Pushed = true
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
@@ -611,6 +616,25 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	TopDown(in.Source, TableID, visitor, shouldVisit)
 
 	return in, result
+}
+
+func hasOrderingOverUnion(op Operator) bool {
+	ordered := false
+	for {
+		switch op.(type) {
+		case *Route:
+			return false
+		case *Ordering:
+			ordered = true
+		case *Union:
+			return ordered
+		}
+		inputs := op.Inputs()
+		if len(inputs) != 1 {
+			return false
+		}
+		op = inputs[0]
+	}
 }
 
 // findOrderingInSourceChain walks down unary operators for an Ordering above a

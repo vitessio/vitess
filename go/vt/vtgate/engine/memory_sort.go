@@ -38,6 +38,11 @@ type MemorySort struct {
 	OrderBy    evalengine.Comparison
 	Input      Primitive
 
+	// CollationQueries resolve UNION expression collations and coercibilities
+	// without reading arm rows. Result-field collations can instead describe
+	// character_set_results and cannot establish a common UNION comparator.
+	CollationQueries []Primitive
+
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
@@ -51,13 +56,35 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
+	resolved, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
 	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ms.OrderBy.SortResult(result); err != nil {
+	orderBy := ms.OrderBy
+	width := len(result.Fields)
+	if len(resolved) > 0 {
+		var keys []unionSortKey
+		orderBy, result.Fields, keys, err = prepareUnionSort(orderBy, result.Fields, resolved)
+		if err != nil {
+			return nil, err
+		}
+		for i, row := range result.Rows {
+			result.Rows[i], err = appendUnionSortKeys(row, keys)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err = orderBy.SortResult(result); err != nil {
 		return nil, err
+	}
+	if len(resolved) > 0 {
+		result = result.Truncate(width)
 	}
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
@@ -74,6 +101,12 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return err
 	}
 
+	resolved, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
+	if err != nil {
+		return err
+	}
+	var keys []unionSortKey
+	var width int
 	cb := func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
@@ -88,12 +121,24 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		mu.Lock()
 		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
+			if len(resolved) > 0 {
+				width = len(qr.Fields)
+				var err error
+				sorter.Compare, _, keys, err = prepareUnionSort(ms.OrderBy, qr.Fields, resolved)
+				if err != nil {
+					return err
+				}
+			}
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
 		}
 		for _, row := range qr.Rows {
-			sorter.Push(row)
+			keyed, err := appendUnionSortKeys(row, keys)
+			if err != nil {
+				return err
+			}
+			sorter.Push(keyed)
 		}
 		if vcursor.ExceedsMaxMemoryRows(sorter.Len()) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
@@ -103,7 +148,13 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
+	rows := sorter.Sorted()
+	if len(keys) > 0 {
+		for i := range rows {
+			rows[i] = rows[i][:width]
+		}
+	}
+	return cb(&sqltypes.Result{Rows: rows})
 }
 
 // GetFields satisfies the Primitive interface.
@@ -113,7 +164,8 @@ func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 
 // Inputs returns the input to memory sort
 func (ms *MemorySort) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{ms.Input}, nil
+	inputs := append([]Primitive{ms.Input}, ms.CollationQueries...)
+	return inputs, nil
 }
 
 // NeedsTransaction implements the Primitive interface

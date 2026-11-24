@@ -450,6 +450,9 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 		})
 	}
 
+	if err := addUnionSortCollationQueries(ctx, prim); err != nil {
+		return nil, err
+	}
 	return prim, nil
 }
 

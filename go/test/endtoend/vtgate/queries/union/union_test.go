@@ -17,6 +17,7 @@ limitations under the License.
 package union
 
 import (
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -25,6 +26,89 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Backend result fields report character_set_results, which can differ from
+// the collation used by an arm's weight_string. Compare the complete SQL with
+// MySQL so a unit fixture with idealized field metadata cannot mask that case.
+func TestUnionOrderByMixedCollations(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+	mcmp.Exec("insert into union_collations(id, name_general, name_bin, name_latin1) values (1, 'unused', 'unused', 'unused'), (4, 'Mango', 'Mango', 'Ångström'), (5, 'Zed', 'Zed', 'Anders'), (6, 'a', 'apple', 'Örebro')")
+
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, column := range []string{"name_general", "name_bin", "name_latin1"} {
+				constant := "All"
+				if column == "name_latin1" {
+					constant = "Zed"
+				}
+				left := fmt.Sprintf("select '%s' as name from union_collations where id = 1", constant)
+				right := "select " + column + " as name from union_collations where id in (4, 5, 6)"
+				for _, arms := range []string{left + " union all " + right, right + " union all " + left} {
+					plan := utils.Exec(t, mcmp.VtConn, "vexplain plan "+arms+" order by name")
+					require.Contains(mcmp.AsT(), fmt.Sprint(plan.Rows), "Concatenate", "exercise separate UNION routes")
+					for _, suffix := range []string{"asc", "desc", "asc limit 1", "desc limit 1", "asc limit 1, 1"} {
+						mcmp.Exec(arms + " order by name " + suffix)
+					}
+				}
+			}
+			for _, second := range []string{"name_general", "name_bin", "name_latin1"} {
+				mcmp.Exec("select name_general as name from union_collations where id = 1 union all select " + second + " from union_collations where id in (4, 5, 6) order by name")
+			}
+			for _, coercibility := range []string{
+				"name_general collate utf8mb4_general_ci as name from union_collations where id = 1 union all select name_bin collate utf8mb4_bin from union_collations where id = 4",
+				"name_general as name from union_collations where id = 1 union all select convert(name_general using utf8mb4) collate utf8mb4_unicode_ci from union_collations where id = 4",
+				"name_general as name from union_collations where id = 1 union all select cast(name_general as char character set utf8mb4) from union_collations where id = 4",
+			} {
+				_, _ = mcmp.ExecAllowAndCompareError("select "+coercibility+" order by name", utils.CompareOptions{})
+			}
+			// An empty column arm still determines the UNION's collation. Its
+			// binary collation orders B before a despite the connection collation.
+			result := mcmp.Exec("select 'a' as name from union_collations where id = 1 union all select 'B' from union_collations where id = 4 union all select name_bin from union_collations where id = 2 order by name")
+			require.Len(mcmp.AsT(), result.Rows, 2)
+			assert.Equal(mcmp.AsT(), "B", result.Rows[0][0].ToString())
+			assert.Equal(mcmp.AsT(), "a", result.Rows[1][0].ToString())
+		})
+	}
+}
+
+func TestUnionOrderByLookupCollations(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+	mcmp.Exec("insert into t1(id1, id2) values (4, 4), (5, 5), (6, 6)")
+	mcmp.Exec("insert into union_collations(id, name_general) values (1, 'unused'), (4, 'Mango'), (5, 'Zed'), (6, 'a')")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, predicate := range []string{"t.id2 = 4", "t.id2 in (4, 5, 6)", "t.id2 in (999)"} {
+				left := "select 'All' as name from union_collations where id = 1"
+				right := "select c.name_general as name from union_collations c join t1 t on t.id1 = c.id where " + predicate
+				for _, arms := range []string{left + " union all " + right, right + " union all " + left} {
+					plan := utils.Exec(t, mcmp.VtConn, "vexplain plan "+arms+" order by name")
+					require.Contains(mcmp.AsT(), fmt.Sprint(plan.Rows), "VindexLookup", "exercise a planable lookup arm")
+					mcmp.Exec(arms + " order by name")
+					mcmp.Exec(arms + " order by name desc limit 2")
+				}
+			}
+		})
+	}
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	utils.Exec(t, mcmp.VtConn, "set transaction_mode = 'SINGLE'")
+	t.Cleanup(func() {
+		_, _ = mcmp.ExecAndIgnore("rollback")
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set transaction_mode = 'MULTI'")
+	})
+	mcmp.Exec("begin")
+	// A lookup miss must resolve metadata on the transaction's existing
+	// shard. Opening an arbitrary different shard would fail SINGLE mode.
+	mcmp.Exec("select 'All' as name from union_collations where id = 4 union all select c.name_general from union_collations c join t1 t on t.id1 = c.id where t.id2 in (999) order by name")
+	mcmp.Exec("rollback")
+}
+
 func start(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
@@ -32,7 +116,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
+		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx", "union_collations"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
