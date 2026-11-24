@@ -62,6 +62,17 @@ func (env *Environment) LookupName(id ID) string {
 	return env.byID[id]
 }
 
+// PadSpace reports whether comparisons pad the shorter string with spaces.
+// The second result is false when this version's catalogue has no padding
+// metadata for the collation; callers must not treat that as NO PAD.
+func (env *Environment) PadSpace(id ID) (bool, bool) {
+	vi, ok := globalVersionInfo[id]
+	if !ok || vi.paddingknown&env.version == 0 {
+		return false, false
+	}
+	return vi.padspace&env.version != 0, true
+}
+
 // DefaultCollationForCharset returns the default collation for a charset
 func (env *Environment) DefaultCollationForCharset(charset string) ID {
 	if defaults, ok := env.byCharset[charset]; ok {

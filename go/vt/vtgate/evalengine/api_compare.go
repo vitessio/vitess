@@ -179,6 +179,11 @@ type (
 		Type Type
 
 		CollationEnv *collations.Environment
+
+		// PadSpaceWeight enables PAD SPACE comparison of server-generated binary
+		// keys using the source collation's space weight. Nil retains normal
+		// value comparison. It is set only on execution-local comparisons.
+		PadSpaceWeight []byte
 	}
 
 	Comparison []OrderByParams
@@ -210,9 +215,22 @@ func (obp *OrderByParams) String() string {
 func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 	v1 := r1[obp.Col]
 	v2 := r2[obp.Col]
-	cmp := v1.TinyWeightCmp(v2)
+	cmp := 0
+	if len(obp.PadSpaceWeight) != 0 {
+		switch {
+		case v1.IsNull() && v2.IsNull():
+		case v1.IsNull():
+			cmp = -1
+		case v2.IsNull():
+			cmp = 1
+		default:
+			cmp = comparePaddedWeights(v1.Raw(), v2.Raw(), obp.PadSpaceWeight)
+		}
+	} else {
+		cmp = v1.TinyWeightCmp(v2)
+	}
 
-	if cmp == 0 {
+	if cmp == 0 && len(obp.PadSpaceWeight) == 0 {
 		var err error
 		cmp, err = NullsafeCompare(v1, v2, obp.CollationEnv, obp.Type.Collation(), obp.Type.values)
 		if err != nil {
@@ -236,9 +254,38 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 	return cmp
 }
 
+// comparePaddedWeights virtually extends the shorter key with space weights.
+// Trimming trailing spaces would get prefixes followed by weights below SPACE
+// wrong; the original binary stream must remain intact.
+func comparePaddedWeights(a, b, space []byte) int {
+	common := min(len(a), len(b))
+	if cmp := bytes.Compare(a[:common], b[:common]); cmp != 0 {
+		return cmp
+	}
+	for i := common; i < max(len(a), len(b)); i++ {
+		x, y := space[(i-common)%len(space)], space[(i-common)%len(space)]
+		if i < len(a) {
+			x = a[i]
+		}
+		if i < len(b) {
+			y = b[i]
+		}
+		if x < y {
+			return -1
+		}
+		if x > y {
+			return 1
+		}
+	}
+	return 0
+}
+
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
 	weights := make([]tinyWeighter, 0, len(cmp))
 	for _, c := range cmp {
+		if len(c.PadSpaceWeight) != 0 {
+			continue
+		}
 		if apply := TinyWeighter(fields[c.Col], c.Type.Collation()); apply != nil {
 			weights = append(weights, tinyWeighter{c.Col, apply})
 		}

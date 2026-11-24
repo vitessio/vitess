@@ -58,7 +58,7 @@ func TestUnionSortCollationQueries(t *testing.T) {
 				assert.Equal(t, route.RoutingParameters, metadata.RoutingParameters, "keep the arm's destinations")
 				assert.NotContains(t, route.Query, ":__upper_limit", "resolve the global comparator before truncating arms")
 				assert.Contains(t, metadata.Query, "limit 0")
-				assert.Equal(t, 2*len(sort.OrderBy), strings.Count(metadata.Query, "(select c"))
+				assert.Equal(t, 2*len(sort.OrderBy), strings.Count(metadata.Query, "(select __union_sort.c"))
 				assert.Contains(t, metadata.Query, "coercibility(")
 				assert.False(t, metadata.NoRoutesSpecialHandling, "empty metadata routes must retain the shard-affine GetFields fallback")
 				assert.NotContains(t, metadata.Query, "::__vals", "metadata must work even when IN routing has no destinations")
@@ -110,7 +110,7 @@ func TestUnionSortCollationQueryWrappers(t *testing.T) {
 	metadata, err := unionSortCollationQuery(&plancontext.PlanningContext{VSchema: vw}, projection, []int{0})
 	require.NoError(t, err)
 	require.NotNil(t, metadata)
-	assert.Contains(t, metadata.(*engine.Route).Query, "select c1 from", "map projected offsets back to route columns")
+	assert.Contains(t, metadata.(*engine.Route).Query, "select __union_sort.c1 from", "map projected offsets back to route columns")
 }
 
 func TestUnionSortMetadataStatement(t *testing.T) {

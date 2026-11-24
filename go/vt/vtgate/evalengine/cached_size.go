@@ -192,7 +192,7 @@ func (cached *Comparison) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(56))
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(80))
 	for _, elem := range *cached {
 		size += elem.CachedSize(false)
 	}
@@ -427,12 +427,16 @@ func (cached *OrderByParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)
 	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
 	size += cached.CollationEnv.CachedSize(true)
+	// field PadSpaceWeight []byte
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PadSpaceWeight)))
+	}
 	return size
 }
 

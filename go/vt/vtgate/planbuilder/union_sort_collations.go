@@ -126,13 +126,19 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		for i := range columns {
 			columns[i] = fmt.Sprintf("c%d", i)
 		}
+		// Retain arm-local ordering metadata too: Route's shard merge runs
+		// before an arm-local LIMIT and must use that arm's own collation.
+		offsets = append([]int(nil), offsets...)
+		for _, order := range route.OrderBy {
+			offsets = append(offsets, order.Col)
+		}
 		arm := sqlparser.String(selectStmt)
 		var expressions []string
 		for _, offset := range offsets {
 			if offset < 0 || offset >= len(columns) {
 				return nil, vterrors.VT13001("UNION ordering column is outside its arm")
 			}
-			scalar := fmt.Sprintf("(select %s from (%s) as __union_sort(%s))", columns[offset], arm, strings.Join(columns, ", "))
+			scalar := fmt.Sprintf("(select __union_sort.%s from (%s) as __union_sort(%s))", columns[offset], arm, strings.Join(columns, ", "))
 			expressions = append(expressions, "collation("+scalar+")", "coercibility("+scalar+")")
 		}
 		query := "select " + strings.Join(expressions, ", ")
@@ -141,10 +147,7 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 			return nil, vterrors.Wrapf(err, "parsing UNION collation query")
 		}
 		outer := statement.(*sqlparser.Select)
-		comments := selectStmt.GetParsedComments()
-		for _, name := range comments.GetMySQLSetVarNames() {
-			outer.SetComments(outer.GetParsedComments().SetMySQLSetVarValue(name, comments.GetMySQLSetVarValue(name)))
-		}
+		outer.SetComments(selectStmt.GetParsedComments().MySQLStatementHints())
 		query = sqlparser.String(outer)
 		metadata := *route
 		metadata.Query, metadata.FieldQuery = query, query

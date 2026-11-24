@@ -1157,3 +1157,30 @@ func TestQueryTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestMySQLStatementHints(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		comments Comments
+		extra    []string
+		want     Comments
+	}{
+		{name: "nil"},
+		{name: "generated", extra: []string{"NO_MERGE(d)"}, want: Comments{"/*+ NO_MERGE(d) */"}},
+		{name: "scopes", comments: Comments{"/* ordinary */", "/*+ QB_NAME(q) MAX_EXECUTION_TIME(5) SET_VAR(sort_buffer_size=32768) RESOURCE_GROUP(`group)name`) NO_ICP(t) JOIN_ORDER(t) NO_MERGE(t) */"}, extra: []string{"NO_MERGE(d)"}, want: Comments{"/*+ MAX_EXECUTION_TIME(5) SET_VAR(sort_buffer_size=32768) RESOURCE_GROUP(`group)name`) NO_MERGE(d) */"}},
+		{name: "effective comment and duplicates", comments: Comments{"/*+ max_execution_time(5) MAX_EXECUTION_TIME(10) */", "/*+ SET_VAR(sort_buffer_size=999) */"}, want: Comments{"/*+ max_execution_time(5) MAX_EXECUTION_TIME(10) */"}},
+		{name: "quoted arguments", comments: Comments{"/*+ SET_VAR(a='x) y') SET_VAR(b=\"x) y\") RESOURCE_GROUP(`a``)b`) */"}, want: Comments{"/*+ SET_VAR(a='x) y') SET_VAR(b=\"x) y\") RESOURCE_GROUP(`a``)b`) */"}},
+		{name: "short comments", comments: Comments{"", "--", "/*+ NO_ICP(t) */"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var parsed *ParsedComments
+			if tc.comments != nil {
+				parsed = tc.comments.Parsed()
+			}
+			assert.Equal(t, tc.want, parsed.MySQLStatementHints(tc.extra...))
+			if parsed != nil {
+				assert.Equal(t, tc.comments, parsed.GetComments())
+			}
+		})
+	}
+}

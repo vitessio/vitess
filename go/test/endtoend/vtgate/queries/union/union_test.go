@@ -363,3 +363,47 @@ func TestUnion(t *testing.T) {
 	mcmp.AssertMatches(`(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 }
+
+// Output aliases must not redirect the generated arm's ORDER BY before its
+// Route merges shards and the arm-local Limit discards rows.
+func TestUnionOrderByAliasAndPadding(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+	mcmp.Exec("insert into union_collations(id,name_general) values (1,'z'),(2,'a'),(3,'y'),(4,'a '),(5,'a'),(6,'c'),(7,'a '),(8,'a')")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, alias := range []string{"c0", "c1", "`c0`"} {
+				for _, direction := range []string{"asc", "desc"} {
+					for _, limit := range []int{1, 2, 3} {
+						query := fmt.Sprintf("(select name_general as name, id as %s from union_collations order by name %s, id limit %d) union all select 'm', 99 from union_collations where id=1 order by name %s, 2", alias, direction, limit, direction)
+						plan := utils.Exec(t, mcmp.VtConn, "vexplain plan "+query)
+						if alias == "c0" && direction == "asc" && limit == 1 {
+							t.Logf("arm-local LIMIT plan: %v", plan.Rows)
+						}
+						for _, operator := range []string{"Concatenate", "Scatter", "Limit"} {
+							require.Contains(mcmp.AsT(), fmt.Sprint(plan.Rows), operator)
+						}
+						mcmp.Exec(query)
+					}
+				}
+			}
+
+			// The empty binary-collation arm changes the final comparator,
+			// while the first arm's LIMIT still follows its own PAD SPACE sort.
+			mcmp.Exec("(select name_general as name,id from union_collations order by name,id limit 2) union all select name_bin,id from union_collations where id=999 order by name,2")
+
+			for _, collation := range []string{"utf8mb4_general_ci", "utf8mb4_unicode_ci", "utf8mb4_0900_ai_ci", "utf8mb4_0900_as_cs", "utf8mb4_bin"} {
+				for _, direction := range []string{"asc", "desc"} {
+					left := "select name_general collate " + collation + " as name,id from union_collations where id in (2,7)"
+					right := "select name_general collate " + collation + ",id from union_collations where id in (4,8)"
+					for _, suffix := range []string{"", " limit 2", " limit 1,2"} {
+						mcmp.Exec(left + " union all " + right + " order by name " + direction + ",id" + suffix)
+					}
+				}
+			}
+		})
+	}
+}

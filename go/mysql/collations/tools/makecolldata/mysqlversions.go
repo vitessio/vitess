@@ -34,9 +34,11 @@ import (
 )
 
 type versionInfo struct {
-	id        uint
-	alias     map[string]byte
-	isdefault byte
+	id           uint
+	alias        map[string]byte
+	isdefault    byte
+	padspace     byte
+	paddingknown byte
 }
 
 type alias struct {
@@ -62,6 +64,7 @@ func makeversions(output string) {
 
 	charsets := make(map[string]string)
 	versioninfo := make(map[uint]*versionInfo)
+	padding := make(map[uint]bool)
 	for v, versionCsv := range versionfiles {
 		f, err := os.Open(versionCsv)
 		if err != nil {
@@ -89,6 +92,16 @@ func makeversions(output string) {
 			}
 
 			collname := cols[0]
+			if len(cols) > 6 {
+				switch cols[6] {
+				case "PAD SPACE":
+					padding[uint(collid)] = true
+				case "NO PAD":
+					padding[uint(collid)] = false
+				default:
+					log.Fatalf("unknown PAD_ATTRIBUTE: %q", cols[6])
+				}
+			}
 			vi.alias[collname] |= 1 << v
 			charsets[collname] = cols[1]
 
@@ -114,6 +127,21 @@ func makeversions(output string) {
 			}
 
 			row++
+		}
+	}
+
+	// Older catalogues predate PAD_ATTRIBUTE. Collation IDs shared with the
+	// MySQL 8 catalogue retain their padding policy, including MariaDB's
+	// renamed *_mysql561_* aliases. Leave version-specific IDs without
+	// metadata unknown rather than guessing from their names or ID ranges.
+	for _, vi := range versioninfo {
+		if pad, ok := padding[vi.id]; ok {
+			for _, mask := range vi.alias {
+				vi.paddingknown |= mask
+			}
+			if pad {
+				vi.padspace = vi.paddingknown
+			}
 		}
 	}
 
@@ -156,7 +184,7 @@ func makeversions(output string) {
 	// MySQL version onwards.
 	g.P("func charsetAliases() map[string]string { return ", fmt.Sprintf("%#v", CharsetAliases), "}")
 	g.P()
-	g.P("var globalVersionInfo = map[ID]struct{alias []collalias; isdefault collver}{")
+	g.P("var globalVersionInfo = map[ID]struct{alias []collalias; isdefault collver; padspace collver; paddingknown collver}{")
 
 	sorted := make([]*versionInfo, 0, len(versioninfo))
 	for _, vi := range versioninfo {
@@ -177,7 +205,7 @@ func makeversions(output string) {
 		for _, a := range reverse {
 			fmt.Fprintf(g, "{0b%08b, %q, %q},", a.mask, a.name, charsets[a.name])
 		}
-		fmt.Fprintf(g, "}, isdefault: 0b%08b},\n", vi.isdefault)
+		fmt.Fprintf(g, "}, isdefault: 0b%08b, padspace: 0b%08b, paddingknown: 0b%08b},\n", vi.isdefault, vi.padspace, vi.paddingknown)
 	}
 	g.P("}")
 

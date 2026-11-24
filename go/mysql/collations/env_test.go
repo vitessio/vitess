@@ -97,3 +97,28 @@ func TestIsKnownName(t *testing.T) {
 		require.Regexp(t, "^[a-z][a-z0-9_]*$", name)
 	}
 }
+
+func TestCollationPaddingMetadata(t *testing.T) {
+	for _, version := range []string{"5.6.51", "5.7.44", "8.0.46", "8.4.0", "9.0.0", "10.3.0-MariaDB"} {
+		t.Run(version, func(t *testing.T) {
+			env := NewEnvironment(version)
+			for _, name := range []string{"utf8_general_ci", "utf8mb4_general_ci", "utf8mb4_bin", "latin1_swedish_ci", "binary", "utf8mb4_0900_ai_ci"} {
+				id, _ := env.LookupID(name)
+				if id == Unknown {
+					continue
+				}
+				pad, known := env.PadSpace(id)
+				require.True(t, known, name)
+				require.Equal(t, name != "binary" && name != "utf8mb4_0900_ai_ci", pad, name)
+			}
+			for _, id := range env.AllCollationIDs() {
+				_, known := env.PadSpace(id)
+				require.True(t, known, env.LookupName(id))
+			}
+			_, known := env.PadSpace(Unknown)
+			require.False(t, known)
+			_, known = env.PadSpace(65535)
+			require.False(t, known)
+		})
+	}
+}

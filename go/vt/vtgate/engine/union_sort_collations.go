@@ -30,60 +30,74 @@ import (
 // resolveUnionCollations asks MySQL about expression collations rather than
 // inferring them from result fields, which describe character_set_results.
 // The zero-row scalar subqueries also preserve the coercibility of empty arms.
-func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bindVars map[string]*querypb.BindVariable) ([]collations.TypedCollation, error) {
+func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bindVars map[string]*querypb.BindVariable) ([]collations.TypedCollation, [][]collations.TypedCollation, error) {
 	if len(ms.CollationQueries) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	resolved := make([]collations.TypedCollation, len(ms.OrderBy))
+	arms := make([][]collations.TypedCollation, len(ms.CollationQueries))
 	env := vc.Environment().CollationEnv()
-	for _, query := range ms.CollationQueries {
+	for arm, query := range ms.CollationQueries {
 		// Request fields so an empty destination uses GetFields, which reuses
 		// the transaction's existing shard before choosing an arbitrary one.
 		result, err := vc.ExecutePrimitive(ctx, query, copyBindVars(bindVars), true)
 		if err != nil {
-			return nil, vterrors.Wrapf(err, "resolving UNION sort collations")
+			return nil, nil, vterrors.Wrapf(err, "resolving UNION sort collations")
 		}
 		if len(result.Rows) == 0 {
-			return nil, vterrors.VT13001("UNION collation query returned no metadata")
+			return nil, nil, vterrors.VT13001("UNION collation query returned no metadata")
 		}
 		for _, row := range result.Rows {
-			if len(row) != 2*len(resolved) {
-				return nil, vterrors.VT13001("UNION collation query returned an unexpected column count")
+			if len(row) < 2*len(resolved) || len(row)%2 != 0 {
+				return nil, nil, vterrors.VT13001("UNION collation query returned an unexpected column count")
 			}
-			for i := range resolved {
+			localCount := len(row)/2 - len(resolved)
+			if arms[arm] == nil {
+				arms[arm] = make([]collations.TypedCollation, localCount)
+			}
+			if len(arms[arm]) != localCount {
+				return nil, nil, vterrors.VT13001("UNION arm metadata has inconsistent ordering columns")
+			}
+			for i := 0; i < len(row)/2; i++ {
 				name := row[2*i].ToString()
 				id, _ := env.LookupID(name)
 				if id == collations.Unknown {
-					return nil, vterrors.VT12001("UNION ordering with unsupported collation " + name)
+					return nil, nil, vterrors.VT12001("UNION ordering with unsupported collation " + name)
 				}
 				coercibility, err := row[2*i+1].ToUint64()
 				if err != nil || coercibility > uint64(collations.CoerceIgnorable) {
-					return nil, vterrors.VT13001("UNION collation query returned invalid coercibility")
+					return nil, nil, vterrors.VT13001("UNION collation query returned invalid coercibility")
 				}
 				current := collations.TypedCollation{Collation: id, Coercibility: collations.Coercibility(coercibility), Repertoire: collations.RepertoireUnicode}
 				if cs, _ := env.ConnectionCharset(id); cs == "ascii" {
 					current.Repertoire = collations.RepertoireASCII
 				}
-				if !resolved[i].Valid() {
-					resolved[i] = current
+				var target *collations.TypedCollation
+				if i < len(resolved) {
+					target = &resolved[i]
+				} else {
+					target = &arms[arm][i-len(resolved)]
+				}
+				if !target.Valid() {
+					*target = current
 					continue
 				}
-				resolved[i], err = mergeUnionSortCollations(env, resolved[i], current)
+				*target, err = mergeUnionSortCollations(env, *target, current)
 				if err != nil {
-					return nil, vterrors.Wrapf(vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, err.Error()), "resolving UNION sort collation")
+					return nil, nil, vterrors.Wrapf(vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, err.Error()), "resolving UNION sort collation")
 				}
 			}
 		}
 	}
 	for _, collation := range resolved {
 		if collation.Coercibility == collations.CoerceNone {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, "Illegal mix of collations for operation 'UNION'")
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, "Illegal mix of collations for operation 'UNION'")
 		}
 		if colldata.Lookup(collation.Collation) == nil {
-			return nil, vterrors.VT12001(fmt.Sprintf("UNION ordering with unsupported collation ID %d", collation.Collation))
+			return nil, nil, vterrors.VT12001(fmt.Sprintf("UNION ordering with unsupported collation ID %d", collation.Collation))
 		}
 	}
-	return resolved, nil
+	return resolved, arms, nil
 }
 
 // Metadata aggregation does not compare or decode values. An unsupported arm
