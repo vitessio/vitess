@@ -330,6 +330,14 @@ func needParens(op, val Expr, left bool) bool {
 		return false
 	}
 
+	// In MySQL's grammar the left operand of IN, LIKE, REGEXP and MEMBER OF and the first two
+	// operands of BETWEEN are bit_expr, and the upper bound of BETWEEN is a predicate. An operand
+	// that is a comparison, IS, BETWEEN, NOT, AND, etc. must be parenthesised, otherwise it is
+	// re-parsed with a different structure.
+	if isPredicateOp(op) && valBinding >= P11 {
+		return true
+	}
+
 	if left {
 		// for left associative operators, if the value is to the left of the operator,
 		// we only need parens if the order is higher for the value expression
@@ -337,6 +345,20 @@ func needParens(op, val Expr, left bool) bool {
 	}
 
 	return valBinding >= opBinding
+}
+
+// isPredicateOp returns true for the operators that MySQL's grammar defines on bit_expr operands.
+func isPredicateOp(op Expr) bool {
+	switch node := op.(type) {
+	case *BetweenExpr, *MemberOfExpr:
+		return true
+	case *ComparisonExpr:
+		switch node.Operator {
+		case InOp, NotInOp, LikeOp, NotLikeOp, RegexpOp, NotRegexpOp:
+			return true
+		}
+	}
+	return false
 }
 
 func areBothISExpr(op Expr, val Expr) bool {
