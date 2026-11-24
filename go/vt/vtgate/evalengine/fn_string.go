@@ -609,7 +609,12 @@ func hasUnicaseFallback(id collations.ID) bool {
 		// utf8mb4_unicode_520_ci
 		return false
 	}
-	switch colldata.Lookup(id).Charset().(type) {
+	// Lookup has no collation for one that is known but not supported.
+	coll := colldata.Lookup(id)
+	if coll == nil {
+		return false
+	}
+	switch coll.Charset().(type) {
 	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
 		return true
 	}
@@ -707,10 +712,12 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 		res.Size = 0
 		col = &res.Col
 		utf8Fallback = hasUnicaseFallback(str.Col.Collation)
-	case str.isHexOrBitLiteral() && str.Flag&flagExplicitCollation == 0:
+	case str.Type == sqltypes.VarBinary && str.isHexOrBitLiteral() && str.Flag&flagExplicitCollation == 0:
 		// A hex or bit literal, such as a bind variable the normalizer made out
 		// of one, is a binary value whatever collation its static type names,
-		// unless a COLLATE clause names one explicitly.
+		// unless a COLLATE clause names one explicitly. A cast keeps the literal
+		// flag of its argument although the result is no longer binary: only a
+		// binary value takes this arm, any other converts as its type does.
 		res.Col = collationBinary
 	case str.isTextual():
 	case str.Type == sqltypes.TypeJSON:

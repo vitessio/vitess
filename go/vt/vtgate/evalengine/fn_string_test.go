@@ -182,6 +182,9 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 		{"enum lower utf8mb4_turkish_ci", sqltypes.Enum, 233, `LOWER(column0)`, "I", "", "not implemented"},
 		{"set upper utf8mb3_unicode_520_ci", sqltypes.Set, 214, `UPPER(column0)`, "ƀ,ⱥ", "", "not implemented"},
 		{"set lower utf8mb3_turkish_ci", sqltypes.Set, 201, `LOWER(column0)`, "I,i", "", "not implemented"},
+		// big5_chinese_ci is a known collation that Vitess does not support
+		{"enum upper unsupported collation", sqltypes.Enum, 1, `UPPER(column0)`, "a", "", "not implemented"},
+		{"set lower unsupported collation", sqltypes.Set, 1, `LOWER(column0)`, "A", "", "not implemented"},
 		// the table is for UTF-8 text, not for the UTF-16 bytes of these labels
 		{"enum upper utf16_general_ci", sqltypes.Enum, 54, `UPPER(column0)`, "\x00a", "", "not implemented"},
 		{"set lower utf16_general_ci", sqltypes.Set, 54, `LOWER(column0)`, "\x00A", "", "not implemented"},
@@ -238,5 +241,48 @@ func TestChangeCaseEnumSetCollation(t *testing.T) {
 				require.Equal(t, want, vm.v.(*evalBytes).col, "bad collation from compiler")
 			})
 		}
+	}
+}
+
+// TestChangeCaseCastHexLiteral checks that LOWER and UPPER of a hex or bit
+// literal that was cast to another type follow the conversion of that type: the
+// cast keeps the literal flag of its argument, which only holds for a binary
+// value.
+func TestChangeCaseCastHexLiteral(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	for _, tc := range []struct {
+		expression string
+		want       string
+	}{
+		{`LOWER(CAST(0x31 AS SIGNED))`, "49"},
+		{`UPPER(CAST(0x31 AS UNSIGNED))`, "49"},
+		{`LOWER(CAST(0x41 AS CHAR))`, "a"},
+		{`UPPER(CAST(0x61 AS CHAR))`, "A"},
+		{`LOWER(CAST(b'1000001' AS SIGNED))`, "65"},
+		{`LOWER(0x41)`, "A"},
+	} {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			cfg := &Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			}
+			compiled, err := Translate(expr, cfg)
+			require.NoError(t, err)
+			cfg.NoCompilation = true
+			interpreted, err := Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := EmptyExpressionEnv(venv)
+			ast, err := env.EvaluateAST(interpreted)
+			require.NoError(t, err)
+			vm, err := env.Evaluate(compiled)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, string(ast.v.ToRawBytes()), "bad value from eval engine")
+			require.Equal(t, tc.want, string(vm.v.ToRawBytes()), "bad value from compiler")
+		})
 	}
 }
