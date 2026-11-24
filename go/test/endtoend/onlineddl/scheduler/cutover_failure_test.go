@@ -17,6 +17,7 @@ limitations under the License.
 package scheduler
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -104,24 +105,20 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		}
 		return rs.Rows[0][0].ToString(), nil
 	}
-	// pollStage polls the migration stage every 5ms until pred holds, and
-	// returns the matching stage and the local time it was first observed.
-	// It does not fail the test itself, so that it can be used from goroutines.
-	pollStage := func(pred func(string) bool, timeout time.Duration) (string, time.Time, error) {
-		var last string
-		deadline := time.Now().Add(timeout)
-		for time.Now().Before(deadline) {
-			stage, err := readStage()
-			if err != nil {
-				return "", time.Time{}, err
+	// pollStage waits until the migration stage satisfies pred, and returns the
+	// matching stage and the local time it was first observed. It uses assert
+	// rather than require so that it is safe to call from a goroutine; callers
+	// on the test goroutine check ok.
+	pollStage := func(pred func(string) bool, timeout time.Duration) (stage string, seen time.Time, ok bool) {
+		ok = assert.Eventually(t, func() bool {
+			s, err := readStage()
+			if err != nil || !pred(s) {
+				return false
 			}
-			if pred(stage) {
-				return stage, time.Now(), nil
-			}
-			last = stage
-			time.Sleep(5 * time.Millisecond)
-		}
-		return "", time.Time{}, fmt.Errorf("timeout waiting for stage; last stage: %q", last)
+			stage, seen = s, time.Now()
+			return true
+		}, timeout, 5*time.Millisecond, "waiting for migration stage")
+		return stage, seen, ok
 	}
 	hasAnyPrefix := func(prefixes ...string) func(string) bool {
 		return func(stage string) bool {
@@ -150,7 +147,7 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	}
 	stalled := make(chan stallResult, 1)
 	go func() {
-		stage, _, err := pollStage(hasAnyPrefix(
+		stage, _, ok := pollStage(hasAnyPrefix(
 			"post-sentry pos reached",
 			"buffering queries",
 			"graceful wait for buffering",
@@ -159,6 +156,10 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 			"waiting for RENAME to block",
 			"RENAME found",
 		), extendedWaitTime)
+		var err error
+		if !ok {
+			err = errors.New("timed out waiting for the cut-over to pass the sentry wait")
+		}
 		if err == nil {
 			_, err = stallConn.ExecuteFetch("begin", 0, false)
 		}
@@ -185,8 +186,8 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	// LOCK TABLES is held and the RENAME is in flight from "RENAME found" on.
 	// Probe the original table from a third connection: this read blocks until
 	// the cut-over's LOCK TABLES is released.
-	lockedStage, _, err := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), extendedWaitTime)
-	require.NoError(t, err)
+	lockedStage, _, ok := pollStage(hasAnyPrefix("RENAME found", "reading post-lock pos", "waiting for post-lock pos"), extendedWaitTime)
+	require.True(t, ok)
 	t.Logf("tables locked, stage %q", lockedStage)
 	type probeResult struct {
 		at  time.Time
@@ -201,8 +202,8 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 
 	// The cut-over gives up here; this stage is written before the function
 	// returns and its deferred cleanup runs.
-	_, failedAt, err := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), extendedWaitTime)
-	require.NoError(t, err)
+	_, failedAt, ok := pollStage(hasAnyPrefix("timeout while waiting for post-lock pos"), extendedWaitTime)
+	require.True(t, ok)
 	var probe probeResult
 	select {
 	case probe = <-probeReleased:
@@ -219,5 +220,10 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 
+	// The probe must still have been blocked when the cut-over gave up (it was
+	// issued about one CutOverThreshold earlier); the negative slack only covers
+	// the stage-polling granularity. Otherwise the test would not have exercised
+	// the condition in its name.
+	require.Greater(t, heldAfterFailure, -time.Second, "probe was released before the cut-over gave up; the table lock was not held")
 	assert.Less(t, heldAfterFailure, time.Second, "original table stayed locked for %v after the cut-over gave up", heldAfterFailure)
 }

@@ -1269,7 +1269,10 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 	}
 	defer lockConnRestoreWaitTimeout()
 
-	renameCompleteChan := make(chan error)
+	// Buffered so that the RENAME goroutine can always deliver its result and
+	// exit, even when the cut-over has already returned (e.g. after a failed
+	// post-lock position wait) and nobody receives from the channel anymore.
+	renameCompleteChan := make(chan error, 1)
 	renameConn, err := e.pool.Get(ctx, nil)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed getting rename connection")
