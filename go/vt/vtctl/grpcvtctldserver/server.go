@@ -2824,7 +2824,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 		return nil, err
 	}
 
-	version, err := GetVersionFunc()(tablet.Addr())
+	version, err := GetVersionFunc()(ctx, tablet.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -5964,8 +5964,12 @@ func (s *VtctldServer) getTopologyCell(ctx context.Context, cellPath string, ver
 }
 
 // Helper function to get version of a tablet from its debug vars
-var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
-	resp, err := http.Get("http://" + tabletAddr + "/debug/vars")
+var getVersionFromTabletDebugVars = func(ctx context.Context, tabletAddr string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+tabletAddr+"/debug/vars", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -5995,13 +5999,13 @@ var (
 	getVersionFromTablet = getVersionFromTabletDebugVars
 )
 
-func SetVersionFunc(versionFunc func(string) (string, error)) {
+func SetVersionFunc(versionFunc func(context.Context, string) (string, error)) {
 	versionFuncMu.Lock()
 	defer versionFuncMu.Unlock()
 	getVersionFromTablet = versionFunc
 }
 
-func GetVersionFunc() func(string) (string, error) {
+func GetVersionFunc() func(context.Context, string) (string, error) {
 	versionFuncMu.Lock()
 	defer versionFuncMu.Unlock()
 	return getVersionFromTablet
