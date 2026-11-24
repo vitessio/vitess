@@ -112,3 +112,29 @@ func TestUnionSortCollationQueryWrappers(t *testing.T) {
 	require.NotNil(t, metadata)
 	assert.Contains(t, metadata.(*engine.Route).Query, "select c1 from", "map projected offsets back to route columns")
 }
+
+func TestUnionSortMetadataStatement(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	statement, err := env.Parser().Parse("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t group by id for update")
+	require.NoError(t, err)
+	route := &engine.Route{
+		QueryStatement: statement,
+		FieldQuery:     "select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') SET_VAR(sort_buffer_size=16384) NO_MERGE(t) */ name from unsharded t where 1 != 1 group by id",
+	}
+	query, err := unionSortCollationQuery(&plancontext.PlanningContext{VSchema: vw}, route, []int{0})
+	require.NoError(t, err)
+	metadata := query.(*engine.Route)
+	parsed, err := env.Parser().Parse(metadata.Query)
+	require.NoError(t, err)
+	outer := parsed.(*sqlparser.Select)
+	assert.Equal(t, "'NO_ENGINE_SUBSTITUTION'", outer.GetParsedComments().GetMySQLSetVarValue("sql_mode"))
+	assert.Equal(t, "16384", outer.GetParsedComments().GetMySQLSetVarValue("sort_buffer_size"))
+	assert.NotContains(t, sqlparser.String(outer.Comments), "NO_MERGE", "table-specific hints stay in their query block")
+	assert.Contains(t, metadata.Query, "NO_MERGE(t)")
+	assert.Equal(t, metadata.Query, sqlparser.String(metadata.QueryStatement), "replica warming must use the metadata statement")
+	assert.Equal(t, sqlparser.NoLock, metadata.QueryStatement.(*sqlparser.Select).Lock)
+	assert.Equal(t, sqlparser.ForUpdateLock, statement.(*sqlparser.Select).Lock, "leave the data route untouched")
+}

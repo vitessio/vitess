@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -55,8 +56,8 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 			}
 			for i := range resolved {
 				name := row[2*i].ToString()
-				id, found := env.LookupID(name)
-				if !found || colldata.Lookup(id) == nil {
+				id, _ := env.LookupID(name)
+				if id == collations.Unknown {
 					return nil, vterrors.VT12001("UNION ordering with unsupported collation " + name)
 				}
 				coercibility, err := row[2*i+1].ToUint64()
@@ -64,11 +65,14 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 					return nil, vterrors.VT13001("UNION collation query returned invalid coercibility")
 				}
 				current := collations.TypedCollation{Collation: id, Coercibility: collations.Coercibility(coercibility), Repertoire: collations.RepertoireUnicode}
+				if cs, _ := env.ConnectionCharset(id); cs == "ascii" {
+					current.Repertoire = collations.RepertoireASCII
+				}
 				if !resolved[i].Valid() {
 					resolved[i] = current
 					continue
 				}
-				resolved[i], _, _, err = colldata.Merge(env, resolved[i], current, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+				resolved[i], err = mergeUnionSortCollations(env, resolved[i], current)
 				if err != nil {
 					return nil, vterrors.Wrapf(vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, err.Error()), "resolving UNION sort collation")
 				}
@@ -79,8 +83,82 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 		if collation.Coercibility == collations.CoerceNone {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, "Illegal mix of collations for operation 'UNION'")
 		}
+		if colldata.Lookup(collation.Collation) == nil {
+			return nil, vterrors.VT12001(fmt.Sprintf("UNION ordering with unsupported collation ID %d", collation.Collation))
+		}
 	}
 	return resolved, nil
+}
+
+// Metadata aggregation does not compare or decode values. An unsupported arm
+// collation can therefore be coerced to a supported final comparator; only the
+// latter needs a local implementation. Use the normal merge for supported pairs.
+func mergeUnionSortCollations(env *collations.Environment, left, right collations.TypedCollation) (collations.TypedCollation, error) {
+	if colldata.Lookup(left.Collation) != nil && colldata.Lookup(right.Collation) != nil {
+		merged, _, _, err := colldata.Merge(env, left, right, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+		return merged, err
+	}
+	leftCS, _ := env.ConnectionCharset(left.Collation)
+	rightCS, _ := env.ConnectionCharset(right.Collation)
+	if left.Collation == right.Collation {
+		left.Coercibility = min(left.Coercibility, right.Coercibility)
+		left.Repertoire |= right.Repertoire
+		return left, nil
+	}
+	if left.Coercibility == collations.CoerceExplicit && right.Coercibility == collations.CoerceExplicit {
+		return collations.TypedCollation{}, fmt.Errorf("Illegal mix of explicit collations (%d,%d)", left.Collation, right.Collation)
+	}
+	if leftCS == rightCS {
+		switch {
+		case left.Coercibility < right.Coercibility:
+			left.Repertoire |= right.Repertoire
+			return left, nil
+		case right.Coercibility < left.Coercibility:
+			right.Repertoire |= left.Repertoire
+			return right, nil
+		}
+		binary, _ := env.LookupID(leftCS + "_bin")
+		switch binary {
+		case left.Collation:
+			return left, nil
+		case right.Collation:
+			return right, nil
+		}
+		return collations.TypedCollation{Collation: binary, Coercibility: collations.CoerceNone, Repertoire: left.Repertoire | right.Repertoire}, nil
+	}
+	if leftCS == "binary" && left.Coercibility <= right.Coercibility || rightCS == "binary" && right.Coercibility < left.Coercibility {
+		return left, nil
+	}
+	if rightCS == "binary" && right.Coercibility <= left.Coercibility || leftCS == "binary" && left.Coercibility > right.Coercibility {
+		return right, nil
+	}
+	// These are the charset/coercibility rules used by colldata.Merge. No
+	// conversion function is needed: result values arrive in the wire charset.
+	canConvert := func(to, from collations.TypedCollation, toCS, fromCS string) bool {
+		unicode := func(cs string) bool {
+			switch cs {
+			case "utf8", "utf8mb3", "utf8mb4", "ucs2", "utf16", "utf16le", "utf32":
+				return true
+			}
+			return false
+		}
+		if to.Coercibility <= from.Coercibility {
+			if toCS == "utf8mb4" || unicode(toCS) && (to.Coercibility < from.Coercibility || !unicode(fromCS)) {
+				return true
+			}
+			if from.Repertoire == collations.RepertoireASCII && (to.Coercibility < from.Coercibility || to.Repertoire == collations.RepertoireUnicode) {
+				return true
+			}
+		}
+		return to.Coercibility < from.Coercibility && from.Coercibility > collations.CoerceImplicit
+	}
+	if canConvert(left, right, leftCS, rightCS) {
+		return left, nil
+	}
+	if canConvert(right, left, rightCS, leftCS) {
+		return right, nil
+	}
+	return collations.TypedCollation{}, fmt.Errorf("Illegal mix of collations (%d,%s) and (%d,%s)", left.Collation, left.Coercibility, right.Collation, right.Coercibility)
 }
 
 type unionSortKey struct {

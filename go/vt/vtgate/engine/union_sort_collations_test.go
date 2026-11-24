@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -171,4 +172,48 @@ func TestUnionSortEmptyDestinationUsesExistingShard(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resolved, 1)
 	vc.ExpectLog(t, []string{"ExecuteMultiShard ks.20-: metadata {} false false"})
+}
+
+func TestUnionSortCollationCharsets(t *testing.T) {
+	fields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
+	for _, tc := range []struct {
+		name     string
+		operands []string
+		want     string
+	}{
+		{"unsupported arm", []string{"big5_chinese_ci|4", "utf8mb4_0900_ai_ci|0"}, "utf8mb4_0900_ai_ci"},
+		{"repeated unsupported arm", []string{"big5_chinese_ci|4", "big5_chinese_ci|4", "utf8mb4_0900_ai_ci|0"}, "utf8mb4_0900_ai_ci"},
+		{"ASCII column", []string{"ascii_general_ci|2", "latin1_swedish_ci|2"}, "latin1_swedish_ci"},
+	} {
+		for _, reverse := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/reverse=%t", tc.name, reverse), func(t *testing.T) {
+				sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}}
+				for i := range tc.operands {
+					if reverse {
+						i = len(tc.operands) - 1 - i
+					}
+					sort.CollationQueries = append(sort.CollationQueries, &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, tc.operands[i])}})
+				}
+				resolved, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+				require.NoError(t, err)
+				require.Len(t, resolved, 1)
+				assert.Equal(t, collations.MySQL8().LookupByName(tc.want), resolved[0].Collation)
+			})
+		}
+	}
+	t.Run("unsupported common comparator", func(t *testing.T) {
+		sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "big5_chinese_ci|2")}},
+		}}
+		_, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+		require.ErrorContains(t, err, "VT12001")
+	})
+}
+
+func TestUnionSortCachedSizeIncludesMetadata(t *testing.T) {
+	metadata := &Route{Query: "short"}
+	sort := &MemorySort{CollationQueries: []Primitive{metadata}}
+	before := sort.CachedSize(true)
+	metadata.Query = strings.Repeat("metadata", 1024)
+	assert.GreaterOrEqual(t, sort.CachedSize(true)-before, int64(len(metadata.Query)-64), "plan-cache cost must include retained metadata SQL")
 }

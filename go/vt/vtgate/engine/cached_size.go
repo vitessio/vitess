@@ -720,7 +720,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(96)
 	}
 	// field UpperLimit vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.UpperLimit.(cachedObject); ok {
@@ -736,6 +736,15 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	// field CollationQueries []vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.CollationQueries)) * int64(16))
+		for _, elem := range cached.CollationQueries {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	return size
 }

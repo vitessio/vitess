@@ -119,8 +119,19 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 			expressions = append(expressions, "collation("+scalar+")", "coercibility("+scalar+")")
 		}
 		query := "select " + strings.Join(expressions, ", ")
+		statement, err = ctx.VSchema.Environment().Parser().Parse(query)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "parsing UNION collation query")
+		}
+		outer := statement.(*sqlparser.Select)
+		comments := selectStmt.GetParsedComments()
+		for _, name := range comments.GetMySQLSetVarNames() {
+			outer.SetComments(outer.GetParsedComments().SetMySQLSetVarValue(name, comments.GetMySQLSetVarValue(name)))
+		}
+		query = sqlparser.String(outer)
 		metadata := *route
 		metadata.Query, metadata.FieldQuery = query, query
+		metadata.QueryStatement = outer
 		metadata.OrderBy = nil
 		metadata.TruncateColumnCount = 0
 		metadata.NoRoutesSpecialHandling = false

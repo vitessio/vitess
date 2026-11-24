@@ -109,6 +109,36 @@ func TestUnionOrderByLookupCollations(t *testing.T) {
 	mcmp.Exec("rollback")
 }
 
+func TestUnionOrderByCollationReviewCases(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("set names utf8mb4 collate utf8mb4_0900_ai_ci")
+	mcmp.Exec("insert into union_collations(id, name_general, name_latin1, name_ascii) values (1, 'All', 'Ångström', 'All'), (4, 'Mango', 'Anders', 'Mango')")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, arms := range [][2]string{
+				{"select convert('All' using big5) as name from union_collations where id = 1", "select name_general collate utf8mb4_0900_ai_ci as name from union_collations where id = 4"},
+				{"select name_ascii as name from union_collations where id = 1", "select name_latin1 as name from union_collations where id = 4"},
+			} {
+				for _, reverse := range []bool{false, true} {
+					left, right := arms[0], arms[1]
+					if reverse {
+						left, right = right, left
+					}
+					for _, order := range []string{"asc", "desc limit 1"} {
+						mcmp.Exec(left + " union all " + right + " order by name " + order)
+					}
+				}
+			}
+			// The metadata SELECT must inherit statement-scoped sql_mode,
+			// even though its expression probes nest the arm in subqueries.
+			mcmp.Exec("select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ 'All' as name from union_collations where id = 1 union all select /*+ SET_VAR(sql_mode='NO_ENGINE_SUBSTITUTION') */ name_general as name from union_collations where id = 4 group by name_bin order by name")
+		})
+	}
+}
+
 func start(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
