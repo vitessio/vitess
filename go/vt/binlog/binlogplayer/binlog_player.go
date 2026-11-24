@@ -583,7 +583,11 @@ func (blp *BinlogPlayer) setVReplicationState(state binlogdatapb.VReplicationWor
 	blp.blplStats.State.Store(state.String())
 	query := fmt.Sprintf("update _vt.vreplication set state=%v, message=%v where id=%v", encodeString(state.String()), encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
-		return fmt.Errorf("could not set state: %v: %v", query, err)
+		// Wrap the real failure, not the query: the query quotes the message,
+		// which may quote an earlier MySQL error carrying its own "(errno N)
+		// ... during query:" marker, and reading that marker would log the
+		// wrong mysql_errno for a failure that has nothing to do with it.
+		return fmt.Errorf("could not set state: %w", err)
 	}
 	return nil
 }

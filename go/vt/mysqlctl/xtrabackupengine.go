@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -815,15 +816,19 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// now extract the files by running xbstream
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
+		// The operator's --xbstream-restore-flags can hold an --encrypt-key, so
+		// the log line shows a placeholder for them instead.
+		loggedArgs := slices.Clone(flagsToExec)
 		if xbstreamRestoreFlags != "" {
 			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
 			if err != nil {
 				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
 			}
 			flagsToExec = append(flagsToExec, restoreFlags...)
+			loggedArgs = append(loggedArgs, "<--xbstream-restore-flags>")
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
-		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", redactEncryptKey(flagsToExec)))
+		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", loggedArgs))
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
@@ -961,56 +966,6 @@ func readStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandl
 	}
 
 	return files, nil
-}
-
-// redactEncryptKey returns a copy of xbstream's arguments with the value of
-// --encrypt-key (-k) replaced by "****". xbstream parses options like other
-// MySQL tools: "_" and "-" are the same in option names, any number of
-// "loose-", "skip-", "disable-", "enable-" and "maximum-" prefixes still set
-// the option, a value follows "=" or is the next argument, and in a group of
-// short options the first one that takes a value (-C, -d, -f or -k) takes the
-// rest of the group or the next argument.
-func redactEncryptKey(args []string) []string {
-	prefixes := []string{"loose-", "skip-", "disable-", "enable-", "maximum-"}
-	isEncryptKey := func(option string) bool {
-		name := strings.ReplaceAll(strings.TrimPrefix(option, "--"), "_", "-")
-		for {
-			trimmed := name
-			for _, prefix := range prefixes {
-				trimmed = strings.TrimPrefix(trimmed, prefix)
-			}
-			if trimmed == name {
-				return name == "encrypt-key"
-			}
-			name = trimmed
-		}
-	}
-	redacted := make([]string, len(args))
-	copy(redacted, args)
-	for i := 0; i < len(redacted); i++ {
-		arg := redacted[i]
-		valueIsNext := false
-		if option, _, hasValue := strings.Cut(arg, "="); strings.HasPrefix(arg, "--") {
-			if isEncryptKey(option) {
-				if hasValue {
-					redacted[i] = option + "=****"
-				} else {
-					valueIsNext = true
-				}
-			}
-		} else if j := strings.IndexAny(arg, "Cdfk"); strings.HasPrefix(arg, "-") && j > 0 && arg[j] == 'k' {
-			if j+1 < len(arg) {
-				redacted[i] = arg[:j+1] + "****"
-			} else {
-				valueIsNext = true
-			}
-		}
-		if valueIsNext && i+1 < len(redacted) {
-			i++
-			redacted[i] = "****"
-		}
-	}
-	return redacted
 }
 
 func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (written int64, err error) {

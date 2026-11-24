@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Log messages are becoming constant, with values in attributes](#log-constant-messages)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -30,10 +31,12 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
+        - [`vdiff update` changes tablet picker options on an existing VDiff](#vreplication-vdiff-update)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
         - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
+        - [Bounded memory for VStreamRows streams](#vreplication-vstream-memory-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -70,6 +73,8 @@
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
         - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
+        - [New `DDLCommitWait` type in the `Waits` timings](#vttablet-ddl-commit-wait-timings)
+        - [Replication initialization is serialized with reparents](#vttablet-replication-init-shard-lock)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -304,6 +309,27 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
 
+#### <a id="log-constant-messages"/>Log messages are becoming constant, with values in attributes</a>
+
+Log messages across Vitess are being converted to constant messages, with the values they used to contain, such as tablet aliases, keyspaces, tables, positions, queries and errors, in structured attributes ([#21323](https://github.com/vitessio/vitess/issues/21323)). This keeps row data and query text out of the message itself. Some components are converted in this release, and others will follow.
+
+With the default JSON log format, each attribute is a field next to `msg`. With `--log-format=text`, attributes follow the message as `key=value` pairs.
+
+Converted lines follow these conventions:
+
+- The message is a fixed sentence, and every value is in an attribute.
+- Errors are under `error`. Many lines that log a Vitess error also log its code, such as `INVALID_ARGUMENT`, under `error_code`.
+- Lines from a throttled logger carry the logger's name under `logger`, where it used to prefix the message. Their report of skipped lines is `skipped log messages`, with `logger` and `skipped`.
+- With the JSON format, attributes logged as durations are integer nanoseconds. The text format prints durations such as `1.5s`. With `--log-err-stacks` set, errors from `vterrors.New`, `Errorf`, `Wrap` and the like still include their stack traces when logged as attributes, in both formats; with the JSON format, `error` is then the error's text followed by its stack traces.
+
+When a converted line logs a MySQL error under `error`, the record also gets `mysql_errno`, MySQL's error number as an integer, so you can filter and alert on it without parsing `error` ([#21982](https://github.com/vitessio/vitess/pull/21982)). `mysql_errno` holds only the number. MySQL's error text is still logged under `error`, except that with `--queryserver-config-terse-errors`, vttablet's `Request failed` line can have `mysql_errno` and `sql_state` but no `error`. If an error passed between Vitess components as plain text, the number is read back out of that text. A client can influence that text, so the number can sometimes be wrong or missing. Use it for filtering and alerts, not as proof.
+
+Some attributes can contain user data, such as query text, row values, column definitions or error messages. If you send Vitess logs somewhere others can read them, consider dropping or redacting keys like `error`, `query`, `row`, `values`, `alter`, `stderr` and `message`. More examples are listed in the doc comment of `go/tools/logcheck/logcheck.go`. That list isn't complete either, so if you filter logs, keeping only keys you know are safe is safer than trying to block every unsafe one. Lines that aren't converted yet can still carry these values in `msg`. `tablet` and `error_code` don't carry user data. `keyspace` and `shard` don't carry row or query data, but they can contain names a client sent.
+
+**Impact**: alerts, dashboards, log searches, log-based rules and redaction rules that match on a line's old message text, or on a value inside it, stop matching once that line is converted. For example, `Error applying event for table <table> while processing position <position>: <error>` is now `Error applying event`, with `table`, `processing_position` and `error` attributes.
+
+**Migration**: if you search or alert on a log line's text, match on its new constant message and filter on its attributes instead. For example, search for the message `Error applying event` with `table` set to `users`, rather than for the text `Error applying event for table users`. The pull requests linked from [#21323](https://github.com/vitessio/vitess/issues/21323) list, in their Deployment Notes, the changed lines you're most likely to be matching on.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -373,6 +399,14 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 
 See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
 
+#### <a id="vreplication-vdiff-update"/>`vdiff update` changes tablet picker options on an existing VDiff</a>
+
+`vtctldclient vdiff ... update <uuid>` merges tablet types (`PRIMARY`, `REPLICA`, `RDONLY`) and cells into the stored `_vt.vdiff.options` tablet picker options on each target shard primary, without changing lastpk/progress or core/report options. Only stopped or completed VDiffs can be updated: if the VDiff is pending, started, or in the error state on an affected shard, or a live controller exists there, the update is rejected. Stop it with `VDiff stop`, update, then `VDiff resume` so the new options take effect. Resume and retry continue from the stored progress, so the new tablet types and cells only apply to rows that have not been compared yet; rows already compared are not re-checked. To re-compare everything, create a new VDiff. Tablet types other than `PRIMARY`, `REPLICA`, and `RDONLY`, and cells that are not a cell or cell alias in the topology, are rejected before anything is stored. If a shard rejects the update, other shards may already have been updated; rerunning the update after stopping the remaining shards is safe. `--clear-source-cells` resets source cells to all cells in the source cluster (for Mount/Migrate workflows, the external cluster), and `--clear-target-cells` resets target cells to all cells in the local cluster. They are mutually exclusive with `--source-cells` / `--target-cells`. Optional `--target-shards` limits the fan-out. The RPC is `VDiffUpdate` on vtctld; there is no legacy vtctl command.
+
+The target tablets must run v25 or later. During an upgrade, a shard whose primary tablet still runs an older version rejects the update with a `FAILED_PRECONDITION` error, while shards with upgraded primaries may already have been updated. Rerun the update once all target primaries are upgraded.
+
+See [#21853](https://github.com/vitessio/vitess/issues/21853) for details.
+
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 
 `vtctldclient Materialize cancel` now preserves the materialized target tables and their data. To remove the target tables when canceling the workflow, explicitly pass `--keep-data=false`.
@@ -409,6 +443,14 @@ At the end of each copy cycle of a workflow or Online DDL migration, the target 
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
+
+#### <a id="vreplication-vstream-memory-bounds"/>Bounded memory for VStreamRows streams</a>
+
+The row streams behind VReplication copies and VDiffs (`VStreamRows`, `VStreamTables`) reuse one set of rows across packets on both the source and the receiving tablet. Each reused row only ever grew to the largest value it had held, so a long stream retained the sum of those high-water marks until it ended, and its dynamically sized packets had no upper bound. Both ends now drop the reused rows when they retain more than about four times the live packet, and dynamic packet sizing stops growing at 16 times `--vstream-packet-size`.
+
+This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way. A workflow's config overrides are sent to every tablet it streams from and to, and a tablet rejects a key it does not know: a source on an earlier release fails the copy or the replication with an error naming the key (on v24 and earlier that surfaces as an "uncaught panic" error from the nil streamer). So set `vstream-memory-bounds` only once every source and target tablet runs a release that has it. A VDiff does not carry the workflow's overrides: its streams follow the tablets' `--vstream-memory-bounds` and `--vstream-packet-size` alone. The same goes for the copy phase of a VTGate `VStream`, which copies each table through the same row streamer and so also gets the sender's trim and the cap; VTGate sends no config overrides, so only the source tablets' flags apply to it.
+
+See [#20954](https://github.com/vitessio/vitess/issues/20954) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -852,6 +894,18 @@ Each tablet decides from its own `--throttle-tablet-types` whether the primary p
 
 See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
 
+#### <a id="vttablet-ddl-commit-wait-timings"/>New `DDLCommitWait` type in the `Waits` timings</a>
+
+The `Waits` timings have a new `DDLCommitWait` type. Before a VStream reloads the schema at a schema-changing DDL that it has read from the binlog, VTTablet waits up to `--schema-change-reload-timeout` for MySQL to commit the DDL, if the DDL has a MySQL GTID. `DDLCommitWait` times that wait, so a DDL that is slow to commit, such as one held for a semi-sync acknowledgement, shows in `Waits`. VStreams that reach a DDL while it is being waited for share one wait, which is timed once.
+
+See [#21887](https://github.com/vitessio/vitess/pull/21887) for details.
+
+
+#### <a id="vttablet-replication-init-shard-lock"/>Replication initialization is serialized with reparents</a>
+
+A replica now initializes replication at startup, and after a restore, under the shard lock, so a tablet that restarts or finishes a restore while an `EmergencyReparentShard` holds the shard lock no longer reconnects to the old primary. If another operation holds the lock for longer than the new `--init-replication-lock-wait` flag (default `1s`), the replica leaves replication unchanged and stays `NOT_SERVING` until VTOrc, a reparent or an operator starts replication; VTOrc has been required since v16. Replicas that restart together contend for the lock as well. The new `ReplicationInitDeferred` gauge is `1` while a replica waits this way. A longer wait lets replicas that restart together take turns, but a reparent that holds the lock can wait as long for the tablet's RPCs, so keep it well below the reparent's `--wait-replicas-timeout`. A tablet that waits out a reparent also initializes right after the reparent releases the lock, while the shard record can still name the old primary until the new primary publishes itself ([#21670](https://github.com/vitessio/vitess/issues/21670)): it then fails to start if the old primary doesn't answer, or can replicate from it if it does.
+
+See [#21802](https://github.com/vitessio/vitess/pull/21802) for details.
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
@@ -908,7 +962,11 @@ The builtin backup engine now supports splitting large files into chunks for par
 Two new flags control chunking behavior:
 
 - `--builtinbackup-file-chunk-threshold` (default `0`, chunking disabled): files larger than this size in bytes are split into chunks during backup.
-- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk.
+- `--builtinbackup-file-chunk-size` (default `1073741824` / 1 GiB): the target size in bytes for each chunk. It must be a multiple of 1 MiB (`1048576`), so that chunks can be restored with `O_DIRECT`.
+
+A third flag controls how chunks are written to disk during restores:
+
+- `--builtinbackup-restore-write-mode` (default `buffered`): `buffered` writes chunks through the page cache. `direct` writes them with `O_DIRECT`, bypassing the page cache, and preallocates chunked files so that chunks of the same file are written in parallel. Direct mode requires Linux, a filesystem that supports `O_DIRECT` and `fallocate`, and a backup taken with a `--builtinbackup-file-chunk-size` that is a multiple of 1 MiB (`1048576`). If any of these is missing, the restore fails before the existing data is removed, and the backup can be restored with `buffered` instead. Direct mode only applies to files that were chunked when the backup was taken, i.e. backups taken with `--builtinbackup-file-chunk-threshold` greater than `0`, and only to their files above that threshold. All other files are still written buffered, and so are incremental backups, whose binlogs are written to a temporary directory and only read once.
 
 **Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
 

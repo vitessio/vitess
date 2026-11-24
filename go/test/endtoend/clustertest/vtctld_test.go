@@ -18,13 +18,19 @@ limitations under the License.
 package clustertest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,6 +97,77 @@ func testGetTablets(t *testing.T) {
 	// We don't count the final newline with nothing after it (it becomes an empty
 	// line at the end of the slice)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(tabletsFromCMD)-1)
+}
+
+// TestGetTabletsStalePrimary adds a tablet record that still says it is the
+// primary of a shard, with a primary term older than the shard's current one,
+// as a former primary that never updated its record would. GetTablets must not
+// report it as the primary.
+func TestGetTabletsStalePrimary(t *testing.T) {
+	keyspace := clusterInstance.Keyspaces[0]
+	shard := keyspace.Shards[0]
+	ts := clusterInstance.TopoProcess.Server
+
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	si, err := ts.GetShard(ctx, keyspace.Name, shard.Name)
+	require.NoError(t, err)
+	require.False(t, si.GetPrimaryTermStartTime().IsZero())
+
+	stale := &topodatapb.Tablet{
+		Alias:                &topodatapb.TabletAlias{Cell: clusterInstance.Cell, Uid: 99999},
+		Keyspace:             keyspace.Name,
+		Shard:                shard.Name,
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: protoutil.TimeToProto(si.GetPrimaryTermStartTime().Add(-time.Hour)),
+	}
+	require.NoError(t, ts.CreateTablet(ctx, stale))
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
+		defer cancel()
+		assert.NoError(t, topotools.DeleteTablet(ctx, ts, stale))
+	})
+	staleAlias := topoproto.TabletAliasString(stale.Alias)
+
+	t.Run("tablet alias", func(t *testing.T) {
+		types := getTabletTypes(t, "GetTablets", "--tablet-alias", staleAlias)
+		assert.Equal(t, map[string]string{staleAlias: "unknown"}, types)
+	})
+
+	t.Run("keyspace and shard with primary tablet type", func(t *testing.T) {
+		types := getTabletTypes(t, "GetTablets", "--keyspace", keyspace.Name, "--shard", shard.Name, "--tablet-type", "primary")
+		assert.NotContains(t, types, staleAlias)
+		assert.Equal(t, map[string]string{shard.PrimaryTablet().Alias: "primary"}, types)
+	})
+
+	t.Run("OnlineDDL show ignores stale primary", func(t *testing.T) {
+		// GetSchemaMigrations asks GetTablets for the keyspace's primaries and
+		// queries every tablet it returns, so a stale primary record with no
+		// vttablet behind it would make the command fail.
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("--action-timeout", "30s", "OnlineDDL", "show", keyspace.Name, "all")
+		assert.NoError(t, err, out)
+	})
+}
+
+// getTabletTypes runs a vtctldclient GetTablets command and returns the type
+// of each tablet in its output, keyed by tablet alias.
+func getTabletTypes(t *testing.T, args ...string) map[string]string {
+	t.Helper()
+
+	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
+	require.NoError(t, err)
+
+	types := make(map[string]string)
+	for line := range strings.Lines(result) {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		require.GreaterOrEqual(t, len(fields), 4, "unexpected GetTablets output line: %q", line)
+		types[fields[0]] = fields[3]
+	}
+	return types
 }
 
 func testTabletStatus(t *testing.T) {

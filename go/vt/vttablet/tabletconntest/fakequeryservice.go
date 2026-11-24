@@ -60,6 +60,18 @@ type FakeQueryService struct {
 	// StreamHealthResponse is what we return for StreamHealth.
 	// If not set, return TestStreamHealthStreamHealthResponse
 	StreamHealthResponse *querypb.StreamHealthResponse
+
+	// VStreamRowsResponses are sent, in order, by VStreamRows. Each is cloned before it is sent, so a
+	// test can reuse one response several times.
+	VStreamRowsResponses []*binlogdatapb.VStreamRowsResponse
+
+	// VStreamTablesResponses are sent, in order, by VStreamTables, each cloned before it is sent.
+	VStreamTablesResponses []*binlogdatapb.VStreamTablesResponse
+
+	// LastVStreamRowsRequest and LastVStreamTablesRequest are the requests the last VStreamRows and
+	// VStreamTables calls received, for checking what the client forwards.
+	LastVStreamRowsRequest   *binlogdatapb.VStreamRowsRequest
+	LastVStreamTablesRequest *binlogdatapb.VStreamTablesRequest
 }
 
 var _ queryservice.QueryService = (*FakeQueryService)(nil)
@@ -716,14 +728,38 @@ func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VS
 	return errors.New("VStream not implemented")
 }
 
-// VStreamRows is part of the QueryService interface.
+// VStreamRows is part of the QueryService interface. It sends VStreamRowsResponses in order.
 func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	panic("not implemented")
+	f.LastVStreamRowsRequest = request
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	for _, resp := range f.VStreamRowsResponses {
+		if err := send(resp.CloneVT()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// VStreamTables is part of the QueryService interface.
+// VStreamTables is part of the QueryService interface. It sends VStreamTablesResponses in order.
 func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
-	panic("not implemented")
+	f.LastVStreamTablesRequest = request
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	for _, resp := range f.VStreamTablesResponses {
+		if err := send(resp.CloneVT()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // VStreamResults is part of the QueryService interface.

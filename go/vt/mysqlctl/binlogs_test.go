@@ -312,9 +312,9 @@ func TestEnsureRestoredGTIDPurgedMatchesManifestKeepsBinlogs(t *testing.T) {
 	params := &RestoreParams{Cnf: cnf, Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
 	manifest := &BackupManifest{Position: pos, IncludesBinlogs: true}
 
-	require.NoError(t, ensureRestoredGTIDPurgedMatchesManifest(t.Context(), manifest, params))
+	require.NoError(t, ensureRestoredGTIDsMatchManifest(t.Context(), manifest, params))
 
 	// Without binlogs in the backup, the same state is repaired through SetReplicationPosition.
 	manifest.IncludesBinlogs = false
-	require.Error(t, ensureRestoredGTIDPurgedMatchesManifest(t.Context(), manifest, params))
+	require.Error(t, ensureRestoredGTIDsMatchManifest(t.Context(), manifest, params))
 }

@@ -8190,6 +8190,8 @@ func (cmp *Comparator) RefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		a.Storage == b.Storage &&
 		a.Collate == b.Collate &&
 		a.KeyOpt == b.KeyOpt &&
+		a.SerialDefaultValue == b.SerialDefaultValue &&
+		a.NullBeforeSerialDefaultValue == b.NullBeforeSerialDefaultValue &&
 		a.Format == b.Format &&
 		cmp.RefOfBool(a.Null, b.Null) &&
 		cmp.Expr(a.Default, b.Default) &&

@@ -881,17 +881,26 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ts, "(\n")
+	indexesBefore, constraintsBefore := ts.keysBefore()
+	indexes, constraints := 0, 0
 	for i, col := range ts.Columns {
 		if i == 0 {
-			buf.astPrintf(ts, "\t%v", col)
+			buf.astPrintf(ts, "\t")
 		} else {
-			buf.astPrintf(ts, ",\n\t%v", col)
+			buf.astPrintf(ts, ",\n\t")
 		}
+		for end := indexesBefore[col.Name.Lowered()]; indexes < end; indexes++ {
+			buf.astPrintf(ts, "%v,\n\t", ts.Indexes[indexes])
+		}
+		for end := constraintsBefore[col.Name.Lowered()]; constraints < end; constraints++ {
+			buf.astPrintf(ts, "%v,\n\t", ts.Constraints[constraints])
+		}
+		buf.astPrintf(ts, "%v", col)
 	}
-	for _, idx := range ts.Indexes {
+	for _, idx := range ts.Indexes[indexes:] {
 		buf.astPrintf(ts, ",\n\t%v", idx)
 	}
-	for _, c := range ts.Constraints {
+	for _, c := range ts.Constraints[constraints:] {
 		buf.astPrintf(ts, ",\n\t%v", c)
 	}
 
@@ -959,6 +968,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Options != nil {
 		if ct.Options.Collate != "" {
 			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], encodeSQLName(ct.Options.Collate))
+		}
+		if ct.Options.NullBeforeSerialDefaultValue {
+			buf.astPrintf(ct, " %s", keywordStrings[NULL])
+		}
+		if ct.Options.SerialDefaultValue {
+			buf.astPrintf(ct, " %s %s %s", keywordStrings[SERIAL], keywordStrings[DEFAULT], keywordStrings[VALUE])
 		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {

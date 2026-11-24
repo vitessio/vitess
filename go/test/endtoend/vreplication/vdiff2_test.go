@@ -57,6 +57,7 @@ type testCase struct {
 	// If testing resume, what new rows should be diff'd. These rows must have a PK > all initial rows and retry rows.
 	resumeInserts       []string
 	stop                bool // test stop functionality with this workflow
+	update              bool // test the stop, update, resume flow with this workflow (only needs to be done once)
 	testCLIErrors       bool // test CLI errors against this workflow (only needs to be done once)
 	testCLICreateWait   bool // test CLI create and wait until done against this workflow (only needs to be done once)
 	testCLIFlagHandling bool // test vtctldclient flag handling from end-to-end
@@ -100,6 +101,7 @@ var testCases = []*testCase{
 		testCLIErrors:       true, // test for errors in the simplest workflow
 		testCLICreateWait:   true, // test wait on create feature against simplest workflow
 		testCLIFlagHandling: true, // test flag handling end-to-end against simplest workflow
+		update:              true, // test the stop, update, resume flow against simplest workflow
 		extraVDiffFlags: map[string]string{
 			"--max-diff-duration": "2s",
 		},
@@ -344,6 +346,11 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, tks *Keyspace, 
 
 	if tc.stop {
 		testStop(t, ksWorkflow, allCellNames)
+		tc.vdiffCount++
+	}
+
+	if tc.update {
+		testUpdate(t, ksWorkflow, allCellNames)
 		tc.vdiffCount++
 	}
 
@@ -624,6 +631,71 @@ func testStop(t *testing.T, ksWorkflow, cells string) {
 		require.True(t, (jsonOutput.State == "stopped" || jsonOutput.State == "completed"), "expected vdiff state to be stopped or completed but it was %s", jsonOutput.State)
 		// Confirm that the context cancelled error was also cleared.
 		require.NotContains(t, output, `"Errors":`)
+	})
+}
+
+// testUpdate tests the stop, update, resume flow. A VDiff is created that
+// can only use REPLICA tablets, while the cluster only has PRIMARY tablets,
+// so it waits for a tablet. The update is refused while the VDiff is
+// running. After stopping it, the tablet types are updated to PRIMARY and
+// the resumed VDiff is able to complete.
+func testUpdate(t *testing.T, ksWorkflow, cells string) {
+	t.Run("Stop, update, resume", func(t *testing.T) {
+		targetKeyspace, workflowName, ok := strings.Cut(ksWorkflow, ".")
+		require.True(t, ok)
+		vdiffCmd := func(args ...string) (string, error) {
+			return vc.VtctldClient.ExecuteCommandWithOutput(append([]string{
+				"VDiff", "--target-keyspace", targetKeyspace,
+				"--workflow", workflowName, "--format=json",
+			}, args...)...)
+		}
+		showState := func(uuid string) (string, error) {
+			output, err := vdiffCmd("show", uuid)
+			if err != nil {
+				return "", err
+			}
+			return getVDiffInfo(output).State, nil
+		}
+		requireState := func(uuid, want string) {
+			state, err := showState(uuid)
+			require.NoError(t, err)
+			require.Equal(t, want, state)
+		}
+
+		output, err := vdiffCmd("create", "--tablet-types=REPLICA", "--source-cells="+cells, "--target-cells="+cells)
+		require.NoError(t, err)
+		uuid := gjson.Get(output, "UUID").String()
+		require.NotEmpty(t, uuid)
+
+		// There are no REPLICA tablets so the VDiff stays started while it
+		// waits for a tablet.
+		require.Eventually(t, func() bool {
+			state, err := showState(uuid)
+			return err == nil && state == "started"
+		}, vdiffTimeout, time.Second, "expected vdiff %s to be started", uuid)
+
+		output, err = vdiffCmd("update", uuid, "--tablet-types=PRIMARY")
+		require.Error(t, err, "expected update of a running vdiff to be refused, output: %s", output)
+		require.Contains(t, output, "run VDiff stop first")
+		requireState(uuid, "started")
+
+		_, err = vdiffCmd("stop", uuid)
+		require.NoError(t, err)
+		requireState(uuid, "stopped")
+
+		output, err = vdiffCmd("update", uuid, "--tablet-types=PRIMARY")
+		require.NoError(t, err, "update failed, output: %s", output)
+		requireState(uuid, "stopped")
+
+		ogTime := time.Now()
+		_, err = vdiffCmd("resume", uuid)
+		require.NoError(t, err)
+		info := waitForVDiff2ToComplete(t, ksWorkflow, cells, uuid, ogTime)
+		require.NotNil(t, info)
+		require.False(t, info.HasMismatch)
+		require.Positive(t, info.RowsCompared)
+
+		require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
 	})
 }
 

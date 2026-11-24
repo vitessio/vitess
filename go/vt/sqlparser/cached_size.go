@@ -813,7 +813,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(176)
 	}
 	// field Null *bool
 	if cached.Null != nil {
@@ -991,7 +991,7 @@ func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
@@ -999,6 +999,8 @@ func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Details.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field _beforeColumn string
+	size += hack.RuntimeAllocSize(int64(len(cached._beforeColumn)))
 	return size
 }
 
@@ -2133,7 +2135,7 @@ func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Info *vitess.io/vitess/go/vt/sqlparser.IndexInfo
 	size += cached.Info.CachedSize(true)
@@ -2151,6 +2153,8 @@ func (cached *IndexDefinition) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field _beforeColumn string
+	size += hack.RuntimeAllocSize(int64(len(cached._beforeColumn)))
 	return size
 }
 

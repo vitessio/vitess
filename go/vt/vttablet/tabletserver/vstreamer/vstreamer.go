@@ -99,6 +99,11 @@ type vstreamer struct {
 	// eventGTID is the formatted GTID of the current transaction, or empty
 	// outside one. It is set by setEventGTID and stamped on each VEvent.
 	eventGTID string
+	// gtid is the GTID of the last GTID event. For a DDL, it is the DDL's own GTID, which
+	// parseEvent passes to ReloadAtDDL. It is nil before the first GTID event, and from
+	// each binlog file boundary (a rotate, stop, format description or previous-GTIDs event)
+	// until the next GTID event. setEventGTID sets and clears it together with eventGTID.
+	gtid replication.GTID
 
 	phase   string
 	vse     *Engine
@@ -145,10 +150,10 @@ type streamerPlan struct {
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions,
-) *vstreamer {
+) (*vstreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil
+		return nil, vterrors.Wrapf(err, "invalid VStream options")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
@@ -168,7 +173,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vse:          vse,
 		options:      options,
 		config:       config,
-	}
+	}, nil
 }
 
 // SetVSchema updates the vstreamer against the new vschema.
@@ -187,8 +192,10 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
-// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
+// setEventGTID records gtid and formats it into eventGTID, or clears both if
+// gtid is nil.
 func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.gtid = gtid
 	vs.eventGTID = ""
 	if gtid != nil {
 		vs.eventGTID = gtid.String()
@@ -428,10 +435,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 						return
 					}
 				}
-				logger.Info("vstreamer throttled",
-					slog.String("workflow", vs.filter.GetWorkflowName()),
-					slog.String("reason", checkResult.Summary()),
-				)
+				attrs := append([]slog.Attr{slog.String("workflow", vs.filter.GetWorkflowName())}, checkResult.LogAttrs()...)
+				logger.Info("vstreamer throttled", attrs...)
 				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled
@@ -700,7 +705,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
-				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
+				if err := vs.se.ReloadAtDDL(vs.ctx, vs.pos, vs.gtid); err != nil {
 					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
 				}
 				if err := vs.rebuildPlans(); err != nil {

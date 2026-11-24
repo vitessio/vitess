@@ -17,19 +17,30 @@ limitations under the License.
 package vdiff
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/command/vreplication/common"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -815,15 +826,291 @@ func TestGetStructNames(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestShowNoSamplesFlag(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
+var registerVDiffCommandsOnce sync.Once
 
-	showCmd, _, err := root.Find([]string{"VDiff", "show"})
+func ensureVDiffCommandsRegistered() {
+	registerVDiffCommandsOnce.Do(func() {
+		registerCommands(&cobra.Command{Use: "test"})
+	})
+}
+
+func TestShowNoSamplesFlag(t *testing.T) {
+	ensureVDiffCommandsRegistered()
+
+	showCmd, _, err := base.Find([]string{"show"})
 	require.NoError(t, err)
 
 	flag := showCmd.Flags().Lookup("no-samples")
 	require.NotNil(t, flag, "vdiff show must expose the --no-samples flag")
 	require.Equal(t, "false", flag.DefValue, "--no-samples must default to false")
 	require.Contains(t, flag.Usage, "gRPC message limits")
+}
+
+func TestUpdateCommandFlags(t *testing.T) {
+	ensureVDiffCommandsRegistered()
+
+	require.NotNil(t, update.Flags().Lookup("tablet-types"))
+	require.NotNil(t, update.Flags().Lookup("tablet-types-in-preference-order"))
+	require.NotNil(t, update.Flags().Lookup("source-cells"))
+	require.NotNil(t, update.Flags().Lookup("target-cells"))
+	require.NotNil(t, update.Flags().Lookup("clear-source-cells"))
+	require.NotNil(t, update.Flags().Lookup("clear-target-cells"))
+	require.NotNil(t, update.Flags().Lookup("target-shards"))
+	require.Equal(t, "true", update.Flags().Lookup("tablet-types-in-preference-order").DefValue)
+	require.Contains(t, update.Long, "VDiff stop")
+	require.Contains(t, update.Long, "VDiff resume")
+	require.Contains(t, update.Long, "clear-source-cells")
+	require.Contains(t, update.Example, "PRIMARY")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "PRIMARY")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "REPLICA")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "RDONLY")
+	require.NotContains(t, update.Long, "stopped and resumed")
+	require.Contains(t, update.Long, "Only stopped or completed VDiffs can be updated")
+	require.Contains(t, update.Long, "safe to rerun the update after stopping the remaining")
+
+	t.Run("invalid uuid", func(t *testing.T) {
+		err := update.PreRunE(update, []string{"not-a-uuid"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid UUID provided")
+	})
+
+	t.Run("requires a tablet picker option", func(t *testing.T) {
+		updateOptions.ClearSourceCells = false
+		updateOptions.ClearTargetCells = false
+		updateOptions.SourceCells = nil
+		updateOptions.TargetCells = nil
+		updateOptions.TabletTypes = nil
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "no tablet picker options specified to update")
+	})
+
+	t.Run("clear source cells is a tablet picker option", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
+		t.Cleanup(func() {
+			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			update.Flags().Lookup("clear-source-cells").Changed = false
+			updateOptions.ClearSourceCells = false
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.NoError(t, err)
+	})
+
+	t.Run("source cells and clear source cells are mutually exclusive", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("source-cells", "zone1"))
+		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
+		t.Cleanup(func() {
+			require.NoError(t, update.Flags().Set("source-cells", ""))
+			update.Flags().Lookup("source-cells").Changed = false
+			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			update.Flags().Lookup("clear-source-cells").Changed = false
+			updateOptions.ClearSourceCells = false
+			updateOptions.SourceCells = nil
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot specify both --source-cells and --clear-source-cells")
+	})
+
+	t.Run("tablet types in preference order requires tablet types", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("tablet-types-in-preference-order", "true"))
+		require.NoError(t, update.Flags().Set("clear-target-cells", "true"))
+		t.Cleanup(func() {
+			update.Flags().Lookup("tablet-types-in-preference-order").Changed = false
+			require.NoError(t, update.Flags().Set("clear-target-cells", "false"))
+			update.Flags().Lookup("clear-target-cells").Changed = false
+			updateOptions.ClearTargetCells = false
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.EqualError(t, err, "--tablet-types-in-preference-order requires --tablet-types")
+	})
+}
+
+// capturingVDiffUpdateClient records the VDiffUpdate request and returns
+// the configured response or error.
+type capturingVDiffUpdateClient struct {
+	vtctldclient.VtctldClient
+	req  *vtctldatapb.VDiffUpdateRequest
+	resp *vtctldatapb.VDiffUpdateResponse
+	err  error
+}
+
+func (c *capturingVDiffUpdateClient) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest, _ ...grpc.CallOption) (*vtctldatapb.VDiffUpdateResponse, error) {
+	c.req = req
+	return c.resp, c.err
+}
+
+// runUpdateCommand runs the VDiff update command's PreRunE and RunE with
+// the given flags against client, and returns its output. All update flags
+// and options are reset to their defaults when the test ends.
+func runUpdateCommand(t *testing.T, client vtctldclient.VtctldClient, format string, flags [][2]string) (string, error) {
+	t.Helper()
+	ensureVDiffCommandsRegistered()
+	t.Cleanup(func() {
+		update.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
+		updateOptions.UUID = uuid.UUID{}
+		updateOptions.SourceCells = nil
+		updateOptions.TargetCells = nil
+		updateOptions.ClearSourceCells = false
+		updateOptions.ClearTargetCells = false
+		updateOptions.TabletTypes = nil
+		updateOptions.TabletTypesInPreferenceOrder = true
+		updateOptions.TargetShards = nil
+		common.BaseOptions.TargetKeyspace = ""
+		common.BaseOptions.Workflow = ""
+		common.BaseOptions.Format = "text"
+		common.SetClient(nil)
+		common.SetCommandCtx(context.Background())
+		update.SetOut(nil)
+	})
+
+	common.BaseOptions.TargetKeyspace = "customer"
+	common.BaseOptions.Workflow = "commerce2customer"
+	common.BaseOptions.Format = format
+	common.SetClient(client)
+	common.SetCommandCtx(t.Context())
+	for _, f := range flags {
+		require.NoError(t, update.Flags().Set(f[0], f[1]))
+	}
+	var out bytes.Buffer
+	update.SetOut(&out)
+
+	args := []string{"a037a9e2-5628-11ee-8c99-0242ac120002"}
+	if err := update.PreRunE(update, args); err != nil {
+		return out.String(), err
+	}
+	err := update.RunE(update, args)
+	return out.String(), err
+}
+
+// TestUpdateCommandRequest confirms that the VDiff update command builds
+// the VDiffUpdate request from its flags.
+func TestUpdateCommandRequest(t *testing.T) {
+	newReq := func(req *vtctldatapb.VDiffUpdateRequest) *vtctldatapb.VDiffUpdateRequest {
+		req.TargetKeyspace = "customer"
+		req.Workflow = "commerce2customer"
+		req.Uuid = "a037a9e2-5628-11ee-8c99-0242ac120002"
+		return req
+	}
+	tests := []struct {
+		name  string
+		flags [][2]string
+		want  *vtctldatapb.VDiffUpdateRequest
+	}{
+		{
+			name:  "tablet types in preference order",
+			flags: [][2]string{{"tablet-types", "PRIMARY,REPLICA"}},
+			want: newReq(&vtctldatapb.VDiffUpdateRequest{
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA},
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_INORDER),
+			}),
+		},
+		{
+			name:  "tablet types in any order",
+			flags: [][2]string{{"tablet-types", "RDONLY"}, {"tablet-types-in-preference-order", "false"}},
+			want: newReq(&vtctldatapb.VDiffUpdateRequest{
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+				TabletSelectionPreference: new(tabletmanagerdatapb.TabletSelectionPreference_ANY),
+			}),
+		},
+		{
+			name:  "source and target cells on target shards",
+			flags: [][2]string{{"source-cells", "zone1, zone2"}, {"target-cells", "zone3"}, {"target-shards", "-80,80-"}},
+			want: newReq(&vtctldatapb.VDiffUpdateRequest{
+				TargetShards: []string{"-80", "80-"},
+				SourceCells:  []string{"zone1", "zone2"},
+				TargetCells:  []string{"zone3"},
+			}),
+		},
+		{
+			name:  "clear source and target cells",
+			flags: [][2]string{{"clear-source-cells", "true"}, {"clear-target-cells", "true"}},
+			want: newReq(&vtctldatapb.VDiffUpdateRequest{
+				ClearSourceCells: true,
+				ClearTargetCells: true,
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &capturingVDiffUpdateClient{resp: &vtctldatapb.VDiffUpdateResponse{}}
+			_, err := runUpdateCommand(t, client, "text", tt.flags)
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.want, client.req)
+		})
+	}
+}
+
+// TestUpdateCommandOutput confirms the VDiff update command's output for a
+// successful update and that it returns the error from vtctld.
+func TestUpdateCommandOutput(t *testing.T) {
+	results := &vtctldatapb.VDiffUpdateResponse{
+		Results: []*vtctldatapb.VDiffUpdateResponse_ShardResult{
+			{Shard: "-80", State: "stopped"},
+			{Shard: "80-"},
+		},
+	}
+	tests := []struct {
+		name     string
+		format   string
+		resp     *vtctldatapb.VDiffUpdateResponse
+		err      error
+		wantOut  string
+		wantErr  string
+		wantCall bool
+	}{
+		{
+			name:     "text",
+			format:   "text",
+			resp:     results,
+			wantOut:  "VDiff update completed\nShard -80: updated (state: stopped)\nShard 80-: updated (state: unknown)\n",
+			wantCall: true,
+		},
+		{
+			name:     "text with no shard results",
+			format:   "text",
+			resp:     &vtctldatapb.VDiffUpdateResponse{},
+			wantOut:  "VDiff update completed with no shard results\n",
+			wantCall: true,
+		},
+		{
+			name:     "nil response",
+			format:   "text",
+			wantOut:  "VDiff update completed with no shard results\n",
+			wantCall: true,
+		},
+		{
+			name:     "json",
+			format:   "json",
+			resp:     results,
+			wantOut:  "{\n  \"results\": [\n    {\n      \"shard\": \"-80\",\n      \"state\": \"stopped\"\n    },\n    {\n      \"shard\": \"80-\",\n      \"state\": \"\"\n    }\n  ]\n}\n",
+			wantCall: true,
+		},
+		{
+			name:     "error from vtctld",
+			format:   "text",
+			err:      vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "vdiff is running"),
+			wantErr:  "vdiff is running",
+			wantCall: true,
+		},
+		{
+			name:    "invalid format",
+			format:  "yaml",
+			resp:    results,
+			wantErr: "invalid output format, got yaml",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &capturingVDiffUpdateClient{resp: tt.resp, err: tt.err}
+			out, err := runUpdateCommand(t, client, tt.format, [][2]string{{"tablet-types", "PRIMARY"}})
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantOut, out)
+			require.Equal(t, tt.wantCall, client.req != nil)
+		})
+	}
 }
