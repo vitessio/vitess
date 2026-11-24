@@ -140,6 +140,14 @@ func TestGetTabletsStalePrimary(t *testing.T) {
 		assert.NotContains(t, types, staleAlias)
 		assert.Equal(t, map[string]string{shard.PrimaryTablet().Alias: "primary"}, types)
 	})
+
+	t.Run("OnlineDDL show ignores stale primary", func(t *testing.T) {
+		// GetSchemaMigrations asks GetTablets for the keyspace's primaries and
+		// queries every tablet it returns, so a stale primary record with no
+		// vttablet behind it would make the command fail.
+		out, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("--action-timeout", "30s", "OnlineDDL", "show", keyspace.Name, "all")
+		assert.NoError(t, err, out)
+	})
 }
 
 // getTabletTypes runs a vtctldclient GetTablets command and returns the type
