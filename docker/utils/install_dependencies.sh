@@ -166,12 +166,15 @@ mysql80)
 	;;
 mysql84)
 	if [ -z "$VERSION" ]; then
-		VERSION=8.4.8
+		VERSION=8.4.13.1
 	fi
+	# MySQL Shell isn't released with every MySQL server release (there is no
+	# 8.4.13.1 build), so it has its own version.
+	MYSQL_SHELL_VERSION=8.4.10
 	if [[ "${ARCH}" == "arm64" ]]; then
 		install_mysql_tarball "8.4" "${VERSION}"
 		PACKAGES=(
-			"$(percona_mysql_shell_package "${VERSION}")"
+			"$(percona_mysql_shell_package "${MYSQL_SHELL_VERSION}")"
 			percona-xtrabackup-84
 		)
 	else
@@ -184,7 +187,7 @@ mysql84)
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-shell/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		PACKAGES=(
 			"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
@@ -195,7 +198,7 @@ mysql84)
 			"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-			"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			percona-xtrabackup-84
 		)
 	fi
