@@ -870,6 +870,130 @@ func TestNeverReachedFormerPrimaryDoesNotEndReparentBuffering(t *testing.T) {
 	}
 }
 
+// TestStoppingFormerPrimaryDoesNotEndReparentBuffering verifies that a
+// stopping former primary does not let a stale serving healthcheck from the
+// primary being demoted resolve the keyspace event. StopService reports a
+// negative term (time.Time{}.Unix()), which is not the current primary and
+// not a newer term, so it must not clear waitForReparent.
+func TestStoppingFormerPrimaryDoesNotEndReparentBuffering(t *testing.T) {
+	ctx := t.Context()
+
+	kss := &keyspaceState{
+		keyspace: "ks",
+		shards:   make(map[string]*shardState),
+		lastKeyspace: &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+				ServedType:      topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{{Name: "0"}},
+			}},
+		},
+	}
+	kew := &KeyspaceEventWatcher{
+		ts:               &fakeTopoServer{},
+		localCell:        testCell,
+		keyspaces:        map[string]*keyspaceState{"ks": kss},
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
+	}
+	kss.kew = kew
+	events := kew.Subscribe()
+
+	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
+	primaryHealth := func(uid uint32, serving bool, termStart int64) *TabletHealth {
+		alias := &topodatapb.TabletAlias{Cell: testCell, Uid: uid}
+		return &TabletHealth{
+			Tablet:               &topodatapb.Tablet{Alias: alias},
+			Target:               target,
+			Serving:              serving,
+			PrimaryTermStartTime: termStart,
+		}
+	}
+
+	// An ERS promoted 101 with term 20, and this vtgate sees it serving.
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	require.Len(t, events, 1, "keyspace event for the initial primary")
+	<-events
+
+	// A reparent, such as an ERS to 102, starts demoting 101, and buffering
+	// starts. A PRS can't run while 100 is unreachable.
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+
+	// Former primary 100 stops gracefully and reports a negative term.
+	kss.onHealthCheck(primaryHealth(100, false, time.Time{}.Unix()))
+
+	// A stale serving healthcheck from 101 must not resolve the keyspace event.
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	select {
+	case ev := <-events:
+		require.Failf(t,
+			"stale serving healthcheck from demoting primary 101 resolved the keyspace event",
+			"shards: %v", ev.Shards)
+	default:
+	}
+}
+
+// TestCurrentPrimaryNotServingWithoutTermEndsReparentBuffering verifies that a
+// not-serving check from the current primary still clears waitForReparent
+// even when it carries no term, so a same-term recovery resolves the keyspace
+// event. The healthcheck broadcasts such a check from the topo record before
+// the first stream response, for example when the primary's address changes
+// mid-reparent.
+func TestCurrentPrimaryNotServingWithoutTermEndsReparentBuffering(t *testing.T) {
+	ctx := t.Context()
+
+	kss := &keyspaceState{
+		keyspace: "ks",
+		shards:   make(map[string]*shardState),
+		lastKeyspace: &topodatapb.SrvKeyspace{
+			Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+				ServedType:      topodatapb.TabletType_PRIMARY,
+				ShardReferences: []*topodatapb.ShardReference{{Name: "0"}},
+			}},
+		},
+	}
+	kew := &KeyspaceEventWatcher{
+		ts:               &fakeTopoServer{},
+		localCell:        testCell,
+		keyspaces:        map[string]*keyspaceState{"ks": kss},
+		missingKeyspaces: make(map[string]time.Time),
+		subs:             make(map[chan *KeyspaceEvent]struct{}),
+	}
+	kss.kew = kew
+	events := kew.Subscribe()
+
+	target := &querypb.Target{Keyspace: "ks", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY}
+	primaryHealth := func(uid uint32, serving bool, termStart int64) *TabletHealth {
+		alias := &topodatapb.TabletAlias{Cell: testCell, Uid: uid}
+		return &TabletHealth{
+			Tablet:               &topodatapb.Tablet{Alias: alias},
+			Target:               target,
+			Serving:              serving,
+			PrimaryTermStartTime: termStart,
+		}
+	}
+
+	// An ERS promoted 101 with term 20, and this vtgate sees it serving.
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	require.Len(t, events, 1, "keyspace event for the initial primary")
+	<-events
+
+	// A reparent starts demoting 101, and buffering starts.
+	require.True(t, kew.MarkShardNotServing(ctx, "ks", "0", true /* isReparentErr */))
+
+	// The current primary's address changes, so the healthcheck broadcasts a
+	// not-serving check for 101 with no term before the first stream response.
+	kss.onHealthCheck(primaryHealth(101, false, 0))
+
+	// The same primary recovers with the same term, which must resolve the
+	// keyspace event instead of waiting out the buffer's max duration.
+	kss.onHealthCheck(primaryHealth(101, true, 20))
+	select {
+	case <-events:
+	default:
+		require.Fail(t, "same-term recovery from the current primary did not resolve the keyspace event")
+	}
+}
+
 // realTopoBackedServer is a fakeTopoServer whose GetTopoServer returns a real
 // (memorytopo) *topo.Server, so code under test can read global topo records
 // such as the Shard records getMoveTablesStatus fetches.
