@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,5 +56,13 @@ func TestEnabled(t *testing.T) {
 		assert.True(t, Enabled(slog.LevelInfo))
 		assert.True(t, Enabled(slog.LevelWarn))
 		assert.True(t, Enabled(slog.LevelError))
+
+		infoBefore := glog.Stats.Info.Lines()
+		Debug("suppressed debug without attrs")
+		Debug("suppressed debug with attrs", slog.String("k", "v"))
+		assert.Equal(t, infoBefore, glog.Stats.Info.Lines(), "glog fallback should not emit debug logs")
+
+		Info("emitted info")
+		assert.Equal(t, infoBefore+1, glog.Stats.Info.Lines(), "glog fallback should emit info logs")
 	})
 }
