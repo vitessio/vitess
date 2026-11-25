@@ -266,26 +266,22 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		return index
 	}
 
-	i := aj.Columns[offset]
-	out := 0
-	if i < 0 {
-		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
-		out = ToLeftOffset(out)
-		aj.JoinColumns.addLeft(wsExpr)
-	} else {
-		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
-		out = ToRightOffset(out)
+	// Check the offset that the input returns before converting it, since a left offset is negative once converted.
+	if i := aj.Columns[offset]; i < 0 {
+		if out := aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute); out >= 0 {
+			aj.JoinColumns.addLeft(wsExpr)
+			aj.addOffset(ToLeftOffset(out))
+			return len(aj.Columns) - 1
+		}
+	} else if out := aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute); out >= 0 {
 		aj.JoinColumns.addRight(wsExpr)
+		aj.addOffset(ToRightOffset(out))
+		return len(aj.Columns) - 1
 	}
 
-	if out >= 0 {
-		aj.addOffset(out)
-	} else {
-		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
-		aj.JoinColumns.add(col)
-		aj.planOffsetFor(ctx, col)
-	}
-
+	col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
+	aj.JoinColumns.add(col)
+	aj.planOffsetFor(ctx, col)
 	return len(aj.Columns) - 1
 }
 
