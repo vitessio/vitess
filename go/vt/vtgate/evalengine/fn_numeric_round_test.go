@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TestRoundIntegerOverflow checks ROUND(int, negative) near the int64/uint64
@@ -40,6 +42,9 @@ func TestRoundIntegerOverflow(t *testing.T) {
 			{math.MaxInt64, -19, 0, true},
 			{-math.MaxInt64, -19, 0, true},
 			{9223372036854775804, -1, 9223372036854775800, false},
+			// these wrapped on main although the rounded value fits
+			{9223372036854775798, -1, 9223372036854775800, false},
+			{-9223372036854775799, -1, -9223372036854775800, false},
 			{-9223372036854775804, -1, -9223372036854775800, false},
 			{math.MaxInt64, -20, 0, false},
 			{1234, -2, 1200, false},
@@ -49,7 +54,10 @@ func TestRoundIntegerOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := roundSigned(c.v, c.round)
 			if c.wantErr {
-				assert.Error(t, err, "ROUND(%d, %d) = %d, want out of range error", c.v, c.round, got)
+				if assert.Error(t, err, "ROUND(%d, %d) = %d, want out of range error", c.v, c.round, got) {
+					assert.Equal(t, vterrors.DataOutOfRange, vterrors.ErrState(err))
+					assert.ErrorContains(t, err, "BIGINT value is out of range")
+				}
 				continue
 			}
 			if assert.NoError(t, err, "ROUND(%d, %d)", c.v, c.round) {
@@ -68,6 +76,8 @@ func TestRoundIntegerOverflow(t *testing.T) {
 			{math.MaxUint64, -1, 0, true},
 			{math.MaxUint64, -19, 0, true},
 			{math.MaxUint64, -2, 18446744073709551600, false},
+			// wrapped to 0 on main although the rounded value fits
+			{18446744073709551606, -1, 18446744073709551610, false},
 			{math.MaxUint64, -20, 0, false},
 			{math.MaxInt64, -19, 10000000000000000000, false},
 			{1250, -2, 1300, false},
@@ -75,7 +85,10 @@ func TestRoundIntegerOverflow(t *testing.T) {
 		for _, c := range cases {
 			got, err := roundUnsigned(c.v, c.round)
 			if c.wantErr {
-				assert.Error(t, err, "ROUND(%d, %d) = %d, want out of range error", c.v, c.round, got)
+				if assert.Error(t, err, "ROUND(%d, %d) = %d, want out of range error", c.v, c.round, got) {
+					assert.Equal(t, vterrors.DataOutOfRange, vterrors.ErrState(err))
+					assert.ErrorContains(t, err, "BIGINT UNSIGNED value is out of range")
+				}
 				continue
 			}
 			if assert.NoError(t, err, "ROUND(%d, %d)", c.v, c.round) {
