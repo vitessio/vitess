@@ -211,7 +211,7 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	return nil
 }
 
-func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
+func (bt *BufferingTest) createCluster(tabletExtraArgs ...string) (*cluster.LocalProcessCluster, int) {
 	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -230,6 +230,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		"--health-check-interval", "1s",
 		"--queryserver-config-transaction-timeout", "20s",
 	}
+	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, tabletExtraArgs...)
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false, clusterInstance.Cell); err != nil {
 		return nil, 1
 	}

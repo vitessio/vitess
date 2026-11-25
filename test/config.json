@@ -703,6 +703,7 @@
     "tabletgateway_buffer_reparent": {
       "File": "unused.go",
       "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer",
         "vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reparent"
       ],
       "Args": [],

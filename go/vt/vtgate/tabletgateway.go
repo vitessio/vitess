@@ -381,6 +381,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				// Notify the buffer after we retried.
 				defer retryDone()
 				bufferedOnce = true
+				// A failed reparent can return the previous primary to service.
+				clear(invalidTablets)
 			}
 
 			if bufferErr != nil {
