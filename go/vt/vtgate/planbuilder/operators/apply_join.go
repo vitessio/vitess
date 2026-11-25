@@ -248,6 +248,10 @@ func (aj *ApplyJoin) AddColumn(
 	col := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	offset := len(aj.JoinColumns.columns)
 	aj.JoinColumns.add(col)
+	if len(aj.Columns) > 0 {
+		// The offsets are planned already, so the inputs have to return the new column too.
+		aj.planOffsetFor(ctx, col)
+	}
 	return offset
 }
 
