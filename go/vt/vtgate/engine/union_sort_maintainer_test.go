@@ -146,3 +146,36 @@ func TestUnionSortRejectsNonOrderingServerKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestUnionKnownFloatFallsBackForNonSimpleArms(t *testing.T) {
+	env := collations.MySQL8()
+	floatType := evalengine.NewType(sqltypes.Float64, collations.CollationBinaryID)
+	for _, tc := range []struct {
+		name      string
+		query     string
+		filter    bool
+		localSort bool
+	}{
+		{name: "local order and limit", query: "select value from t order by value limit 2", localSort: true},
+		{name: "aggregate", query: "select sum(value) from t"},
+		{name: "locally merged union", query: "select value from t union all select value from u"},
+		{name: "filter wrapper", query: "select value from t", filter: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			route := unionSortTestRoute(t, tc.query)
+			if tc.localSort {
+				route.OrderBy = evalengine.Comparison{{Col: 0, Type: floatType, CollationEnv: env}}
+			}
+			var source Primitive = route
+			if tc.filter {
+				source = &Filter{Input: route}
+			}
+			input := NewConcatenate([]Primitive{source}, nil)
+			sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, Type: floatType, CollationEnv: env}}}
+			got, layout, err := sort.unionSortInput(nil, 1, env)
+			require.NoError(t, err)
+			require.Nil(t, layout)
+			require.Same(t, input, got, "unsupported arm shapes keep the original execution path")
+		})
+	}
+}

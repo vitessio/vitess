@@ -52,6 +52,9 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 		if !unionSortNeedsNumericKeys(ms.OrderBy) {
 			return unionSortPlainInput(input, ms.OrderBy, count, nil, env), nil, nil
 		}
+		if !unionSortSimpleSources(input) {
+			return ms.Input, nil, nil
+		}
 		metadata = &unionSortMetadata{common: make([]collations.TypedCollation, len(ms.OrderBy)), arms: make([][]collations.TypedCollation, len(input.Sources)), types: make([]sqltypes.Type, len(ms.OrderBy)), scales: make([]int32, len(ms.OrderBy)), same: true}
 		for i, key := range ms.OrderBy {
 			metadata.common[i] = collations.TypedCollation{Collation: key.Type.Collation()}

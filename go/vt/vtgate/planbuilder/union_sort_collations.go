@@ -213,6 +213,9 @@ func unionSortKnownColumns(ctx *plancontext.PlanningContext, source operators.Op
 			if !found || typ.Type() == sqltypes.Unknown || typ.Type() != key.Type.Type() || typ.Collation() != key.Type.Collation() {
 				return false
 			}
+			if name, _ := ctx.VSchema.Environment().CollationEnv().LookupKnownCollation(typ.Collation()); name == "" {
+				return false
+			}
 		}
 	}
 	return true

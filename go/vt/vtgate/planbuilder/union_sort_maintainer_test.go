@@ -62,9 +62,32 @@ func TestUnionSortOriginalStatementEligibility(t *testing.T) {
 	}
 }
 
-func TestUnionSortKnownSharedColumnsAvoidMetadata(t *testing.T) {
+func TestUnionSortUnknownSharedColumnsStillResolveMetadata(t *testing.T) {
 	env := vtenv.NewTestEnv()
-	vw, err := vschemawrapper.NewVschemaWrapper(env, loadSchema(t, "vschemas/schema.json", true), TestBuilder)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, loadSchema(t, "vschemas/schema.json", false), TestBuilder)
+	require.NoError(t, err)
+	plan, err := TestBuilder("select textcol1 as x from user union all select col1 from unsharded_fk_allow.u_tbl1 order by x limit 10", vw, vw.CurrentDb())
+	require.NoError(t, err)
+	sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions).(*engine.MemorySort)
+	require.False(t, sort.UnionCollationKnown, "two Unknown IDs do not establish a shared collation")
+	require.Len(t, sort.CollationQueries, 2, "each arm must resolve its unknown textual collation")
+}
+
+func TestUnionSortExplicitSharedColumnsAvoidMetadata(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", false)
+	for _, tc := range []struct{ keyspace, table, column string }{
+		{"user", "user", "textcol1"},
+		{"unsharded_fk_allow", "u_tbl1", "col1"},
+	} {
+		table := vschema.Keyspaces[tc.keyspace].Tables[tc.table]
+		for i := range table.Columns {
+			if table.Columns[i].Name.EqualString(tc.column) {
+				table.Columns[i].CollationName = "utf8mb4_general_ci"
+			}
+		}
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	require.NoError(t, err)
 	plan, err := TestBuilder("select textcol1 as x from user union all select col1 from unsharded_fk_allow.u_tbl1 order by x limit 10", vw, vw.CurrentDb())
 	require.NoError(t, err)

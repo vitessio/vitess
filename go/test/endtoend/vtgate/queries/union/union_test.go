@@ -439,6 +439,9 @@ func TestUnionOrderedCaps(t *testing.T) {
 	for _, workload := range []string{"oltp", "olap"} {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, "set workload="+workload)
+			localFloatQuery := "(select cast(id as double) as x from union_collations where id in (1,2) order by x desc limit 1) union all select cast(id as double) from union_collations where id=4 order by x limit 2"
+			localFloatResult := mcmp.Exec(localFloatQuery)
+			require.Equal(t, []string{"2", "4"}, []string{localFloatResult.Rows[0][0].ToString(), localFloatResult.Rows[1][0].ToString()})
 			for _, query := range []string{
 				"select id as x from union_collations where id=1 union all select id from union_collations where id in (" + strings.Join(rightIDs, ",") + ") order by x desc limit 10",
 				"select 9007199254740991+id as x,id from union_collations where id in (1,2) union all select cast(0 as double),99 from union_collations where id=4 order by x desc,id limit 1",
