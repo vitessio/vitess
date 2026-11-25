@@ -112,7 +112,9 @@ func TestPRSRefusedWhileShardPrimaryRestores(t *testing.T) {
 			continue
 		}
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
-			assert.Equal(c, wantRows, rowCount(ctx, t, tablet), "%s", tablet.Alias)
+			n, err := queryRowCount(ctx, tablet)
+			require.NoError(c, err)
+			assert.Equal(c, wantRows, n, "%s", tablet.Alias)
 		}, 30*time.Second, 200*time.Millisecond)
 	}
 }
@@ -179,9 +181,24 @@ func semiSyncAcknowledgedTransactions(ctx context.Context, t *testing.T, primary
 }
 
 func rowCount(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) int {
-	n, err := strconv.Atoi(scalar(ctx, t, tablet, "select count(*) from vt_insert_test"))
+	n, err := queryRowCount(ctx, tablet)
 	require.NoError(t, err)
 	return n
+}
+
+// queryRowCount returns the number of rows in the test table, and reports errors to the
+// caller so that a poll can retry them.
+func queryRowCount(ctx context.Context, tablet *cluster.Vttablet) (int, error) {
+	conn, err := utils.GetMySQLConn(ctx, tablet)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select count(*) from vt_insert_test", 1, false)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(qr.Rows[0][0].ToString())
 }
 
 func scalar(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, query string) string {
