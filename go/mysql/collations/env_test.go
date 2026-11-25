@@ -122,3 +122,17 @@ func TestCollationPaddingMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestKnownBackendCollationNames(t *testing.T) {
+	env := MySQL8()
+	for _, name := range []string{"big5_chinese_ci", "gbk_chinese_ci", "gb18030_chinese_ci", "latin1_german2_ci", "utf8mb3_tolower_ci"} {
+		id, supported := env.LookupID(name)
+		require.NotEqual(t, Unknown, id)
+		require.False(t, supported)
+		known, charset := env.LookupKnownCollation(id)
+		require.NotEmpty(t, known)
+		require.NotEmpty(t, charset)
+		_, paddingKnown := env.PadSpace(id)
+		require.True(t, paddingKnown)
+	}
+}

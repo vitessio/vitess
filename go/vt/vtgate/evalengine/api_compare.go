@@ -184,6 +184,9 @@ type (
 		// keys using the source collation's space weight. Nil retains normal
 		// value comparison. It is set only on execution-local comparisons.
 		PadSpaceWeight []byte
+		// PadSpaceWeightCol selects a server-generated SPACE weight when no
+		// local collation is available. Zero disables this execution-local key.
+		PadSpaceWeightCol int
 	}
 
 	Comparison []OrderByParams
@@ -216,7 +219,11 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 	v1 := r1[obp.Col]
 	v2 := r2[obp.Col]
 	cmp := 0
-	if len(obp.PadSpaceWeight) != 0 {
+	if len(obp.PadSpaceWeight) != 0 || obp.PadSpaceWeightCol > 0 {
+		space := obp.PadSpaceWeight
+		if obp.PadSpaceWeightCol > 0 {
+			space = r1[obp.PadSpaceWeightCol].Raw()
+		}
 		switch {
 		case v1.IsNull() && v2.IsNull():
 		case v1.IsNull():
@@ -224,13 +231,13 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 		case v2.IsNull():
 			cmp = 1
 		default:
-			cmp = comparePaddedWeights(v1.Raw(), v2.Raw(), obp.PadSpaceWeight)
+			cmp = comparePaddedWeights(v1.Raw(), v2.Raw(), space)
 		}
 	} else {
 		cmp = v1.TinyWeightCmp(v2)
 	}
 
-	if cmp == 0 && len(obp.PadSpaceWeight) == 0 {
+	if cmp == 0 && len(obp.PadSpaceWeight) == 0 && obp.PadSpaceWeightCol == 0 {
 		var err error
 		cmp, err = NullsafeCompare(v1, v2, obp.CollationEnv, obp.Type.Collation(), obp.Type.values)
 		if err != nil {
@@ -283,7 +290,7 @@ func comparePaddedWeights(a, b, space []byte) int {
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {
 	weights := make([]tinyWeighter, 0, len(cmp))
 	for _, c := range cmp {
-		if len(c.PadSpaceWeight) != 0 {
+		if len(c.PadSpaceWeight) != 0 || c.PadSpaceWeightCol > 0 {
 			continue
 		}
 		if apply := TinyWeighter(fields[c.Col], c.Type.Collation()); apply != nil {

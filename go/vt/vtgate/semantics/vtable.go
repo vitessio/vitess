@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -29,6 +30,7 @@ type vTableInfo struct {
 	tableName       string
 	columnNames     []string
 	cols            []sqlparser.Expr
+	types           []evalengine.Type
 	tables          TableSet
 	isAuthoritative bool
 }
@@ -70,6 +72,9 @@ func (v *vTableInfo) dependenciesInGroupBy(colName string, org originable) (depe
 
 func (v *vTableInfo) createCertainForCol(org originable, i int) *certain {
 	directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
+	if i < len(v.types) {
+		qt = v.types[i]
+	}
 	newDeps := createCertain(directDeps, recursiveDeps, qt)
 	return newDeps
 }

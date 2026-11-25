@@ -20,6 +20,11 @@ import (
 	"context"
 	"fmt"
 
+	"golang.org/x/sync/errgroup"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -27,46 +32,83 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+type unionSortMetadata struct {
+	common []collations.TypedCollation
+	arms   [][]collations.TypedCollation
+	types  []sqltypes.Type
+	scales []int32
+	same   bool
+}
+
 // resolveUnionCollations asks MySQL about expression collations rather than
 // inferring them from result fields, which describe character_set_results.
 // The zero-row scalar subqueries also preserve the coercibility of empty arms.
-func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bindVars map[string]*querypb.BindVariable) ([]collations.TypedCollation, [][]collations.TypedCollation, error) {
+func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bindVars map[string]*querypb.BindVariable) (*unionSortMetadata, error) {
 	if len(ms.CollationQueries) == 0 {
-		return nil, nil, nil
+		if !ms.UnionCollationKnown {
+			return nil, nil
+		}
+		input := ms.Input.(*Concatenate)
+		metadata := &unionSortMetadata{common: make([]collations.TypedCollation, len(ms.OrderBy)), arms: make([][]collations.TypedCollation, len(input.Sources)), types: make([]sqltypes.Type, len(ms.OrderBy)), scales: make([]int32, len(ms.OrderBy)), same: true}
+		for i, key := range ms.OrderBy {
+			metadata.common[i] = collations.TypedCollation{Collation: key.Type.Collation(), Coercibility: collations.CoerceImplicit, Repertoire: collations.RepertoireUnicode}
+			metadata.types[i] = key.Type.Type()
+			metadata.scales[i] = key.Type.Scale()
+		}
+		return metadata, nil
 	}
 	resolved := make([]collations.TypedCollation, len(ms.OrderBy))
 	arms := make([][]collations.TypedCollation, len(ms.CollationQueries))
-	env := vc.Environment().CollationEnv()
-	for arm, query := range ms.CollationQueries {
-		// Request fields so an empty destination uses GetFields, which reuses
-		// the transaction's existing shard before choosing an arbitrary one.
-		result, err := vc.ExecutePrimitive(ctx, query, copyBindVars(bindVars), true)
-		if err != nil {
-			return nil, nil, vterrors.Wrapf(err, "resolving UNION sort collations")
+	metadata := &unionSortMetadata{common: resolved, arms: arms, types: make([]sqltypes.Type, len(resolved)), scales: make([]int32, len(resolved)), same: true}
+	nativeTypes := make([][]sqltypes.Type, len(ms.CollationQueries))
+	typers := make([]evalengine.TypeAggregator, len(resolved))
+	results := make([]*sqltypes.Result, len(ms.CollationQueries))
+	execute := func(i int) error {
+		var err error
+		results[i], err = vc.ExecutePrimitive(ctx, ms.CollationQueries[i], copyBindVars(bindVars), true)
+		return err
+	}
+	if vc.Session().InTransaction() || vc.Session().InReservedConn() {
+		for i := range results {
+			if err := execute(i); err != nil {
+				return nil, vterrors.Wrapf(err, "resolving UNION sort collations")
+			}
 		}
+	} else {
+		var group errgroup.Group
+		for i := range results {
+			group.Go(func() error { return execute(i) })
+		}
+		if err := group.Wait(); err != nil {
+			return nil, vterrors.Wrapf(err, "resolving UNION sort collations")
+		}
+	}
+	env := vc.Environment().CollationEnv()
+	for arm, result := range results {
+		nativeTypes[arm] = make([]sqltypes.Type, len(resolved))
 		if len(result.Rows) == 0 {
-			return nil, nil, vterrors.VT13001("UNION collation query returned no metadata")
+			return nil, vterrors.VT13001("UNION collation query returned no metadata")
 		}
 		for _, row := range result.Rows {
-			if len(row) < 2*len(resolved) || len(row)%2 != 0 {
-				return nil, nil, vterrors.VT13001("UNION collation query returned an unexpected column count")
+			if len(row) < 3*len(resolved) || len(row)%3 != 0 {
+				return nil, vterrors.VT13001("UNION collation query returned an unexpected column count")
 			}
-			localCount := len(row)/2 - len(resolved)
+			localCount := len(row)/3 - len(resolved)
 			if arms[arm] == nil {
 				arms[arm] = make([]collations.TypedCollation, localCount)
 			}
 			if len(arms[arm]) != localCount {
-				return nil, nil, vterrors.VT13001("UNION arm metadata has inconsistent ordering columns")
+				return nil, vterrors.VT13001("UNION arm metadata has inconsistent ordering columns")
 			}
-			for i := 0; i < len(row)/2; i++ {
-				name := row[2*i].ToString()
+			for i := 0; i < len(row)/3; i++ {
+				name := row[3*i].ToString()
 				id, _ := env.LookupID(name)
 				if id == collations.Unknown {
-					return nil, nil, vterrors.VT12001("UNION ordering with unsupported collation " + name)
+					return nil, vterrors.VT12001("UNION ordering with unsupported collation " + name)
 				}
-				coercibility, err := row[2*i+1].ToUint64()
+				coercibility, err := row[3*i+1].ToUint64()
 				if err != nil || coercibility > uint64(collations.CoerceIgnorable) {
-					return nil, nil, vterrors.VT13001("UNION collation query returned invalid coercibility")
+					return nil, vterrors.VT13001("UNION collation query returned invalid coercibility")
 				}
 				current := collations.TypedCollation{Collation: id, Coercibility: collations.Coercibility(coercibility), Repertoire: collations.RepertoireUnicode}
 				if cs, _ := env.ConnectionCharset(id); cs == "ascii" {
@@ -74,6 +116,15 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 				}
 				var target *collations.TypedCollation
 				if i < len(resolved) {
+					field := result.Fields[3*i+2]
+					nativeTypes[arm][i] = field.Type
+					typ := evalengine.NewTypeEx(field.Type, collations.CollationBinaryID, true, int32(field.ColumnLength), int32(field.Decimals), nil)
+					if err := typers[i].Add(typ, env); err != nil {
+						return nil, err
+					}
+					if resolved[i].Valid() && resolved[i].Collation != current.Collation {
+						metadata.same = false
+					}
 					target = &resolved[i]
 				} else {
 					target = &arms[arm][i-len(resolved)]
@@ -84,25 +135,32 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 				}
 				*target, err = mergeUnionSortCollations(env, *target, current)
 				if err != nil {
-					return nil, nil, vterrors.Wrapf(vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, err.Error()), "resolving UNION sort collation")
+					return nil, vterrors.Wrapf(vterrors.NewError(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregate2Collations, err.Error()), "resolving UNION sort collation")
 				}
 			}
 		}
 	}
 	for _, collation := range resolved {
 		if collation.Coercibility == collations.CoerceNone {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, "Illegal mix of collations for operation 'UNION'")
-		}
-		if colldata.Lookup(collation.Collation) == nil {
-			return nil, nil, vterrors.VT12001(fmt.Sprintf("UNION ordering with unsupported collation ID %d", collation.Collation))
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantAggregateCollations, "Illegal mix of collations for operation 'UNION'")
 		}
 	}
-	return resolved, arms, nil
+	for i := range resolved {
+		typ := typers[i].Type()
+		metadata.types[i] = typ.Type()
+		metadata.scales[i] = typ.Scale()
+		for _, native := range nativeTypes {
+			if native[i] != metadata.types[i] {
+				metadata.same = false
+			}
+		}
+	}
+	return metadata, nil
 }
 
 // Metadata aggregation does not compare or decode values. An unsupported arm
-// collation can therefore be coerced to a supported final comparator; only the
-// latter needs a local implementation. Use the normal merge for supported pairs.
+// collation can therefore participate in a common comparator whose keys are
+// generated by MySQL. Use the normal merge for supported pairs.
 func mergeUnionSortCollations(env *collations.Environment, left, right collations.TypedCollation) (collations.TypedCollation, error) {
 	if colldata.Lookup(left.Collation) != nil && colldata.Lookup(right.Collation) != nil {
 		merged, _, _, err := colldata.Merge(env, left, right, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})

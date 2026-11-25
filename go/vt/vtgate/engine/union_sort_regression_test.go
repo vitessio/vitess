@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,7 +66,7 @@ func TestUnionSortTruncatingFilter(t *testing.T) {
 					}
 
 					sort := &MemorySort{Input: NewConcatenate([]Primitive{input}, nil), OrderBy: evalengine.Comparison{{Col: orderCol, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Unknown, 0), CollationEnv: collations.MySQL8()}}, CollationQueries: []Primitive{
-						&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|2")}},
+						&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|2")}},
 					}}
 					vc := &loggingVCursor{shards: []string{"0"}, results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "z|1|1|z", "a|2|1|a", "0|0|0|0")}}
 					vc.inTx = true
@@ -93,10 +94,10 @@ func TestUnionSortSQLScope(t *testing.T) {
 	env := collations.MySQL8()
 	source := unionSortTestRoute(t, "select name, id as c0 from review3_alias order by name")
 	source.OrderBy = evalengine.Comparison{{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.VarChar, env.LookupByName("utf8mb4_general_ci")), CollationEnv: env}}
-	generated, _, _, err := unionSortRoute(source, []int{0}, []collations.TypedCollation{{Collation: env.LookupByName("utf8mb4_general_ci")}}, []collations.TypedCollation{{Collation: env.LookupByName("utf8mb4_general_ci")}}, env)
+	generated, _, _, err := unionSortRoute(source, source.OrderBy, []collations.TypedCollation{{Collation: env.LookupByName("utf8mb4_general_ci")}}, []collations.TypedCollation{{Collation: env.LookupByName("utf8mb4_general_ci")}}, math.MaxInt, env)
 	require.NoError(t, err)
 	timeout := unionSortTestRoute(t, "select /*+ MAX_EXECUTION_TIME(5) SET_VAR(sort_buffer_size=32768) RESOURCE_GROUP(rg) NO_ICP(a) QB_NAME(q) */ sum(a.id * b.id) as n from review3_load a cross join review3_load b")
-	timed, _, _, err := unionSortRoute(timeout, []int{0}, []collations.TypedCollation{{Collation: 63}}, nil, env)
+	timed, _, _, err := unionSortRoute(timeout, evalengine.Comparison{{Col: 0, Type: evalengine.NewType(sqltypes.Int64, 63)}}, []collations.TypedCollation{{Collation: 63}}, nil, math.MaxInt, env)
 	require.NoError(t, err)
 	t.Logf("alias wrapper: %s", generated.Query)
 	t.Logf("timeout wrapper: %s", timed.Query)
@@ -119,7 +120,7 @@ func TestUnionSortPadSpaceTie(t *testing.T) {
 					{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Unknown, 0), CollationEnv: collations.MySQL8()},
 					{Col: 1, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Int64, 63), CollationEnv: collations.MySQL8()},
 				},
-				CollationQueries:    []Primitive{&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("collation|coercibility|collation2|coercibility2", "varchar|int64|varchar|int64"), "utf8mb4_general_ci|2|binary|5")}}},
+				CollationQueries:    []Primitive{&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("collation|coercibility|collation2|coercibility2", "varchar|int64|varchar|int64"), "utf8mb4_general_ci|2|binary|5")}}},
 				TruncateColumnCount: 2,
 			}
 			var result *sqltypes.Result
@@ -142,8 +143,8 @@ func TestUnionSortDifferentArmHelpers(t *testing.T) {
 			left := unionSortTestRoute(t, "select name,id,weight_string(name),weight_string(id) from test")
 			right := unionSortTestRoute(t, "select name,id,weight_string(name) from test")
 			sort := &MemorySort{Input: NewConcatenate([]Primitive{&Limit{Input: left, Count: evalengine.NewLiteralInt(1)}, right}, []int{2}), TruncateColumnCount: 2, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 2, Type: evalengine.NewType(sqltypes.Unknown, 0)}}, CollationQueries: []Primitive{
-				&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|2")}},
-				&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|4")}},
+				&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|2")}},
+				&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("collation|coercibility", "varchar|int64"), "utf8mb4_general_ci|4")}},
 			}}
 			vc := &loggingVCursor{shards: []string{"0"}, results: []*sqltypes.Result{
 				sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|id|old1|old2|key", "varchar|int64|varbinary|varbinary|varbinary"), "a|1|old|old|a"),
@@ -173,8 +174,8 @@ func TestUnionSortArmLimitPadSpace(t *testing.T) {
 	other := unionSortTestRoute(t, "select name,id from other")
 	other.Opcode = Scatter
 	sort := &MemorySort{Input: NewConcatenate([]Primitive{&Limit{Input: route, Count: evalengine.NewLiteralInt(1)}, other}, nil), TruncateColumnCount: 2, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Unknown, 0)}}, CollationQueries: []Primitive{
-		&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("global|coercibility|local1|coercibility1|local2|coercibility2", "varchar|int64|varchar|int64|varchar|int64"), "utf8mb4_general_ci|2|utf8mb4_general_ci|2|binary|5")}},
-		&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("global|coercibility", "varchar|int64"), "utf8mb4_bin|2")}},
+		&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("global|coercibility|local1|coercibility1|local2|coercibility2", "varchar|int64|varchar|int64|varchar|int64"), "utf8mb4_general_ci|2|utf8mb4_general_ci|2|binary|5")}},
+		&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(sqltypes.MakeTestFields("global|coercibility", "varchar|int64"), "utf8mb4_bin|2")}},
 	}}
 	vc := &loggingVCursor{shards: []string{"-80", "80-"}, results: []*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|id|global_key|local_key", "varchar|int64|varbinary|varbinary"), "a|5|\x00\x00a|\x00A", "a |4|\x00\x00a\x00\x00 |\x00A\x00 "),
@@ -208,7 +209,7 @@ func TestUnionSortConcurrentPlanReuse(t *testing.T) {
 					key := string(coll.WeightString(nil, []byte("a"), 0))
 					spaced := string(coll.WeightString(nil, []byte("a "), 0))
 					vc := &loggingVCursor{shards: []string{"0"}, results: []*sqltypes.Result{
-						sqltypes.MakeTestResult(sqltypes.MakeTestFields("collation|coercibility|collation2|coercibility2", "varchar|int64|varchar|int64"), name+"|2|binary|5"),
+						unionSortMetadataResult(sqltypes.MakeTestFields("collation|coercibility|collation2|coercibility2", "varchar|int64|varchar|int64"), name+"|2|binary|5"),
 						sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|id|key|id_key", "varchar|int64|varbinary|varbinary"), "a|2|"+key+"|2", "a |1|"+spaced+"|1"),
 					}}
 					vc.inTx = true

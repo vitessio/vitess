@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -33,6 +34,9 @@ import (
 func addUnionSortCollationQueries(ctx *plancontext.PlanningContext, sort *engine.MemorySort) error {
 	union, ok := sort.Input.(*engine.Concatenate)
 	if !ok {
+		return nil
+	}
+	if sort.UnionCollationKnown {
 		return nil
 	}
 	needed := false
@@ -83,13 +87,8 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		}
 		return unionSortCollationQuery(ctx, source.Input, offsets)
 	case *engine.VindexLookup:
-		query, err := unionSortCollationQuery(ctx, source.SendTo, offsets)
-		if err != nil || query == nil {
-			return nil, err
-		}
-		lookup := *source
-		lookup.SendTo = query.(*engine.Route)
-		return &lookup, nil
+		// The probe has no row predicate and does not need a lookup value.
+		return unionSortCollationQuery(ctx, source.SendTo, offsets)
 	case *engine.Route:
 		route := source
 		// FieldQuery already removes row predicates and their shard-specific
@@ -103,20 +102,28 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		if !ok {
 			return nil, vterrors.VT13001("UNION sort input is not a SELECT")
 		}
-		// Adding mandatory probes or hidden keys must not change GROUP BY
-		// validation, DISTINCT equality, or a locally merged UNION's semantics.
-		supported := true
+		// FieldQuery deliberately drops predicates and DISTINCT. Eligibility
+		// must be checked on the original statement before that transformation.
+		original := route.QueryStatement
+		if original == nil {
+			original = selectStmt
+		}
+		supported := !sqlparser.ContainsAggregation(original)
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 			switch node := node.(type) {
 			case *sqlparser.Union:
 				supported = false
+			case *sqlparser.FuncExpr:
+				if node.Name.EqualsAnyString(ctx.VSchema.GetAggregateUDFs()) {
+					supported = false
+				}
 			case *sqlparser.Select:
-				if node.GroupBy != nil || node.Distinct {
+				if node.GroupBy != nil {
 					supported = false
 				}
 			}
 			return supported, nil
-		}, selectStmt)
+		}, original)
 		if !supported {
 			return nil, nil
 		}
@@ -139,7 +146,7 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 				return nil, vterrors.VT13001("UNION ordering column is outside its arm")
 			}
 			scalar := fmt.Sprintf("(select __union_sort.%s from (%s) as __union_sort(%s))", columns[offset], arm, strings.Join(columns, ", "))
-			expressions = append(expressions, "collation("+scalar+")", "coercibility("+scalar+")")
+			expressions = append(expressions, "collation("+scalar+")", "coercibility("+scalar+")", scalar)
 		}
 		query := "select " + strings.Join(expressions, ", ")
 		statement, err = ctx.VSchema.Environment().Parser().Parse(query)
@@ -152,6 +159,15 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		metadata := *route
 		metadata.Query, metadata.FieldQuery = query, query
 		metadata.QueryStatement = outer
+		routing := &engine.RoutingParameters{}
+		if route.RoutingParameters != nil {
+			*routing = *route.RoutingParameters
+		}
+		// None uses GetFields' existing-transaction-shard fallback, or one
+		// arbitrary shard outside a transaction. Never scatter a zero-row probe.
+		routing.Opcode = engine.None
+		routing.TargetDestination = nil
+		metadata.RoutingParameters = routing
 		metadata.OrderBy = nil
 		metadata.TruncateColumnCount = 0
 		metadata.NoRoutesSpecialHandling = false
@@ -160,4 +176,44 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 	default:
 		return nil, nil
 	}
+}
+
+// Only plain column references are session-independent. Literal expressions
+// and explicit COLLATE/CONVERT expressions keep runtime coercibility probing.
+func unionSortKnownColumns(ctx *plancontext.PlanningContext, source operators.Operator, sort *engine.MemorySort) bool {
+	union, ok := source.(*operators.Union)
+	if !ok {
+		return false
+	}
+	input, ok := sort.Input.(*engine.Concatenate)
+	if !ok || len(input.Sources) != len(union.Selects) {
+		return false
+	}
+	for i, columns := range union.Selects {
+		route, ok := input.Sources[i].(*engine.Route)
+		if !ok || len(route.OrderBy) > 0 {
+			return false
+		}
+		stmt, ok := route.QueryStatement.(*sqlparser.Select)
+		if !ok || stmt.Limit != nil || ctx.ContainsAggr(stmt) {
+			return false
+		}
+		for _, key := range sort.OrderBy {
+			if key.Col >= len(columns) {
+				return false
+			}
+			expr, ok := columns[key.Col].(*sqlparser.AliasedExpr)
+			if !ok {
+				return false
+			}
+			if _, ok := expr.Expr.(*sqlparser.ColName); !ok {
+				return false
+			}
+			typ, found := ctx.TypeForExpr(expr.Expr)
+			if !found || typ.Type() == sqltypes.Unknown || typ.Type() != key.Type.Type() || typ.Collation() != key.Type.Collation() {
+				return false
+			}
+		}
+	}
+	return true
 }

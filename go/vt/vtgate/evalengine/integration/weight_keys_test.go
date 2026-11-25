@@ -35,11 +35,20 @@ func TestServerWeightKeyComparison(t *testing.T) {
 	t.Cleanup(conn.Close)
 	env := collations.NewEnvironment(conn.ServerVersion)
 	corpus := []string{"", " ", "  ", "a", "a ", "A", "a\x00", "a\x00 ", "a\x01", "a\x1f", "a\u0301", "á", "ß", "ss", "a\u200d", "a\u200b", "ab", "ch", "cH", "ll", "lL", "dz", "dž", "æ", "œ", "İ", "ı", "ก", "เก"}
-	for _, id := range env.AllCollationIDs() {
-		t.Run(env.LookupName(id), func(t *testing.T) {
-			name := env.LookupName(id)
-			cs := env.LookupCharsetName(id)
-			properties, err := conn.ExecuteFetch("select pad_attribute from information_schema.collations where collation_name='"+name+"'", 1, true)
+	catalogue, err := conn.ExecuteFetch("select collation_name,id from information_schema.collations order by id", 1000, true)
+	require.NoError(t, err)
+	for _, entry := range catalogue.Rows {
+		id, _ := env.LookupID(entry[0].ToString())
+		if id == collations.Unknown {
+			continue
+		}
+		name, cs := env.LookupKnownCollation(id)
+		t.Run(name, func(t *testing.T) {
+			switch name {
+			case "tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci":
+				t.Skip("MySQL weight strings are not order-preserving; UNION key generation rejects this comparator")
+			}
+			properties, err := conn.ExecuteFetch("select pad_attribute from information_schema.collations where id="+entry[1].ToString(), 1, true)
 			require.NoError(t, err)
 			require.Len(t, properties.Rows, 1)
 			pad, known := env.PadSpace(id)
@@ -52,16 +61,22 @@ func TestServerWeightKeyComparison(t *testing.T) {
 				return fmt.Sprintf("convert(_utf8mb4 X'%x' using %s) collate %s", []byte(value), cs, name)
 			}
 			cmp := evalengine.OrderByParams{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID)}
+			var space sqltypes.Value
 			if pad {
-				coll := colldata.Lookup(id)
-				var encoded [4]byte
-				n := coll.Charset().EncodeRune(encoded[:], ' ')
-				require.Positive(t, n)
-				cmp.PadSpaceWeight = coll.WeightString(nil, encoded[:n], 0)
 				server, err := conn.ExecuteFetch("select weight_string("+expr(" ")+")", 1, true)
 				require.NoError(t, err)
-				require.Equal(t, server.Rows[0][0].Raw(), cmp.PadSpaceWeight)
+				space = server.Rows[0][0]
+				if coll := colldata.Lookup(id); coll != nil {
+					var encoded [4]byte
+					n := coll.Charset().EncodeRune(encoded[:], ' ')
+					require.Positive(t, n)
+					cmp.PadSpaceWeight = coll.WeightString(nil, encoded[:n], 0)
+					require.Equal(t, space.Raw(), cmp.PadSpaceWeight)
+				} else {
+					cmp.PadSpaceWeightCol = 1
+				}
 			}
+
 			for _, left := range corpus {
 				for _, right := range corpus {
 					result, err := conn.ExecuteFetch("select strcmp("+expr(left)+","+expr(right)+"),weight_string("+expr(left)+"),weight_string("+expr(right)+")", 1, true)
@@ -69,9 +84,34 @@ func TestServerWeightKeyComparison(t *testing.T) {
 					row := result.Rows[0]
 					want, err := row[0].ToInt64()
 					require.NoError(t, err)
-					require.Equal(t, int(want), cmp.Compare(sqltypes.Row{row[1]}, sqltypes.Row{row[2]}), "left=%q right=%q", left, right)
+					require.Equal(t, int(want), cmp.Compare(sqltypes.Row{row[1], space}, sqltypes.Row{row[2], space}), "left=%q right=%q weights=%x/%x space=%x", left, right, row[1].Raw(), row[2].Raw(), space.Raw())
 				}
 			}
+		})
+	}
+}
+
+// These transforms cannot be used as comparison keys even with a server SPACE
+// weight. Keep the limitation reproducible alongside the accepted catalogue.
+func TestServerWeightKeyKnownLimitations(t *testing.T) {
+	conn := mysqlconn(t)
+	t.Cleanup(conn.Close)
+	for _, tc := range []struct{ collation, charset, left, right string }{
+		{"tis620_thai_ci", "tis620", "a", "a\x00"},
+		{"cp1250_czech_cs", "cp1250", "", "  "},
+		{"gb18030_chinese_ci", "gb18030", "ss", "ı"},
+	} {
+		t.Run(tc.collation, func(t *testing.T) {
+			expr := func(value string) string {
+				return fmt.Sprintf("convert(_utf8mb4 X'%x' using %s) collate %s", value, tc.charset, tc.collation)
+			}
+			result, err := conn.ExecuteFetch("select strcmp("+expr(tc.left)+","+expr(tc.right)+"),weight_string("+expr(tc.left)+"),weight_string("+expr(tc.right)+"),weight_string("+expr(" ")+")", 1, true)
+			require.NoError(t, err)
+			row := result.Rows[0]
+			want, err := row[0].ToInt64()
+			require.NoError(t, err)
+			cmp := evalengine.OrderByParams{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID), PadSpaceWeightCol: 1}
+			require.NotEqual(t, int(want), cmp.Compare(sqltypes.Row{row[1], row[3]}, sqltypes.Row{row[2], row[3]}))
 		})
 	}
 }

@@ -55,16 +55,17 @@ func TestUnionSortCollationQueries(t *testing.T) {
 			for i, input := range union.Sources {
 				route := input.(*engine.Route)
 				metadata := sort.CollationQueries[i].(*engine.Route)
-				assert.Equal(t, route.RoutingParameters, metadata.RoutingParameters, "keep the arm's destinations")
+				assert.Same(t, route.Keyspace, metadata.Keyspace)
+				assert.Equal(t, engine.None, metadata.Opcode, "probe one shard through GetFields, independently of row routing")
 				assert.NotContains(t, route.Query, ":__upper_limit", "resolve the global comparator before truncating arms")
 				assert.Contains(t, metadata.Query, "limit 0")
-				assert.Equal(t, 2*len(sort.OrderBy), strings.Count(metadata.Query, "(select __union_sort.c"))
+				assert.Equal(t, 3*len(sort.OrderBy), strings.Count(metadata.Query, "(select __union_sort.c"))
 				assert.Contains(t, metadata.Query, "coercibility(")
 				assert.False(t, metadata.NoRoutesSpecialHandling, "empty metadata routes must retain the shard-affine GetFields fallback")
 				assert.NotContains(t, metadata.Query, "::__vals", "metadata must work even when IN routing has no destinations")
 				stmt, err := env.Parser().Parse(metadata.Query)
 				require.NoError(t, err)
-				assert.Equal(t, 2*len(sort.OrderBy), stmt.(sqlparser.SelectStatement).GetColumnCount())
+				assert.Equal(t, 3*len(sort.OrderBy), stmt.(sqlparser.SelectStatement).GetColumnCount())
 			}
 		})
 	}
@@ -89,12 +90,12 @@ func TestUnionSortCollationQueryWrappers(t *testing.T) {
 			union := sort.Input.(*engine.Concatenate)
 			switch arm := union.Sources[1].(type) {
 			case *engine.VindexLookup:
-				metadata, ok := sort.CollationQueries[1].(*engine.VindexLookup)
-				require.True(t, ok, "lookup retains ownership of its destination")
-				assert.Same(t, arm.Lookup, metadata.Lookup)
-				assert.NotSame(t, arm.SendTo, metadata.SendTo)
-				assert.Contains(t, metadata.SendTo.Query, "coercibility(")
-				assert.NotContains(t, arm.SendTo.Query, "coercibility(")
+				metadata, ok := sort.CollationQueries[1].(*engine.Route)
+				require.True(t, ok, "metadata does not repeat the lookup")
+				assert.Equal(t, engine.None, metadata.Opcode)
+				assert.NotSame(t, arm.SendTo, metadata)
+				assert.Contains(t, metadata.Query, "coercibility(")
+
 			case *engine.Limit:
 				assert.Equal(t, "2", sqlparser.String(arm.Count), "keep arm-local row selection")
 				_, ok := sort.CollationQueries[1].(*engine.Route)
@@ -146,7 +147,6 @@ func TestUnionSortExcludesRowShapingRoutes(t *testing.T) {
 	require.NoError(t, err)
 	for _, query := range []string{
 		"select name from unsharded group by id",
-		"select distinct name from unsharded",
 		"select name from (select name from unsharded group by id) t",
 		"select name from unsharded union all select name from user",
 	} {

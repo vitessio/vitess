@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -450,6 +451,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 		})
 	}
 
+	prim.UnionCollationKnown = unionSortKnownColumns(ctx, ordering.Source, prim)
 	if err := addUnionSortCollationQueries(ctx, prim); err != nil {
 		return nil, err
 	}
@@ -960,6 +962,13 @@ func createLimit(ctx *plancontext.PlanningContext, input engine.Primitive, limit
 		}
 	}
 
+	// Limit supplies count+offset before executing its input. Keep the UNION
+	// heap and per-arm top-N bounded by that same execution-local value.
+	if sort, ok := input.(*engine.MemorySort); ok {
+		if _, union := sort.Input.(*engine.Concatenate); union {
+			sort.UpperLimit = evalengine.NewBindVar(engine.UpperLimitStr, evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))
+		}
+	}
 	return &engine.Limit{
 		Count:                count,
 		Offset:               offset,

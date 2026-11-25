@@ -209,6 +209,12 @@ func (v *VExplain) getExplainTraceOutput(getOpStats func() Stats) (*sqltypes.Res
 func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
 	logEntries := vcursor.Session().GetVExplainLogs()
 	explainResults := make(map[Primitive]string)
+	resolved := make(map[Primitive]Primitive)
+	for _, entry := range logEntries {
+		if route, ok := entry.FiredFrom.(*Route); ok && route.unionSortOriginal != nil {
+			resolved[route.unionSortOriginal] = route
+		}
+	}
 	for _, entry := range logEntries {
 		if entry.Target == nil || entry.Gateway == nil || entry.FiredFrom == nil {
 			continue
@@ -234,7 +240,11 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		explainResults[entry.FiredFrom] = res.Rows[0][0].ToString()
 	}
 
-	planDescription := primitiveToPlanDescriptionWithSQLResults(v.Input, explainResults)
+	planDescription := primitiveToPlanDescriptionWithResolved(v.Input, func(prim Primitive, pd *PrimitiveDescription) {
+		if result, ok := explainResults[prim]; ok {
+			pd.Other["mysql_explain_json"] = json.RawMessage(result)
+		}
+	}, resolved)
 	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
 	if err != nil {
 		return nil, err
@@ -264,7 +274,8 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 	}
 
 	var tasks []mysqlExplainTask
-	if err := v.collectMySQLExplainTasks(ctx, vcursor, v.Input, bindVars, &tasks); err != nil {
+	resolved := make(map[Primitive]Primitive)
+	if err := v.collectMySQLExplainTasks(ctx, vcursor, v.Input, bindVars, &tasks, resolved); err != nil {
 		return nil, err
 	}
 
@@ -273,7 +284,11 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 		return nil, err
 	}
 
-	planDescription := primitiveToPlanDescriptionWithShardedSQLResults(v.Input, explainResults)
+	planDescription := primitiveToPlanDescriptionWithResolved(v.Input, func(prim Primitive, pd *PrimitiveDescription) {
+		if result, ok := explainResults[prim]; ok {
+			pd.Other["mysql_explain_json_by_shard"] = result
+		}
+	}, resolved)
 	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
 	if err != nil {
 		return nil, err
@@ -291,8 +306,28 @@ func (v *VExplain) convertToVExplainMySQLResult(ctx context.Context, vcursor VCu
 // that primitive's shards. Shard resolution runs serially here (it is cheap and,
 // for a pushed-down Limit, must happen before its child Route is visited); the
 // EXPLAIN queries themselves are run concurrently by runMySQLExplainTasks.
-func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, tasks *[]mysqlExplainTask) error {
+func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor, primitive Primitive, bindVars map[string]*querypb.BindVariable, tasks *[]mysqlExplainTask, resolved map[Primitive]Primitive) error {
 	switch prim := primitive.(type) {
+	case *MemorySort:
+		if resolved != nil {
+			metadata, err := prim.resolveUnionCollations(ctx, vcursor, bindVars)
+			if err != nil {
+				return err
+			}
+			count, err := prim.fetchCount(ctx, vcursor, bindVars)
+			if err != nil {
+				return err
+			}
+			input, _, err := prim.unionSortInput(metadata, count, vcursor.Environment().CollationEnv())
+			if err != nil {
+				return err
+			}
+			clone := *prim
+			clone.Input = input
+			clone.CollationQueries = nil
+			resolved[prim] = &clone
+			return v.collectMySQLExplainTasks(ctx, vcursor, input, bindVars, tasks, resolved)
+		}
 	case *Route:
 		rss, bvs, err := prim.findRoute(ctx, vcursor, bindVars)
 		if err != nil {
@@ -342,7 +377,7 @@ func (v *VExplain) collectMySQLExplainTasks(ctx context.Context, vcursor VCursor
 		// Sharing one map across sibling inputs (e.g. the arms of a Concatenate)
 		// would let a later sibling overwrite an earlier task's bindings before
 		// the EXPLAINs run. This mirrors Concatenate's per-source copyBindVars.
-		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, copyBindVars(bindVars), tasks); err != nil {
+		if err := v.collectMySQLExplainTasks(ctx, vcursor, input, copyBindVars(bindVars), tasks, resolved); err != nil {
 			return err
 		}
 	}
@@ -447,13 +482,20 @@ func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]st
 // tree, calling attach on each node so the caller can decorate it with its own
 // EXPLAIN output (which differs in shape between VEXPLAIN ALL and MYSQLPLAN).
 func primitiveToPlanDescriptionWith(in Primitive, attach func(Primitive, *PrimitiveDescription)) PrimitiveDescription {
+	return primitiveToPlanDescriptionWithResolved(in, attach, nil)
+}
+
+func primitiveToPlanDescriptionWithResolved(in Primitive, attach func(Primitive, *PrimitiveDescription), resolved map[Primitive]Primitive) PrimitiveDescription {
+	if replacement, ok := resolved[in]; ok {
+		in = replacement
+	}
 	this := in.description()
 
 	attach(in, &this)
 
 	inputs, infos := in.Inputs()
 	for idx, input := range inputs {
-		pd := primitiveToPlanDescriptionWith(input, attach)
+		pd := primitiveToPlanDescriptionWithResolved(input, attach, resolved)
 		if infos != nil {
 			for k, v := range infos[idx] {
 				if k == inputName {

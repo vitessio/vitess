@@ -18,6 +18,8 @@ package union
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -205,14 +207,14 @@ func TestUnionOrderByLossyBackendResults(t *testing.T) {
 		for _, tablet := range shard.Vttablets {
 			process := tablet.VttabletProcess
 			previous := process.Charset
-			require.NoError(t, process.TearDown())
-			process.Charset = "ascii"
 			t.Cleanup(func() {
 				assert.NoError(t, process.TearDown())
 				process.Charset = previous
 				assert.NoError(t, process.Setup())
 				assert.NoError(t, process.WaitForTabletStatus("SERVING"))
 			})
+			require.NoError(t, process.TearDown())
+			process.Charset = "ascii"
 			require.NoError(t, process.Setup())
 			require.NoError(t, process.WaitForTabletStatus("SERVING"))
 		}
@@ -405,5 +407,111 @@ func TestUnionOrderByAliasAndPadding(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// More than 50 matches per shard would exceed this fixture's tablet result
+// limit without the backend cap; OLAP would also exceed max-memory-rows=64.
+func TestUnionOrderedCaps(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	// Delete in bounded batches before the shared fixture's ordinary cleanup;
+	// its DML prefetch is subject to the same deliberately low tablet limit.
+	t.Cleanup(func() {
+		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload=oltp")
+		for first := 1; first <= 256; first += 16 {
+			var ids []string
+			for id := first; id < first+16; id++ {
+				ids = append(ids, strconv.Itoa(id))
+			}
+			_, _ = mcmp.ExecAndIgnore("delete from union_collations where id in (" + strings.Join(ids, ",") + ")")
+		}
+	})
+	var values, rightIDs []string
+	for id := 1; id <= 256; id++ {
+		if id > 1 {
+			rightIDs = append(rightIDs, strconv.Itoa(id))
+		}
+		values = append(values, fmt.Sprintf("(%d,'a%03d','Z%03d')", id, 257-id, id))
+	}
+	mcmp.Exec("insert into union_collations(id,name_general,name_bin) values " + strings.Join(values, ","))
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload="+workload)
+			for _, query := range []string{
+				"select id as x from union_collations where id=1 union all select id from union_collations where id in (" + strings.Join(rightIDs, ",") + ") order by x desc limit 10",
+				"select 9007199254740991+id as x,id from union_collations where id in (1,2) union all select cast(0 as double),99 from union_collations where id=4 order by x desc,id limit 1",
+				"select name_general as x,id from union_collations where id=1 union all select name_bin,id from union_collations where id in (" + strings.Join(rightIDs, ",") + ") order by x,id limit 3,10",
+				"select name_general as x,id from union_collations where id=1 union all select name_general,id from union_collations where id in (" + strings.Join(rightIDs, ",") + ") order by x desc,id limit 10",
+			} {
+				plan := utils.Exec(t, mcmp.VtConn, "vexplain plan "+query)
+				require.Contains(mcmp.AsT(), fmt.Sprint(plan.Rows), "Concatenate", "exercise the split UNION path")
+				if strings.Contains(query, "9007199254740991") {
+					result := utils.Exec(t, mcmp.VtConn, query)
+					require.Equal(t, "1", result.Rows[0][1].ToString(), "the converted DOUBLE keys tie at 2^53; the secondary integer key must choose id=1")
+				} else {
+					mcmp.Exec(query)
+				}
+				trace := utils.Exec(t, mcmp.VtConn, "vexplain queries "+query)
+				data, probes := 0, 0
+				for _, row := range trace.Rows {
+					sql := row[3].ToString()
+					if strings.Contains(sql, "coercibility(") {
+						probes++
+						continue
+					}
+					if strings.HasPrefix(sql, "select") {
+						data++
+						assert.Contains(mcmp.AsT(), sql, "order by")
+						assert.Contains(mcmp.AsT(), sql, "limit")
+					}
+				}
+				assert.Positive(mcmp.AsT(), data, "query=%s trace=%v", query, trace.Rows)
+				assert.LessOrEqual(mcmp.AsT(), probes, 2, "one probe per arm, independent of shard count")
+				if strings.HasPrefix(query, "select id") {
+					for _, row := range trace.Rows {
+						assert.NotContains(mcmp.AsT(), row[3].ToString(), "NO_MERGE")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestUnionBackendCollationAndEligibility(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("insert into union_collations(id,name_general) values (1,'a'),(4,'z')")
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload="+workload)
+		for _, charset := range []string{"tis620", "cp1250", "gb18030"} {
+			collation := map[string]string{"tis620": "tis620_thai_ci", "cp1250": "cp1250_czech_cs", "gb18030": "gb18030_chinese_ci"}[charset]
+			query := "select convert(name_general using " + charset + ") collate " + collation + " as x from union_collations where id=1 union all select convert(name_general using " + charset + ") collate " + collation + " from union_collations where id=4 order by x"
+			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
+			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
+		}
+		mcmp.Exec("select convert(name_general using big5) as x from union_collations where id=1 union all select convert(name_general using big5) from union_collations where id=4 order by x limit 1")
+		mcmp.Exec("select name_general as x,id from union_collations where id=1 union all select name_general,sum(id) from union_collations where id=4 and name_general='z' order by x")
+		mcmp.Exec("(select distinct name_general as x from union_collations) union all select name_general from union_collations where id=1 order by x limit 2")
+		_, _ = mcmp.ExecAllowAndCompareError("select name_general collate utf8mb4_unicode_ci as x from union_collations where id=1 union all select name_general collate utf8mb4_bin from union_collations where id=4 order by x", utils.CompareOptions{})
+	}
+}
+
+func TestUnionExplainRuntimeSQL(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("insert into union_collations(id,name_general,name_bin) values (1,'a','a'),(4,'z','z')")
+	query := "select name_general as x from union_collations where id=1 union all select name_bin from union_collations where id=4 order by x limit 1"
+	plan := utils.Exec(t, mcmp.VtConn, "vexplain plan "+query)
+	assert.Contains(t, fmt.Sprint(plan.Rows), "Collation metadata 1")
+	for _, mode := range []string{"mysqlplan", "all"} {
+		result := utils.Exec(t, mcmp.VtConn, "vexplain "+mode+" "+query)
+		text := result.Rows[0][0].ToString()
+		assert.Contains(t, text, "NO_MERGE(__union_values)", mode)
+		assert.Contains(t, text, "mysql_explain_json", mode)
+		assert.Contains(t, text, "limit 1", mode)
 	}
 }

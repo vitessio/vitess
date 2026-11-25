@@ -577,8 +577,9 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		debugNoRewrite("limit push blocked: upper limit already set")
 		return in, NoRewrite
 	}
-	// A UNION's common comparator can differ from every arm's local
-	// comparison. Keep all arm rows until the global sort has resolved it.
+	// A UNION's comparator can differ from each arm's native order. MemorySort
+	// installs ordering and per-arm caps together after resolving that comparator;
+	// pushing a cap here would truncate rows before the correct order is known.
 	if hasOrderingOverUnion(in.Source) {
 		return in, NoRewrite
 	}

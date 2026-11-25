@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -50,17 +51,19 @@ func TestUnionSortCollationsPerExecution(t *testing.T) {
 			}
 			metadataFields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 			vc := &loggingVCursor{shards: []string{"0"}, results: []*sqltypes.Result{
-				sqltypes.MakeTestResult(fields, "a|wrong_a|1", "B|wrong_B|2"),
-				sqltypes.MakeTestResult(fields, "a|wrong_a|2", "B|wrong_B|1"),
+				sqltypes.MakeTestResult(fields, "a|\x00A|1"),
+				sqltypes.MakeTestResult(fields, "B|\x1c\x60|2"),
+				sqltypes.MakeTestResult(fields, "a|\x00\x00a|2"),
+				sqltypes.MakeTestResult(fields, "B|\x1c\x60|1"),
 			}}
 			vc.inTx = true
 			route := unionSortTestRoute(t, "select name, weight_string(name) from test")
 			metadata := &fakePrimitive{results: []*sqltypes.Result{
-				sqltypes.MakeTestResult(metadataFields, "utf8mb4_general_ci|2"),
-				sqltypes.MakeTestResult(metadataFields, "utf8mb4_bin|2"),
+				unionSortMetadataResult(metadataFields, "utf8mb4_general_ci|2"),
+				unionSortMetadataResult(metadataFields, "utf8mb4_bin|2"),
 			}}
 			sort := &MemorySort{
-				Input: NewConcatenate([]Primitive{route}, nil), CollationQueries: []Primitive{metadata}, TruncateColumnCount: 1,
+				Input: NewConcatenate([]Primitive{route, unionSortTestRoute(t, "select :value as name, weight_string(:value) from test")}, nil), CollationQueries: []Primitive{metadata, &fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(metadataFields, "utf8mb4_0900_ai_ci|4"), unionSortMetadataResult(metadataFields, "utf8mb4_0900_ai_ci|4")}}}, TruncateColumnCount: 1,
 				OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.Unknown, collations.Unknown), CollationEnv: collations.MySQL8()}},
 			}
 			for _, want := range [][]string{{"a", "B"}, {"B", "a"}} {
@@ -96,20 +99,20 @@ func TestUnionSortCollationCoercibility(t *testing.T) {
 	metadataFields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 	for _, reverse := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reverse=%t", reverse), func(t *testing.T) {
-			constant := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(metadataFields, "utf8mb4_0900_ai_ci|4")}}
-			column := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(metadataFields, "utf8mb4_general_ci|2")}}
+			constant := &fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(metadataFields, "utf8mb4_0900_ai_ci|4")}}
+			column := &fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(metadataFields, "utf8mb4_general_ci|2")}}
 			queries := []Primitive{constant, column}
 			if reverse {
 				queries = []Primitive{column, constant}
 			}
 			sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: queries}
-			resolved, _, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+			metadata, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
 			require.NoError(t, err)
-			require.Len(t, resolved, 1)
+			require.Len(t, metadata.common, 1)
 			id, ok := collations.MySQL8().LookupID("utf8mb4_general_ci")
 			require.True(t, ok)
-			assert.Equal(t, id, resolved[0].Collation)
-			assert.Equal(t, collations.CoerceImplicit, resolved[0].Coercibility)
+			assert.Equal(t, id, metadata.common[0].Collation)
+			assert.Equal(t, collations.CoerceImplicit, metadata.common[0].Coercibility)
 		})
 	}
 }
@@ -127,11 +130,11 @@ func TestUnionSortMetadataPreservesBindings(t *testing.T) {
 	fields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 	metadata := &fakePrimitive{
 		writeBindVar: "__vals",
-		results:      []*sqltypes.Result{sqltypes.MakeTestResult(fields, "utf8mb4_general_ci|2")},
+		results:      []*sqltypes.Result{unionSortMetadataResult(fields, "utf8mb4_general_ci|2")},
 	}
 	sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: []Primitive{metadata}}
 	bindings := map[string]*querypb.BindVariable{"kept": sqltypes.Int64BindVariable(7)}
-	_, _, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, bindings)
+	_, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, bindings)
 	require.NoError(t, err)
 	require.Len(t, bindings, 1)
 	assert.True(t, proto.Equal(sqltypes.Int64BindVariable(7), bindings["kept"]))
@@ -146,14 +149,18 @@ func TestUnionSortRejectsIncompatibleCollations(t *testing.T) {
 		t.Run(fmt.Sprint(operands), func(t *testing.T) {
 			sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}}
 			for _, operand := range operands {
-				sort.CollationQueries = append(sort.CollationQueries, &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, operand)}})
+				sort.CollationQueries = append(sort.CollationQueries, &fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(fields, operand)}})
 			}
-			_, _, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+			_, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
 			require.Error(t, err)
 			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 			mysqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 			require.True(t, ok)
-			assert.Equal(t, sqlerror.ERCantAggregateNCollations, mysqlErr.Number())
+			want := sqlerror.ERCantAggregateNCollations
+			if operands[0] == "utf8mb4_general_ci|0" {
+				want = sqlerror.ERCantAggregate2Collations
+			}
+			assert.Equal(t, want, mysqlErr.Number())
 		})
 	}
 }
@@ -162,13 +169,13 @@ func TestUnionSortEmptyDestinationUsesExistingShard(t *testing.T) {
 	fields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 	vc := &loggingVCursor{
 		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "20-"}}},
-		results:      []*sqltypes.Result{sqltypes.MakeTestResult(fields, "utf8mb4_general_ci|2")},
+		results:      []*sqltypes.Result{unionSortMetadataResult(fields, "utf8mb4_general_ci|2")},
 	}
 	route := NewRoute(None, &vindexes.Keyspace{Name: "ks", Sharded: true}, "metadata", "metadata")
 	sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: []Primitive{route}}
-	resolved, _, err := sort.resolveUnionCollations(t.Context(), vc, nil)
+	metadata, err := sort.resolveUnionCollations(t.Context(), vc, nil)
 	require.NoError(t, err)
-	require.Len(t, resolved, 1)
+	require.Len(t, metadata.common, 1)
 	vc.ExpectLog(t, []string{"ExecuteMultiShard ks.20-: metadata {} false false"})
 }
 
@@ -190,21 +197,21 @@ func TestUnionSortCollationCharsets(t *testing.T) {
 					if reverse {
 						i = len(tc.operands) - 1 - i
 					}
-					sort.CollationQueries = append(sort.CollationQueries, &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, tc.operands[i])}})
+					sort.CollationQueries = append(sort.CollationQueries, &fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(fields, tc.operands[i])}})
 				}
-				resolved, _, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+				metadata, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
 				require.NoError(t, err)
-				require.Len(t, resolved, 1)
-				assert.Equal(t, collations.MySQL8().LookupByName(tc.want), resolved[0].Collation)
+				require.Len(t, metadata.common, 1)
+				assert.Equal(t, collations.MySQL8().LookupByName(tc.want), metadata.common[0].Collation)
 			})
 		}
 	}
-	t.Run("unsupported common comparator", func(t *testing.T) {
+	t.Run("backend-only common comparator", func(t *testing.T) {
 		sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: []Primitive{
-			&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "big5_chinese_ci|2")}},
+			&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(fields, "big5_chinese_ci|2")}},
 		}}
-		_, _, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
-		require.ErrorContains(t, err, "VT12001")
+		_, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+		require.NoError(t, err)
 	})
 }
 
@@ -249,8 +256,8 @@ func TestUnionSortConcatenatedTextAndBlob(t *testing.T) {
 						unionSortTestRoute(t, "select name from test where id = 4"),
 					}, nil),
 					CollationQueries: []Primitive{
-						&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(metadataFields, tc.metadata)}},
-						&fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(metadataFields, tc.metadata)}},
+						&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(metadataFields, tc.metadata)}},
+						&fakePrimitive{results: []*sqltypes.Result{unionSortMetadataResult(metadataFields, tc.metadata)}},
 					},
 					OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.Unknown, collations.Unknown), CollationEnv: collations.MySQL8()}},
 				}
@@ -314,12 +321,12 @@ func TestUnionSortInputWrappers(t *testing.T) {
 	projection := &SimpleProjection{Input: route, Cols: []int{1, 0}, ColNames: []string{"id", "name"}}
 	sort := &MemorySort{Input: NewConcatenate([]Primitive{&Limit{Input: &Filter{Input: projection}}}, nil), OrderBy: evalengine.Comparison{{Col: 1}, {Col: 0}}}
 	resolved := []collations.TypedCollation{{Collation: collations.MySQL8().LookupByName("utf8mb4_general_ci")}, {Collation: collations.CollationBinaryID}}
-	input, _, err := sort.unionSortInput(resolved, [][]collations.TypedCollation{resolved[:1]}, collations.MySQL8())
+	input, _, err := sort.unionSortInput(&unionSortMetadata{common: resolved, arms: [][]collations.TypedCollation{resolved[:1]}, types: []sqltypes.Type{sqltypes.VarChar, sqltypes.Int64}, scales: []int32{0, 0}}, math.MaxInt, collations.MySQL8())
 	require.NoError(t, err)
 	copyRoute := Find(func(p Primitive) bool { _, ok := p.(*Route); return ok }, input).(*Route)
 	assert.Contains(t, copyRoute.Query, "NO_MERGE(__union_values)")
 	assert.Contains(t, copyRoute.Query, "weight_string(convert(__union_values.c0 using utf8mb4) collate utf8mb4_general_ci)")
-	assert.Contains(t, copyRoute.Query, "cast(__union_values.c1 as binary)")
+	assert.Contains(t, copyRoute.Query, "cast(__union_values.c1 as signed)")
 	assert.Contains(t, copyRoute.Query, "::__vals", "preserve routing-specific bindings in the data query")
 	assert.Contains(t, copyRoute.Query, "limit 2 for update", "preserve arm-local selection and locks")
 	assert.Contains(t, copyRoute.Query, "order by __union_values.c0 asc", "preserve the per-shard order used by Route's merge")
@@ -333,4 +340,20 @@ func TestUnionSortInputWrappers(t *testing.T) {
 	assert.Contains(t, warming, "weight_string(convert(__union_values.c0 using utf8mb4)", "warming uses the generated data statement")
 	assert.Equal(t, []int{1, 0}, projection.Cols)
 	assert.Equal(t, 3, route.QueryStatement.(*sqlparser.Select).GetColumnCount())
+}
+
+func unionSortMetadataResult(fields []*querypb.Field, rows ...string) *sqltypes.Result {
+	old := sqltypes.MakeTestResult(fields, rows...)
+	out := &sqltypes.Result{}
+	for i := 0; i < len(fields); i += 2 {
+		out.Fields = append(out.Fields, fields[i], fields[i+1], &querypb.Field{Type: sqltypes.VarChar})
+	}
+	for _, row := range old.Rows {
+		var values sqltypes.Row
+		for i := 0; i < len(row); i += 2 {
+			values = append(values, row[i], row[i+1], sqltypes.NULL)
+		}
+		out.Rows = append(out.Rows, values)
+	}
+	return out
 }

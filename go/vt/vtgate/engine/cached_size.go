@@ -728,7 +728,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(80))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(88))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}
@@ -768,7 +768,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(80))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(88))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}
@@ -1047,7 +1047,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -1055,11 +1055,13 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.QueryStatement.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field unionSortOriginal *vitess.io/vitess/go/vt/vtgate/engine.Route
+	size += cached.unionSortOriginal.CachedSize(true)
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(80))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(88))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}

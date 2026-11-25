@@ -1666,32 +1666,43 @@ func BenchmarkMerger(b *testing.B) {
 // heap used by streaming sorts. PAD SPACE ties must reach the numeric key.
 func TestSortPaddedWeightKeys(t *testing.T) {
 	fields := sqltypes.MakeTestFields("key|id", "varbinary|int64")
-	for _, desc := range []bool{false, true} {
-		t.Run(fmt.Sprintf("desc=%t", desc), func(t *testing.T) {
-			input := sqltypes.MakeTestResult(fields, "\x00A|4", "\x00A\x00 |3", "|2", "\x00 |1", "null|0", "\x00A\x00\x01|5")
-			cmp := Comparison{{Col: 0, WeightStringCol: -1, Desc: desc, Type: NewType(sqltypes.VarBinary, collations.CollationBinaryID), PadSpaceWeight: []byte{0, 32}}, {Col: 1, WeightStringCol: -1, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
-			want := []int64{0, 1, 2, 5, 3, 4}
-			if desc {
-				want = []int64{3, 4, 5, 1, 2, 0}
-			}
-			// Even a value that already has a bytewise tiny weight must bypass it.
-			Comparison{{Col: 0, Type: NewType(sqltypes.VarBinary, collations.CollationBinaryID)}}.ApplyTinyWeights(input)
-			heap := Sorter{Compare: cmp, Limit: 3}
-			for _, row := range input.Rows {
-				heap.Push(row)
-			}
-			require.NoError(t, cmp.SortResult(input))
-			ids := func(rows []sqltypes.Row) []int64 {
-				out := make([]int64, len(rows))
-				for i, row := range rows {
-					var err error
-					out[i], err = row[1].ToInt64()
-					require.NoError(t, err)
+	for _, serverPad := range []bool{false, true} {
+		for _, desc := range []bool{false, true} {
+			t.Run(fmt.Sprintf("desc=%t/serverPad=%t", desc, serverPad), func(t *testing.T) {
+				input := sqltypes.MakeTestResult(fields, "\x00A|4", "\x00A\x00 |3", "|2", "\x00 |1", "null|0", "\x00A\x00\x01|5")
+				cmp := Comparison{{Col: 0, WeightStringCol: -1, Desc: desc, Type: NewType(sqltypes.VarBinary, collations.CollationBinaryID), PadSpaceWeight: []byte{0, 32}}, {Col: 1, WeightStringCol: -1, Type: NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+				if serverPad {
+					input.Fields = append(input.Fields, &querypb.Field{Type: sqltypes.VarBinary})
+					for i := range input.Rows {
+						input.Rows[i] = append(input.Rows[i], sqltypes.NewVarBinary("\x00 "))
+					}
+					cmp[0].PadSpaceWeight = nil
+					cmp[0].PadSpaceWeightCol = 2
 				}
-				return out
-			}
-			assert.Equal(t, want, ids(input.Rows))
-			assert.Equal(t, want[:3], ids(heap.Sorted()))
-		})
+
+				want := []int64{0, 1, 2, 5, 3, 4}
+				if desc {
+					want = []int64{3, 4, 5, 1, 2, 0}
+				}
+				// Even a value that already has a bytewise tiny weight must bypass it.
+				Comparison{{Col: 0, Type: NewType(sqltypes.VarBinary, collations.CollationBinaryID)}}.ApplyTinyWeights(input)
+				heap := Sorter{Compare: cmp, Limit: 3}
+				for _, row := range input.Rows {
+					heap.Push(row)
+				}
+				require.NoError(t, cmp.SortResult(input))
+				ids := func(rows []sqltypes.Row) []int64 {
+					out := make([]int64, len(rows))
+					for i, row := range rows {
+						var err error
+						out[i], err = row[1].ToInt64()
+						require.NoError(t, err)
+					}
+					return out
+				}
+				assert.Equal(t, want, ids(input.Rows))
+				assert.Equal(t, want[:3], ids(heap.Sorted()))
+			})
+		}
 	}
 }

@@ -84,6 +84,10 @@ type Route struct {
 	// QueryStatement is the parsed AST of Query
 	QueryStatement sqlparser.Statement
 
+	// unionSortOriginal associates an execution-local UNION rewrite with its
+	// cached route for VEXPLAIN. Cached routes leave this nil.
+	unionSortOriginal *Route
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
