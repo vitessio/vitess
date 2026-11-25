@@ -1061,17 +1061,22 @@ func TestSelectUserDefinedVariableValidation(t *testing.T) {
 
 // TestSelectTupleWithNonLiteralMembers pins that a tuple vtgate evaluates
 // itself is returned rather than panicked on when a member is a value the
-// evalengine produces but sqltypes.NewValue has no arm for: a float overflow
+// evalengine produces but sqltypes.NewValue has no arm for: a non-finite float
 // (+Inf is not a SQL literal), a NULL (a nil eval) and a nested tuple.
 // evalTuple.ToRawBytes used to rebuild each member with NewValue and panic on
 // its error. The members are evalengine output, not caller bytes, and are
 // trusted the way the scalar path trusts them.
+//
+// Float arithmetic that overflows is an out of range error, so the +Inf
+// member is passed in as a bind variable.
 func TestSelectTupleWithNonLiteralMembers(t *testing.T) {
 	testcases := []struct {
 		sql  string
+		bv   map[string]*querypb.BindVariable
 		want sqltypes.Value
 	}{{
-		sql:  "select (1e308*10, 1)",
+		sql:  "select (:v, 1)",
+		bv:   map[string]*querypb.BindVariable{"v": sqltypes.Float64BindVariable(math.Inf(1))},
 		want: sqltypes.TestTuple(sqltypes.NewFloat64(math.Inf(1)), sqltypes.NewInt64(1)),
 	}, {
 		sql:  "select (null, 1)",
@@ -1088,7 +1093,7 @@ func TestSelectTupleWithNonLiteralMembers(t *testing.T) {
 			var result *sqltypes.Result
 			var err error
 			require.NotPanics(t, func() {
-				result, err = executorExec(ctx, executor, session, tc.sql, nil)
+				result, err = executorExec(ctx, executor, session, tc.sql, tc.bv)
 			})
 			require.NoError(t, err)
 			require.Len(t, result.Rows, 1)
