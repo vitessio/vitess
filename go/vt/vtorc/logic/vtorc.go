@@ -209,15 +209,22 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error("Failed to discover",
 			slog.String("tablet", tabletAliasString),
 			slog.Bool("force_discovery", forceDiscovery),
 			slog.Any("error", err),
 			slog.String("error_code", vterrors.Code(err).String()))
-	} else if shouldLogDiscoveryInfo(prevInstance, instance, found, forceDiscovery, config.GetReasonableReplicationLagSeconds()) {
+	case shouldLogDiscoveryInfo(discoveryLogCheck{
+		prev:           prevInstance,
+		curr:           instance,
+		found:          found,
+		forceDiscovery: forceDiscovery,
+		lagThreshold:   config.GetReasonableReplicationLagSeconds(),
+	}):
 		log.Info("Discovered", instance.LogAttrs(slog.String("tablet", tabletAliasString), slog.Bool("force_discovery", forceDiscovery))...)
-	} else if log.Enabled(slog.LevelDebug) {
+	case log.Enabled(slog.LevelDebug):
 		log.Debug("Discovered", instance.LogAttrs(slog.String("tablet", tabletAliasString), slog.Bool("force_discovery", forceDiscovery))...)
 	}
 

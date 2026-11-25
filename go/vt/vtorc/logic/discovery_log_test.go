@@ -43,7 +43,12 @@ func TestShouldLogDiscoveryInfo(t *testing.T) {
 		prev.SecondsBehindPrimary = sql.NullInt64{Int64: 0, Valid: true}
 		curr.SecondsBehindPrimary = sql.NullInt64{Int64: lagThreshold, Valid: true}
 
-		assert.False(t, shouldLogDiscoveryInfo(prev, curr, true, false, lagThreshold))
+		assert.False(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         prev,
+			curr:         curr,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}))
 	})
 
 	t.Run("changed routine poll returns true", func(t *testing.T) {
@@ -51,24 +56,60 @@ func TestShouldLogDiscoveryInfo(t *testing.T) {
 		curr := newValidInstance()
 		curr.ReadOnly = false
 
-		assert.True(t, shouldLogDiscoveryInfo(prev, curr, true, false, lagThreshold))
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         prev,
+			curr:         curr,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}))
 	})
 
 	t.Run("lifecycle conditions return true", func(t *testing.T) {
 		prev := newValidInstance()
 		curr := newValidInstance()
 
-		assert.True(t, shouldLogDiscoveryInfo(prev, curr, true, true, lagThreshold), "forceDiscovery")
-		assert.True(t, shouldLogDiscoveryInfo(prev, curr, false, false, lagThreshold), "not found")
-		assert.True(t, shouldLogDiscoveryInfo(nil, curr, true, false, lagThreshold), "nil prev")
-		assert.True(t, shouldLogDiscoveryInfo(prev, nil, true, false, lagThreshold), "nil curr")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:           prev,
+			curr:           curr,
+			found:          true,
+			forceDiscovery: true,
+			lagThreshold:   lagThreshold,
+		}), "forceDiscovery")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         prev,
+			curr:         curr,
+			found:        false,
+			lagThreshold: lagThreshold,
+		}), "not found")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         nil,
+			curr:         curr,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}), "nil prev")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         prev,
+			curr:         nil,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}), "nil curr")
 
 		invalidPrev := newValidInstance()
 		invalidPrev.IsLastCheckValid = false
-		assert.True(t, shouldLogDiscoveryInfo(invalidPrev, curr, true, false, lagThreshold), "recovery from invalid prev check")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         invalidPrev,
+			curr:         curr,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}), "recovery from invalid prev check")
 
 		invalidCurr := newValidInstance()
 		invalidCurr.IsLastCheckValid = false
-		assert.True(t, shouldLogDiscoveryInfo(prev, invalidCurr, true, false, lagThreshold), "curr check invalid")
+		assert.True(t, shouldLogDiscoveryInfo(discoveryLogCheck{
+			prev:         prev,
+			curr:         invalidCurr,
+			found:        true,
+			lagThreshold: lagThreshold,
+		}), "curr check invalid")
 	})
 }

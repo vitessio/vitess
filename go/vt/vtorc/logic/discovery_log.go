@@ -18,17 +18,37 @@ package logic
 
 import "vitess.io/vitess/go/vt/vtorc/inst"
 
+// discoveryLogCheck holds the inputs needed to decide whether a successful
+// instance discovery should log at INFO level rather than DEBUG.
+type discoveryLogCheck struct {
+	// prev is the previously persisted instance state, if one was found.
+	prev *inst.Instance
+
+	// curr is the instance state returned by the current discovery poll.
+	curr *inst.Instance
+
+	// found reports whether a previous instance record existed in the backend.
+	found bool
+
+	// forceDiscovery reports whether this poll was explicitly forced.
+	forceDiscovery bool
+
+	// lagThreshold is the replication lag threshold in seconds used to detect
+	// lag threshold crossings.
+	lagThreshold int64
+}
+
 // shouldLogDiscoveryInfo reports whether a successful instance discovery logs
 // at INFO level rather than DEBUG. Routine polls with unchanged operational
 // state return false.
-func shouldLogDiscoveryInfo(prev, curr *inst.Instance, found, forceDiscovery bool, lagThreshold int64) bool {
-	if forceDiscovery || !found || prev == nil || curr == nil {
+func shouldLogDiscoveryInfo(check discoveryLogCheck) bool {
+	if check.forceDiscovery || !check.found || check.prev == nil || check.curr == nil {
 		return true
 	}
 
-	if !prev.IsLastCheckValid || !curr.IsLastCheckValid {
+	if !check.prev.IsLastCheckValid || !check.curr.IsLastCheckValid {
 		return true
 	}
 
-	return curr.OperationalStateChanged(prev, lagThreshold)
+	return check.curr.OperationalStateChanged(check.prev, check.lagThreshold)
 }
