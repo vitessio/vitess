@@ -284,7 +284,7 @@ The following flags, which pass credentials as flag values, are now deprecated i
 
 **Impact**: Move these credentials into the files listed above and remove the deprecated flags and options from startup scripts or configuration before upgrading to v26.
 
-The `--xtrabackup-backup-flags`, `--xtrabackup-prepare-flags`, `--xbstream-restore-flags`, `--mysql-shell-flags`, `--mysql-shell-dump-flags`, `--mysql-shell-load-flags`, `--external-compressor`, `--external-decompressor` and `--manifest-external-decompressor` flags pass their values on to other tools, so they aren't deprecated. Keep secrets out of them too, and use each tool's own way of reading them from a file:
+The `--xtrabackup-backup-flags`, `--xtrabackup-prepare-flags`, `--xbstream-restore-flags`, `--mysql-shell-flags`, `--mysql-shell-dump-flags`, `--mysql-shell-load-flags`, `--external-compressor`, `--external-decompressor` and `--manifest-external-decompressor` flags pass their values on to other tools, so they aren't deprecated. Keep secrets out of them too. `--xtrabackup-backup-flags`, `--mysql-shell-load-flags` and `--manifest-external-decompressor` are also saved in the backup's `MANIFEST`, so a secret in them is written to the backup storage next to the backup. Use each tool's own way of reading secrets from a file instead:
 
 - xtrabackup and xbstream: `--encrypt-key-file` instead of `--encrypt-key`. xtrabackup reads the tablet's `my.cnf`, so put a password in an `[xtrabackup]` section of a file listed in the `EXTRA_MY_CNF` environment variable.
 - MySQL Shell dump and load: the cloud provider's credential files or environment variables instead of credentials in the JSON options.
