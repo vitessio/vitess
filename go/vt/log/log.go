@@ -65,6 +65,20 @@ func SwapLogger(newLogger *slog.Logger) *slog.Logger {
 	return logger.Swap(newLogger)
 }
 
+// Enabled reports whether logs at level will be emitted by the configured logger.
+func Enabled(level slog.Level) bool {
+	if !structured.Load() {
+		return level >= slog.LevelInfo
+	}
+
+	l := logger.Load()
+	if l == nil {
+		return false
+	}
+
+	return l.Enabled(context.Background(), level)
+}
+
 // log is a helper that logs with glog or slog depending on the configured flags.
 func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 	if !structured.Load() {
