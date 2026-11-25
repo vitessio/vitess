@@ -188,6 +188,7 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 
 	latency.Start("backend")
 	prevInstance, found, _ = inst.ReadInstance(tabletAlias)
+	instance = prevInstance
 	latency.Stop("backend")
 	if !forceDiscovery && found && prevInstance.IsUpToDate && prevInstance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
