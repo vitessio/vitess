@@ -58,7 +58,9 @@ func TestPRSRefusedWhileShardPrimaryRestores(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vtctld")
 	ctx := t.Context()
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	// Registered before stallRestore's cleanup, so that it runs after it.
+	// Both are registered before stallRestore's cleanup, so that they run after it. The
+	// directory comes first, so that it is removed after the teardown has stopped the vttablet.
+	backupRoot := t.TempDir()
 	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	oldPrimary, primaryElect := tablets[0], tablets[1]
@@ -85,7 +87,7 @@ func TestPRSRefusedWhileShardPrimaryRestores(t *testing.T) {
 		"the old primary should have committed every transaction after a replica acknowledged it")
 
 	// The old primary loses its data and restarts into a restore that does not finish.
-	stallRestore(t, clusterInstance, oldPrimary)
+	stallRestore(t, clusterInstance, oldPrimary, backupRoot)
 	require.Equal(t, oldPrimary.Alias, utils.GetShardPrimary(t, clusterInstance).Alias, "the shard record should still name the restoring tablet")
 
 	out, err = utils.Prs(t, clusterInstance, primaryElect)
@@ -117,20 +119,20 @@ func TestPRSRefusedWhileShardPrimaryRestores(t *testing.T) {
 
 // stallRestore kills the tablet, wipes its data directory and starts it again with
 // --restore_from_backup, so that the restore blocks. The tablet restores from a private
-// copy of the backups in which the MANIFEST of every backup is a FIFO that nobody writes
-// to, so the backups that other clusters share are left alone. It returns once the tablet
-// is RESTORE. A cleanup registered here lets the restore fail when the test ends, or when
-// an assertion below fails, so that the vttablet is not left waiting on the FIFO.
-func stallRestore(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
+// copy of the backups, made in backupRoot, in which the MANIFEST of every backup is a FIFO
+// that nobody writes to, so the backups that other clusters share are left alone. The caller
+// creates backupRoot, so that its removal runs after the cluster teardown. It returns once
+// the tablet is RESTORE. A cleanup registered here lets the restore fail when the test ends,
+// or when an assertion below fails, so that the vttablet is not left waiting on the FIFO.
+func stallRestore(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet, backupRoot string) {
 	utils.KillTablet(t, tablet)
 	require.Eventually(t, func() bool {
 		// mysqld may still be writing to the directory right after it was killed.
 		return os.RemoveAll(tablet.MysqlctlProcess.BasePath()) == nil
 	}, 30*time.Second, 200*time.Millisecond, "could not remove the data directory of %s", tablet.Alias)
 
-	storageRoot := t.TempDir()
-	require.NoError(t, os.CopyFS(storageRoot, os.DirFS(tablet.VttabletProcess.FileBackupStorageRoot)))
-	manifests, err := filepath.Glob(filepath.Join(storageRoot, utils.KeyspaceName, utils.ShardName, "*", "MANIFEST"))
+	require.NoError(t, os.CopyFS(backupRoot, os.DirFS(tablet.VttabletProcess.FileBackupStorageRoot)))
+	manifests, err := filepath.Glob(filepath.Join(backupRoot, utils.KeyspaceName, utils.ShardName, "*", "MANIFEST"))
 	require.NoError(t, err)
 	require.NotEmpty(t, manifests, "there is no backup to restore from")
 	for _, manifest := range manifests {
@@ -147,7 +149,7 @@ func stallRestore(t *testing.T, clusterInstance *cluster.LocalProcessCluster, ta
 			}()
 		}
 	})
-	tablet.VttabletProcess.FileBackupStorageRoot = storageRoot
+	tablet.VttabletProcess.FileBackupStorageRoot = backupRoot
 
 	tablet.MysqlctlProcess.InitMysql = true
 	require.NoError(t, tablet.MysqlctlProcess.Start())
