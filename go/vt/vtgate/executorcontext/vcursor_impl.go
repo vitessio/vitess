@@ -1342,6 +1342,10 @@ func (vc *VCursorImpl) getQueryTimeout() int {
 func (vc *VCursorImpl) SetStatementOptions(ctx context.Context, qh sqlparser.QueryHints) {
 	if opts, ok := StatementOptionsFromContext(ctx); ok {
 		vc.statementOptions = opts
+		vc.queryTimeout = 0
+		if opts.timeout != nil {
+			vc.queryTimeout = time.Duration(*opts.timeout) * time.Millisecond
+		}
 		return
 	}
 	opts := &StatementOptions{
