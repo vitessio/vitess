@@ -17,6 +17,9 @@ jobs:
     # Skip the other vitessio repositories, such as vitess-security.
     if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     runs-on: ubuntu-latest
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 5
     outputs:
       skip: ${{ steps.check_labels.outputs.skip }}
@@ -56,6 +59,9 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'
@@ -86,6 +92,9 @@ jobs:
   add_initial_labels:
     name: Add Initial Labels
     runs-on: ubuntu-latest
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 5
     needs: check_labels
     if: needs.check_labels.outputs.skip != 'true'

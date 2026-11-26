@@ -24,6 +24,9 @@ jobs:
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 10
     # Skip the other vitessio repositories, such as vitess-security.
     if: (github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess') && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')

@@ -17,6 +17,9 @@ jobs:
         branch: [ main, release-24.0, release-23.0 ]
     name: Update Golang Version
     runs-on: ubuntu-24.04
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 10
     steps:
       - name: Harden the runner (Audit all outbound calls)
