@@ -77,7 +77,10 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 		dropUUID := testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: dropTable, ddlStrategy: ddlStrategy, executeStrategy: "vtgate"})
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, dropUUID, schema.OnlineDDLStatusComplete)
 	}()
-	uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion", executeStrategy: "vtgate", skipWait: true})
+	// --cut-over-threshold=5s is the minimum; it halves the post-lock wait
+	// without affecting what the test checks, since the session-variable restore
+	// timeout this test guards against is a fixed 5s.
+	uuid = testOnlineDDLStatement(t, &testOnlineDDLStatementParams{ddlStatement: alterTable, ddlStrategy: ddlStrategy + " --postpone-completion --cut-over-threshold=5s", executeStrategy: "vtgate", skipWait: true})
 	onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 	waitForReadyToComplete(t, uuid, true)
 
@@ -214,9 +217,12 @@ func TestCutOverFailureReleasesLocksPromptly(t *testing.T) {
 	heldAfterFailure := probe.at.Sub(failedAt)
 	t.Logf("probe blocked for %v in total; original table stayed locked for %v after the cut-over gave up", probe.at.Sub(probeStart), heldAfterFailure)
 
-	// Let vreplication catch up; the scheduler retries the cut-over on its own.
+	// Let vreplication catch up, then force the retry rather than waiting out
+	// the scheduler's one-minute cut-over backoff. Nothing holds a lock on the
+	// table anymore, so the forced cut-over has nothing to kill.
 	_, err = stallConn.ExecuteFetch("rollback", 0, false)
 	require.NoError(t, err)
+	onlineddl.CheckForceMigrationCutOver(t, &vtParams, shards, uuid, true)
 	status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	require.Equal(t, schema.OnlineDDLStatusComplete, status)
 

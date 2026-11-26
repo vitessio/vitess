@@ -1290,7 +1290,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 		return vterrors.Wrapf(err, "failed ensuring wait_timeout on rename connection")
 	}
 	defer renameConnRestoreWaitTimeout()
-	// This defer is registered after the session-variable restores below so that it
+	// This defer is registered after the session-variable restores above so that it
 	// runs before them. On a failed cut-over the RENAME is still in flight on this
 	// connection, blocked behind lockConn's LOCK TABLES, so any restore sent first
 	// would queue behind it until its own timeout killed it. Killing the connection
