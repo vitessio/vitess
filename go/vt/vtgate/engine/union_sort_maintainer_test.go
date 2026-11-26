@@ -138,7 +138,7 @@ func TestUnionSortIndependentProbesRunConcurrently(t *testing.T) {
 	require.Len(t, vars, 1, "each concurrent probe owns its bind map")
 }
 
-func TestMemorySortRejectsKnownBadServerWeightKeys(t *testing.T) {
+func TestMemorySortSupportsServerWeightKeyOrderingCases(t *testing.T) {
 	for _, tc := range []struct{ collation, left, right string }{
 		{"tis620_thai_ci", "a", "a\x00"},
 		{"cp1250_czech_cs", "", "  "},
@@ -161,8 +161,8 @@ func TestMemorySortRejectsKnownBadServerWeightKeys(t *testing.T) {
 			}
 			sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.VarChar, id)}}}
 			_, _, err := sort.unionSortInput(metadata, 1, env)
-			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
-			t.Logf("counterexample values: %q / %q", tc.left, tc.right)
+			require.NoError(t, err)
+			t.Logf("MySQL UNION ordering case: %q / %q", tc.left, tc.right)
 		})
 	}
 }

@@ -493,24 +493,35 @@ func TestUnionBackendCollationAndEligibility(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
-	mcmp.Exec("insert into union_collations(id,name_general) values (1,'a'),(4,'z')")
+	mcmp.Exec("insert into union_collations(id,name_general,enum_sort) values (1,'a','b'),(2,'b','b'),(3,'c','a'),(4,'z','b')")
+	enumQuery := "select enum_sort from union_collations where id in (1,2,3) union all select enum_sort from union_collations where id=4 order by enum_sort limit 2"
+	enumResult := mcmp.Exec(enumQuery)
+	require.Len(t, enumResult.Rows, 2)
+	assert.Equal(t, "a", enumResult.Rows[0][0].ToString(), "UNION sorts ENUM values as VARCHAR before applying its global LIMIT")
+	assert.Equal(t, "b", enumResult.Rows[1][0].ToString())
 	utils.Exec(t, mcmp.VtConn, "update union_collations set data_json='10' where id=1")
-	utils.Exec(t, mcmp.VtConn, "update union_collations set data_json='2.5' where id=4")
-	jsonQuery := "select data_json as x from union_collations where id in (1,4) union all select data_json from union_collations where id=999 order by x limit 1"
+	utils.Exec(t, mcmp.VtConn, "update union_collations set data_json='2.5' where id=2")
+	jsonQuery := "select data_json as x from union_collations where id in (1,2) union all select data_json from union_collations where id=999 order by x limit 1"
 	jsonResult := utils.Exec(t, mcmp.VtConn, jsonQuery)
 	require.Len(t, jsonResult.Rows, 1)
 	require.Equal(t, "2.5", jsonResult.Rows[0][0].ToString(), "keep both JSON values until the final comparator; MySQL and evalengine JSON ordering differ")
 	for _, workload := range []string{"oltp", "olap"} {
 		utils.Exec(t, mcmp.VtConn, "set workload="+workload)
-		for _, tc := range []struct{ charset, collation, left, right string }{
-			{"tis620", "tis620_thai_ci", "a", "a\x00"},
-			{"cp1250", "cp1250_czech_cs", "", "  "},
-			{"gb18030", "gb18030_chinese_ci", "ss", "ı"},
+		for _, tc := range []struct {
+			charset, collation, left, right string
+			wantIDs                         []string
+		}{
+			{"tis620", "tis620_thai_ci", "a", "a\x00", []string{"1", "4"}},
+			{"cp1250", "cp1250_czech_cs", "", "  ", []string{"1", "4"}},
+			{"gb18030", "gb18030_chinese_ci", "ss", "ı", []string{"4", "1"}},
 		} {
 			leftHex, rightHex := hex.EncodeToString([]byte(tc.left)), hex.EncodeToString([]byte(tc.right))
-			query := fmt.Sprintf("select convert(_utf8mb4 X'%s' using %s) collate %s as x from union_collations where id=1 union all select convert(_utf8mb4 X'%s' using %s) collate %s from union_collations where id=4 order by x", leftHex, tc.charset, tc.collation, rightHex, tc.charset, tc.collation)
-			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
-			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
+			query := fmt.Sprintf("select convert(_utf8mb4 X'%s' using %s) collate %s as x, id from union_collations where id=1 union all select convert(_utf8mb4 X'%s' using %s) collate %s, id from union_collations where id=4 order by x, id", leftHex, tc.charset, tc.collation, rightHex, tc.charset, tc.collation)
+			result := mcmp.Exec(query)
+			require.Len(t, result.Rows, 2)
+			for i, wantID := range tc.wantIDs {
+				assert.Equal(t, wantID, result.Rows[i][1].ToString(), "MySQL UNION ORDER BY result for %s", tc.collation)
+			}
 		}
 		mcmp.Exec("select convert(name_general using big5) as x from union_collations where id=1 union all select convert(name_general using big5) from union_collations where id=4 order by x limit 1")
 		mcmp.Exec("select name_general as x,id from union_collations where id=1 union all select name_general,sum(id) from union_collations where id=4 and name_general='z' order by x")

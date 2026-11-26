@@ -75,11 +75,6 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 	global := slices.Clone(ms.OrderBy)
 	for i := range global {
 		global[i].Type = evalengine.NewTypeEx(metadata.types[i], resolved[i].Collation, true, 0, metadata.scales[i], nil)
-		if sqltypes.IsTextOrBinary(global[i].Type.Type()) {
-			if err := unionSortUnsupportedWeightKey(env, resolved[i].Collation); err != nil {
-				return nil, nil, err
-			}
-		}
 	}
 	if !unionSortNeedsNumericKeys(global) && unionSortSimpleSources(input) && (unionSortNonText(global) || unionSortRepeatableSources(input) && unionSortReusable(ms.OrderBy, metadata, env)) {
 		return unionSortPlainInput(input, global, count, metadata, env), nil, nil

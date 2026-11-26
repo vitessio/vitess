@@ -134,11 +134,16 @@ func TestUnionSortLookupProbeReusesResolvedLookup(t *testing.T) {
 		hit      bool
 		inTx     bool
 		reserved bool
+		stream   bool
 	}{
 		{name: "transaction hit", hit: true, inTx: true},
 		{name: "transaction miss", inTx: true},
 		{name: "reserved hit", hit: true, reserved: true},
 		{name: "reserved miss", reserved: true},
+		{name: "stream transaction hit", hit: true, inTx: true, stream: true},
+		{name: "stream transaction miss", inTx: true, stream: true},
+		{name: "stream reserved hit", hit: true, reserved: true, stream: true},
+		{name: "stream reserved miss", reserved: true, stream: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lookupFields := sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary")
@@ -146,11 +151,14 @@ func TestUnionSortLookupProbeReusesResolvedLookup(t *testing.T) {
 			if tc.hit {
 				lookupResult = sqltypes.MakeTestResult(lookupFields, "1|\x10")
 			}
-			lookup := &fakePrimitive{results: []*sqltypes.Result{lookupResult}}
+			lookup := &fakePrimitive{results: []*sqltypes.Result{
+				lookupResult,
+				sqltypes.MakeTestResult(lookupFields, "2|\x20"),
+			}}
 			keyspace := &vindexes.Keyspace{Name: "ks", Sharded: true}
 			source := &VindexLookup{
 				Opcode: EqualUnique, Vindex: planable, Keyspace: keyspace, Arguments: args,
-				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)}, Lookup: lookup,
+				Values: []evalengine.Expr{evalengine.NewBindVar("id", evalengine.Type{})}, Lookup: lookup,
 				SendTo: NewRoute(ByDestination, keyspace, "select value from data", "select value from data"),
 			}
 			probeRoute := NewRoute(ByDestination, keyspace, "select metadata", "select metadata")
@@ -161,15 +169,30 @@ func TestUnionSortLookupProbeReusesResolvedLookup(t *testing.T) {
 				results: []*sqltypes.Result{
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("value", "varchar"), "metadata"),
 					sqltypes.MakeTestResult(sqltypes.MakeTestFields("value", "varchar"), "data"),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("value", "varchar"), "joined data"),
 				},
 			}
 			vc.inTx, vc.inReservedConn = tc.inTx, tc.reserved
 			ctx := withUnionSortLookupCache(t.Context())
-			_, err := probe.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
+			execute := func(lookup *VindexLookup, value int64) error {
+				bindVars := map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(value)}
+				if tc.stream {
+					return lookup.TryStreamExecute(ctx, vc, bindVars, true, func(*sqltypes.Result) error { return nil })
+				}
+				_, err := lookup.TryExecute(ctx, vc, bindVars, true)
+				return err
+			}
+			err := execute(probe, 1)
 			require.NoError(t, err)
-			_, err = source.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
+			dataArm := NewUnionSortLookupProbe(source, source.SendTo)
+			err = execute(dataArm, 1)
 			require.NoError(t, err)
-			require.Equal(t, 1, lookup.curResult, "the data read must reuse the probe's lookup result")
+			require.Equal(t, 1, lookup.curResult, "the marked data-arm clone must reuse the probe's lookup result")
+			// Ordinary join execution may invoke the same unmarked primitive
+			// repeatedly with different bindings. It must do its own lookup.
+			err = execute(source, 2)
+			require.NoError(t, err)
+			require.Equal(t, 2, lookup.curResult, "unmarked lookups must not reuse UNION probe results")
 		})
 	}
 }

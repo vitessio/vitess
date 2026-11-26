@@ -89,7 +89,8 @@ func (vr *VindexLookup) NeedsTransaction() bool {
 func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	cache := unionSortLookupCacheFromContext(ctx)
 	lookupKey := vr.unionSortLookupKey()
-	if cache != nil {
+	cacheable := cache != nil && vr.unionSortLookupSource != nil
+	if cacheable {
 		if cached, ok := cache.get(lookupKey); ok {
 			vr.setListBindVariable(cached.ids, bindVars)
 			return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, cached.ids, cached.dest)
@@ -107,7 +108,7 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	if err != nil {
 		return nil, err
 	}
-	if cache != nil {
+	if cacheable {
 		cache.set(lookupKey, unionSortLookupResult{ids: ids, dest: dest})
 	}
 
@@ -139,7 +140,8 @@ func (vr *VindexLookup) setListBindVariable(ids []sqltypes.Value, bindVars map[s
 func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	cache := unionSortLookupCacheFromContext(ctx)
 	lookupKey := vr.unionSortLookupKey()
-	if cache != nil {
+	cacheable := cache != nil && vr.unionSortLookupSource != nil
+	if cacheable {
 		if cached, ok := cache.get(lookupKey); ok {
 			vr.setListBindVariable(cached.ids, bindVars)
 			return vr.SendTo.streamExecuteAfterLookup(ctx, vcursor, bindVars, wantfields, callback, cached.ids, cached.dest)
@@ -158,7 +160,7 @@ func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 	if err != nil {
 		return err
 	}
-	if cache != nil {
+	if cacheable {
 		cache.set(lookupKey, unionSortLookupResult{ids: ids, dest: dest})
 	}
 

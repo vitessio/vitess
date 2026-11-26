@@ -91,9 +91,10 @@ func TestServerWeightKeyComparison(t *testing.T) {
 	}
 }
 
-// These transforms cannot be used as comparison keys even with a server SPACE
-// weight. Keep the limitation reproducible alongside the accepted catalogue.
-func TestServerWeightKeyKnownLimitations(t *testing.T) {
+// These values compare differently under SQL's collation order and strcmp.
+// strcmp is therefore not a valid oracle for checking UNION weight-key sort
+// behavior; the UNION ORDER BY result must be tested directly.
+func TestServerWeightKeyOrderingDiffersFromStrcmp(t *testing.T) {
 	conn := mysqlconn(t)
 	t.Cleanup(conn.Close)
 	for _, tc := range []struct{ collation, charset, left, right string }{

@@ -12,7 +12,8 @@ create table union_collations(
     name_ascii varchar(30) character set ascii collate ascii_general_ci,
     name_text text character set utf8mb4 collate utf8mb4_general_ci,
     name_blob blob,
-    data_json json
+    data_json json,
+    enum_sort enum('b', 'a') character set utf8mb4 collate utf8mb4_0900_ai_ci
 ) Engine=InnoDB;
 
 create table t1_id2_idx(

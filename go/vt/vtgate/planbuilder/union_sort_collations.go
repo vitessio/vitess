@@ -265,6 +265,12 @@ func unionSortSetKnownOutputTypes(ctx *plancontext.PlanningContext, source opera
 			}
 		}
 		if typeKnown {
+			// UNION result aggregation treats ENUM and SET as VARCHAR. Keeping
+			// their arm-local types here can incorrectly push an ENUM-index
+			// ordered LIMIT into each arm before the UNION string comparison.
+			if common.Type() == sqltypes.Enum || common.Type() == sqltypes.Set {
+				common = evalengine.NewTypeEx(sqltypes.VarChar, common.Collation(), common.Nullable(), common.Size(), common.Scale(), nil)
+			}
 			if !collationKnown {
 				common = evalengine.NewType(common.Type(), collations.Unknown)
 			}

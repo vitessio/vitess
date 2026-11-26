@@ -23,11 +23,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/vschemawrapper"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestUnionSortCollationQueries(t *testing.T) {
@@ -67,6 +69,42 @@ func TestUnionSortCollationQueries(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, 3*len(sort.OrderBy), stmt.(sqlparser.SelectStatement).GetColumnCount())
 			}
+		})
+	}
+}
+
+func TestUnionSortSetKnownOutputTypesTreatsEnumAndSetAsVarchar(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	for _, tableName := range [][2]string{{"user", "user"}, {"main", "unsharded"}} {
+		table, err := vschema.FindTable(tableName[0], tableName[1])
+		require.NoError(t, err)
+		for _, column := range []struct {
+			name string
+			typ  sqltypes.Type
+		}{
+			{name: "enumcol", typ: sqltypes.Enum},
+			{name: "setcol", typ: sqltypes.Set},
+		} {
+			table.Columns = append(table.Columns, vindexes.Column{
+				Name:          sqlparser.NewIdentifierCI(column.name),
+				Type:          column.typ,
+				CollationName: "utf8mb4_0900_ai_ci",
+			})
+		}
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	for _, column := range []string{"enumcol", "setcol"} {
+		t.Run(column, func(t *testing.T) {
+			query := "select " + column + " from user union all select " + column + " from unsharded order by " + column + " limit 2"
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			require.NoError(t, err)
+			primitive := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions)
+			require.NotNil(t, primitive)
+			sort := primitive.(*engine.MemorySort)
+			require.Equal(t, sqltypes.VarChar, sort.OrderBy[0].Type.Type())
+			require.Len(t, sort.CollationQueries, 2, "string ordering needs the UNION collation probes")
 		})
 	}
 }
