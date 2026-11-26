@@ -4,5 +4,5 @@ Usage:
   zkctld [flags]
 
 Flags:
-  -h, --help      help for zkctld
-  -v, --version   version for zkctld
+  -h, --help[=true|false]      help for zkctld
+  -v, --version[=true|false]   version for zkctld

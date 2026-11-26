@@ -21,7 +21,7 @@ Available Commands:
 Flags:
       --app-idle-timeout duration                                   Idle timeout for app connections (default 1m0s)
       --app-pool-size int                                           Size of the connection pool for app connections (default 40)
-      --catch-sigpipe                                               catch and ignore SIGPIPE on stdout and stderr if specified
+      --catch-sigpipe[=true|false]                                  catch and ignore SIGPIPE on stdout and stderr if specified
       --config-file string                                          Full path of the config file (with extension) to use. If set, --config-path, --config-type, and --config-name are ignored.
       --config-file-not-found-handling ConfigFileNotFoundHandling   Behavior when a config file is not found. (Options: error, exit, ignore, warn) (default warn)
       --config-name string                                          Name of the config file (without extension) to search for. (default "vtconfig")
@@ -29,7 +29,7 @@ Flags:
       --config-persistence-min-interval duration                    minimum interval between persisting dynamic config changes back to disk (if no change has occurred, nothing is done). (default 1s)
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --db-charset string                                           Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
-      --db-conn-query-info                                          enable parsing and processing of QUERY_OK info fields
+      --db-conn-query-info[=true|false]                             enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                   connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                  db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
@@ -43,7 +43,7 @@ Flags:
       --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
       --db-dba-password string                                      db dba password
-      --db-dba-use-ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-use-ssl[=true|false]                                 Set this flag to false to make the dba connection to not use ssl (default true)
       --db-dba-user string                                          db dba user userKey (default "vt_dba")
       --db-flags uint                                               Flag values as defined by MySQL.
       --db-flavor string                                            Flavor overrid. Valid value is FilePos.
@@ -59,15 +59,15 @@ Flags:
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --dba-idle-timeout duration                                   Idle timeout for dba connections (default 1m0s)
       --dba-pool-size int                                           Size of the connection pool for dba connections (default 20)
-  -h, --help                                                        help for mysqlctl
+  -h, --help[=true|false]                                           help for mysqlctl
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                    keep running at least this long after SIGTERM before stopping (default 50ms)
-      --log-err-stacks                                              log stack traces for errors
+      --log-err-stacks[=true|false]                                 log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured JSON logging (default true)
+      --log-structured[=true|false]                                 enable structured JSON logging (default true)
       --max-stack-size int                                          configure the maximum stack size in bytes (default 67108864)
       --mysql-port int                                              MySQL port. (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
@@ -80,7 +80,7 @@ Flags:
       --pid-file string                                             If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool-hostname-resolve-interval duration                     if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)
       --pprof strings                                               enable profiling
-      --pprof-http                                                  enable pprof http endpoints
+      --pprof-http[=true|false]                                     enable pprof http endpoints
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
       --replication-connect-retry duration                          how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
@@ -89,6 +89,6 @@ Flags:
       --table-refresh-interval int                                  interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet-dir string                                           The directory within the vtdataroot to store vttablet/mysql files. Defaults to being generated by the tablet uid.
       --tablet-uid uint32                                           Tablet UID. (default 41983)
-  -v, --version                                                     print binary version
+  -v, --version[=true|false]                                        print binary version
 
 Use "mysqlctl [command] --help" for more information about a command.

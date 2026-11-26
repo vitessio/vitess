@@ -48,7 +48,7 @@ Usage:
   vtbackup [flags]
 
 Flags:
-      --allow-first-backup                                          Allow this job to take the first backup of an existing shard.
+      --allow-first-backup[=true|false]                             Allow this job to take the first backup of an existing shard.
       --azblob-backup-account-key-file string                       Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob-backup-account-name string                           Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
       --azblob-backup-buffer-size int                               The memory buffer size to use in bytes, per file or stripe, when streaming to Azure Blob Service. (default 104857600)
@@ -57,7 +57,7 @@ Flags:
       --azblob-backup-storage-root string                           Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup-engine-implementation string                         Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup-storage-block-size int                               if backup-storage-compress is true, backup-storage-block-size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup-storage-compress                                     if set, the backup files will be compressed. (default true)
+      --backup-storage-compress[=true|false]                        if set, the backup files will be compressed. (default true)
       --backup-storage-implementation string                        Which backup storage implementation to use for creating and restoring backups.
       --backup-storage-number-blocks int                            if backup-storage-compress is true, backup-storage-number-blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --bind-address string                                         Bind address for the server. If empty, the server will listen on all available unicast and anycast IP addresses of the local system.
@@ -70,7 +70,7 @@ Flags:
       --builtinbackup-progress duration                             how often to send progress updates when backing up large files. (default 5s)
       --builtinbackup-restore-write-mode string                     How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 1MiB (1048576); otherwise the restore fails before the existing data is removed. Incremental backups are always restored buffered. (default "buffered")
       --ceph-backup-storage-config string                           Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
-      --clone-from-primary                                          Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
+      --clone-from-primary[=true|false]                             Clone data from the primary tablet in the shard using MySQL CLONE REMOTE instead of restoring from backup. Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-tablet.
       --clone-from-tablet string                                    Clone data from this tablet using MySQL CLONE REMOTE instead of restoring from backup (tablet alias, e.g., zone1-123). Requires MySQL 8.0.17+. Mutually exclusive with --clone-from-primary.
       --clone-restart-wait-timeout duration                         Timeout for waiting for MySQL to restart after CLONE REMOTE. (default 5m0s)
       --compression-engine-name string                              compressor engine used for compression. (default "pargzip")
@@ -84,19 +84,19 @@ Flags:
       --config-type string                                          Config file type (omit to infer config type from file extension).
       --consul-auth-static-file string                              JSON File to read the topos/tokens from.
       --db-allprivs-password string                                 db allprivs password
-      --db-allprivs-use-ssl                                         Set this flag to false to make the allprivs connection to not use ssl (default true)
+      --db-allprivs-use-ssl[=true|false]                            Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db-allprivs-user string                                     db allprivs user userKey (default "vt_allprivs")
       --db-app-password string                                      db app password
-      --db-app-use-ssl                                              Set this flag to false to make the app connection to not use ssl (default true)
+      --db-app-use-ssl[=true|false]                                 Set this flag to false to make the app connection to not use ssl (default true)
       --db-app-user string                                          db app user userKey (default "vt_app")
       --db-appdebug-password string                                 db appdebug password
-      --db-appdebug-use-ssl                                         Set this flag to false to make the appdebug connection to not use ssl (default true)
+      --db-appdebug-use-ssl[=true|false]                            Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                     db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                           Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db-clone-password string                                    db clone password
-      --db-clone-use-ssl                                            Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-use-ssl[=true|false]                               Set this flag to false to make the clone connection to not use ssl (default true)
       --db-clone-user string                                        db clone user userKey (default "vt_clone")
-      --db-conn-query-info                                          enable parsing and processing of QUERY_OK info fields
+      --db-conn-query-info[=true|false]                             enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                   connection timeout to mysqld in milliseconds (0 for no timeout)
       --db-credentials-file string                                  db credentials file; send SIGHUP to reload this file
       --db-credentials-server string                                db credentials server type ('file' - file implementation; 'vault' - HashiCorp Vault implementation) (default "file")
@@ -110,20 +110,20 @@ Flags:
       --db-credentials-vault-tokenfile string                       Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                           How long to cache DB credentials from the Vault server (default 30m0s)
       --db-dba-password string                                      db dba password
-      --db-dba-use-ssl                                              Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-use-ssl[=true|false]                                 Set this flag to false to make the dba connection to not use ssl (default true)
       --db-dba-user string                                          db dba user userKey (default "vt_dba")
       --db-erepl-password string                                    db erepl password
-      --db-erepl-use-ssl                                            Set this flag to false to make the erepl connection to not use ssl (default true)
+      --db-erepl-use-ssl[=true|false]                               Set this flag to false to make the erepl connection to not use ssl (default true)
       --db-erepl-user string                                        db erepl user userKey (default "vt_erepl")
       --db-filtered-password string                                 db filtered password
-      --db-filtered-use-ssl                                         Set this flag to false to make the filtered connection to not use ssl (default true)
+      --db-filtered-use-ssl[=true|false]                            Set this flag to false to make the filtered connection to not use ssl (default true)
       --db-filtered-user string                                     db filtered user userKey (default "vt_filtered")
       --db-flags uint                                               Flag values as defined by MySQL.
       --db-flavor string                                            Flavor overrid. Valid value is FilePos.
       --db-host string                                              The host name for the tcp connection.
       --db-port int                                                 tcp port
       --db-repl-password string                                     db repl password
-      --db-repl-use-ssl                                             Set this flag to false to make the repl connection to not use ssl (default true)
+      --db-repl-use-ssl[=true|false]                                Set this flag to false to make the repl connection to not use ssl (default true)
       --db-repl-user string                                         db repl user userKey (default "vt_repl")
       --db-server-name string                                       server name of the DB we are connecting to.
       --db-socket string                                            The unix socket to connect on. If this is specified, host and port will not be used.
@@ -133,31 +133,31 @@ Flags:
       --db-ssl-key string                                           connection ssl key
       --db-ssl-mode SslMode                                         SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.
       --db-tls-min-version string                                   Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --detach                                                      detached mode - run backups detached from the terminal
-      --disable-redo-log                                            Disable InnoDB redo log during replication-from-primary phase of backup.
-      --emit-stats                                                  If set, emit stats to push-based monitoring and stats backends
-      --enable-errant-gtid-checks                                   Fail the run when the restored backup or the backup this run takes has errant GTIDs.
+      --detach[=true|false]                                         detached mode - run backups detached from the terminal
+      --disable-redo-log[=true|false]                               Disable InnoDB redo log during replication-from-primary phase of backup.
+      --emit-stats[=true|false]                                     If set, emit stats to push-based monitoring and stats backends
+      --enable-errant-gtid-checks[=true|false]                      Fail the run when the restored backup or the backup this run takes has errant GTIDs.
       --external-compressor string                                  command with arguments to use when compressing a backup.
       --external-compressor-extension string                        extension to use when using an external compressor.
       --external-decompressor string                                command with arguments to use when decompressing a backup.
-      --external-decompressor-use-manifest                          allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
+      --external-decompressor-use-manifest[=true|false]             allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
       --file-backup-storage-root string                             Root directory for the file backup storage.
       --gcs-backup-storage-bucket string                            Google Cloud Storage bucket to use for backups.
       --gcs-backup-storage-root string                              Root prefix for all backup-related object names.
       --grpc-auth-static-client-creds string                        When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                                     Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-dial-concurrency-limit int                             Maximum concurrency of grpc dial operations. This should be less than the golang max thread limit of 10000. (default 1024)
-      --grpc-enable-tracing                                         Enable gRPC tracing.
+      --grpc-enable-tracing[=true|false]                            Enable gRPC tracing.
       --grpc-initial-conn-window-size int                           gRPC initial connection window size
       --grpc-initial-window-size int                                gRPC initial window size
       --grpc-keepalive-time duration                                After a duration of this time, if the client doesn't see any activity, it pings the server to see if the transport is still alive. (default 10s)
       --grpc-keepalive-timeout duration                             After having pinged for keepalive check, the client waits for a duration of Timeout and if no activity is seen even after that the connection is closed. (default 10s)
       --grpc-max-message-size int                                   Maximum allowed RPC message size. Larger messages will be rejected by gRPC with the error 'exceeding the max size'. (default 16777216)
-      --grpc-prometheus                                             Enable gRPC monitoring with Prometheus.
-  -h, --help                                                        help for vtbackup
-      --include-binlogs                                             Include the source's binary logs in a full builtin backup. Restores use them automatically.
+      --grpc-prometheus[=true|false]                                Enable gRPC monitoring with Prometheus.
+  -h, --help[=true|false]                                           help for vtbackup
+      --include-binlogs[=true|false]                                Include the source's binary logs in a full builtin backup. Restores use them automatically.
       --incremental-from-pos string                                 Position, or name of backup from which to create an incremental backup. Default: empty. If given, then this backup becomes an incremental backup from given position or given backup. If value is 'auto', this backup will be taken from the last successful backup position.
-      --init-backup-sql-fail-on-error                               Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)
+      --init-backup-sql-fail-on-error[=true|false]                  Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)
       --init-backup-sql-queries strings                             Queries to execute after catch-up replication, before initializing the backup
       --init-backup-sql-timeout duration                            At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup
       --init-backup-tablet-types strings                            Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup
@@ -165,16 +165,16 @@ Flags:
       --init-db-sql-file string                                     path to .sql file to run after mysql_install_db
       --init-keyspace string                                        (init parameter) keyspace to use for this tablet
       --init-shard string                                           (init parameter) shard to use for this tablet
-      --initial-backup                                              Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
+      --initial-backup[=true|false]                                 Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).
       --keep-alive-timeout duration                                 Wait until timeout elapses after a successful backup before shutting down.
       --keep-logs duration                                          keep logs for this long (using ctime) (zero to keep forever)
       --keep-logs-by-mtime duration                                 keep logs for this long (using mtime) (zero to keep forever)
       --lock-timeout duration                                       Maximum time to wait when attempting to acquire a lock from the topo server (default 45s)
-      --log-err-stacks                                              log stack traces for errors
+      --log-err-stacks[=true|false]                                 log stack traces for errors
       --log-format string                                           log output format: json for machine-readable JSON, text for human-readable colored output (default "json")
       --log-level string                                            minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --log-structured                                              enable structured JSON logging (default true)
+      --log-structured[=true|false]                                 enable structured JSON logging (default true)
       --manifest-external-decompressor string                       command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --min-backup-interval duration                                Only take a new backup if it's been at least this long since the most recent backup.
       --min-retention-count int                                     Always keep at least this many of the most recent backups in this backup storage location, even if some are older than --min-retention-time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
@@ -197,39 +197,39 @@ Flags:
       --mycnf-slow-log-path string                                  mysql slow query log path
       --mycnf-socket-file string                                    mysql socket file
       --mycnf-tmp-dir string                                        mysql tmp directory
-      --mysql-clone-enabled                                         Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
+      --mysql-clone-enabled[=true|false]                            Enable MySQL CLONE plugin and user for backup/replica provisioning (requires MySQL 8.0.17+)
       --mysql-port int                                              MySQL port (default 3306)
       --mysql-server-version string                                 MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                          location where the backup will be stored
       --mysql-shell-dump-flags string                               flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
       --mysql-shell-flags string                                    execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
       --mysql-shell-load-flags string                               flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
-      --mysql-shell-restore-skip-version-check                      skip the MySQL version compatibility check when restoring from a mysql-shell backup
-      --mysql-shell-should-drain                                    decide if we should drain while taking a backup or continue to serving traffic
-      --mysql-shell-speedup-restore                                 speed up restore by disabling redo logging and double write buffer during the restore process
+      --mysql-shell-restore-skip-version-check[=true|false]         skip the MySQL version compatibility check when restoring from a mysql-shell backup
+      --mysql-shell-should-drain[=true|false]                       decide if we should drain while taking a backup or continue to serving traffic
+      --mysql-shell-speedup-restore[=true|false]                    speed up restore by disabling redo logging and double write buffer during the restore process
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql-timeout duration                                      how long to wait for mysqld startup (default 5m0s)
       --opentsdb-uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
-      --pprof-http                                                  enable pprof http endpoints
+      --pprof-http[=true|false]                                     enable pprof http endpoints
       --purge-logs-interval duration                                how often try to remove old logs (default 1h0m0s)
       --remote-operation-timeout duration                           time to wait for a remote operation (default 15s)
-      --restart-before-backup                                       Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
-      --restore-with-clone                                          (init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet
+      --restart-before-backup[=true|false]                          Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
+      --restore-with-clone[=true|false]                             (init parameter) will perform the restore phase with MySQL CLONE, requires either --clone-from-primary or --clone-from-tablet
       --s3-backup-aws-endpoint string                               endpoint of the S3 backend (region must be provided).
       --s3-backup-aws-min-partsize int                              Minimum part size to use, defaults to 5MiB but can be increased due to the dataset size. (default 5242880)
       --s3-backup-aws-region string                                 AWS region to use. (default "us-east-1")
       --s3-backup-aws-retries int                                   AWS request retries. (default -1)
       --s3-backup-download-concurrency int                          Number of parallel goroutines for S3 downloads. Set > 1 to enable parallel byte-range GETs via the transfer manager (recommended: 2-10). (default 1)
       --s3-backup-download-part-size int                            Part size in bytes for parallel S3 downloads via transfer manager. (default 8388608)
-      --s3-backup-force-path-style                                  force the s3 path style.
+      --s3-backup-force-path-style[=true|false]                     force the s3 path style.
       --s3-backup-log-level string                                  determine the S3 loglevel to use from LogOff, LogDebug, LogDebugWithSigning, LogDebugWithHTTPBody, LogDebugWithRequestRetries, LogDebugWithRequestErrors. (default "LogOff")
       --s3-backup-server-side-encryption string                     server-side encryption algorithm (e.g., AES256, aws:kms, sse_c:/path/to/key/file).
       --s3-backup-storage-bucket string                             S3 bucket to use for backups.
       --s3-backup-storage-root string                               root prefix for all backup-related object names.
-      --s3-backup-tls-skip-verify-cert                              skip the 'certificate is valid' check for SSL connections.
+      --s3-backup-tls-skip-verify-cert[=true|false]                 skip the 'certificate is valid' check for SSL connections.
       --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --sql-max-length-errors int                                   truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                       truncate queries in debug UIs to the given length (default 512) (default 512)
@@ -264,13 +264,13 @@ Flags:
       --topo-zk-tls-ca string                                       the server ca to use to validate servers when connecting to the zk topo server
       --topo-zk-tls-cert string                                     the cert to use to connect to the zk topo server, requires topo-zk-tls-key, enables TLS
       --topo-zk-tls-key string                                      the key to use to connect to the zk topo server, enables TLS
-      --upgrade-safe                                                Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.
-  -v, --version                                                     print binary version
+      --upgrade-safe[=true|false]                                   Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.
+  -v, --version[=true|false]                                        print binary version
       --xbstream-restore-flags string                               Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup-backup-flags string                              Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup-prepare-flags string                             Flags to pass to prepare command. These should be space separated and will be added to the end of the command
       --xtrabackup-root-path string                                 Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
-      --xtrabackup-should-drain                                     Decide if we should drain while taking a backup or continue to serving traffic
+      --xtrabackup-should-drain[=true|false]                        Decide if we should drain while taking a backup or continue to serving traffic
       --xtrabackup-stream-mode string                               Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
       --xtrabackup-stripe-block-size uint                           Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
       --xtrabackup-stripes uint                                     If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
