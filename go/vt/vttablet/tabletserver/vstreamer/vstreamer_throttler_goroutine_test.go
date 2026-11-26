@@ -41,13 +41,15 @@ import (
 // newThrottleTestVStreamer builds the minimal vstreamer that drives
 // parseEvents without MySQL: a nil-throttler client throttles only
 // throttlerapp.TestingAlwaysThrottledName, so the app name picks which branch
-// of throttleEvents the worker lands in.
-func newThrottleTestVStreamer(app throttlerapp.Name, counterPrefix string, send func([]*binlogdatapb.VEvent) error) (*vstreamer, *Engine) {
+// of throttleEvents the worker lands in. The counters stay unnamed so they
+// are never registered with expvar and repeated runs (-count=2) cannot panic
+// on a duplicate publish.
+func newThrottleTestVStreamer(app throttlerapp.Name, send func([]*binlogdatapb.VEvent) error) (*vstreamer, *Engine) {
 	throttlerClient := throttle.NewBackgroundClient(nil, app, base.UndefinedScope)
 	vse := &Engine{
 		throttlerClient: throttlerClient,
-		throttledCounts: stats.NewCounter(counterPrefix+"ThrottledCounts", "Number of times vstreamer was throttled by the tablet throttler"),
-		errorCounts:     stats.NewCountersWithSingleLabel(counterPrefix+"Errors", "Tracks errors in vstreamer", "type"),
+		throttledCounts: stats.NewCounter("", "Number of times vstreamer was throttled by the tablet throttler"),
+		errorCounts:     stats.NewCountersWithSingleLabel("", "Tracks errors in vstreamer", "type"),
 	}
 	vs := &vstreamer{
 		filter:       &binlogdatapb.Filter{},
@@ -84,9 +86,8 @@ func parseEventsGone() bool {
 // to keep the goroutine in the fully-throttled branch deterministically. Once
 // the goroutine has settled, the errs channel (which models the BinlogConnection
 // dying) makes parseEvents return while the caller's context stays alive. The
-// worker must then exit through the derived context's cancellation, well
-// before fullyThrottledTimeout could fire: the throttled counter, which the
-// worker increments every throttleCheckDuration while alive, must stop moving.
+// worker must then exit through the derived context's cancellation, long
+// before fullyThrottledTimeout could fire.
 func TestParseEventsStopsThrottlerGoroutine(t *testing.T) {
 	origTimeout := fullyThrottledTimeout
 	origHeartbeatTime := HeartbeatTime
@@ -95,12 +96,14 @@ func TestParseEventsStopsThrottlerGoroutine(t *testing.T) {
 		HeartbeatTime = origHeartbeatTime
 	})
 	// The goroutine reports fully-throttled after this much continuous
-	// throttling; long enough that parseEvents can return first.
-	fullyThrottledTimeout = 2 * time.Second
+	// throttling; long enough that parseEvents can return first, and long
+	// enough that a worker which would only stop at its timeout is still
+	// caught mid-leak by the parseEventsGone wait below.
+	fullyThrottledTimeout = 2 * time.Minute
 	// Keep the heartbeat branch out of the test entirely.
 	HeartbeatTime = time.Hour
 
-	vs, vse := newThrottleTestVStreamer(throttlerapp.TestingAlwaysThrottledName, "TestParseEventsStopsThrottlerGoroutine", func([]*binlogdatapb.VEvent) error { return nil })
+	vs, vse := newThrottleTestVStreamer(throttlerapp.TestingAlwaysThrottledName, func([]*binlogdatapb.VEvent) error { return nil })
 
 	events := make(chan mysql.BinlogEvent)
 	errs := make(chan error, 1)
@@ -133,17 +136,12 @@ func TestParseEventsStopsThrottlerGoroutine(t *testing.T) {
 		require.FailNow(t, "parseEvents did not return after the events error channel fired")
 	}
 
-	// The derived context is cancelled as parseEvents returns, so the worker
-	// must exit immediately, long before fullyThrottledTimeout could end it.
-	// A leaked worker would keep incrementing throttledCounts every
-	// throttleCheckDuration (250ms); the counter of an exited worker never
-	// moves again. The window stays under fullyThrottledTimeout so a worker
-	// that would only stop at its timeout is still caught mid-leak.
-	frozen := vse.throttledCounts.Get()
-	assert.Never(t, func() bool {
-		return vse.throttledCounts.Get() != frozen
-	}, fullyThrottledTimeout/2, 25*time.Millisecond, "throttleEvents goroutine is still running after parseEvents returned")
-	assert.True(t, parseEventsGone(), "throttleEvents goroutine is still running after parseEvents returned")
+	// The derived context is cancelled as parseEvents returns, but
+	// cancellation is not synchronous: the worker can be past its ctx.Done()
+	// check and still have an increment in flight. Wait for the worker to
+	// actually exit; a leaked worker would only stop at fullyThrottledTimeout,
+	// so it is caught here long before that.
+	require.Eventually(t, parseEventsGone, 30*time.Second, 10*time.Millisecond, "throttleEvents goroutine is still running after parseEvents returned")
 }
 
 // TestParseEventsStopsBlockedForwarder covers the second leak path of
@@ -168,7 +166,7 @@ func TestParseEventsStopsBlockedForwarder(t *testing.T) {
 	sendStarted := make(chan struct{})
 	sendGate := make(chan error, 1)
 	var sendOnce sync.Once
-	vs, _ := newThrottleTestVStreamer("never-throttled-app", "TestParseEventsStopsBlockedForwarder", func([]*binlogdatapb.VEvent) error {
+	vs, _ := newThrottleTestVStreamer("never-throttled-app", func([]*binlogdatapb.VEvent) error {
 		sendOnce.Do(func() { close(sendStarted) })
 		return <-sendGate
 	})
