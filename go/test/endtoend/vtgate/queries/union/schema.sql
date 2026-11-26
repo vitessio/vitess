@@ -11,7 +11,8 @@ create table union_collations(
     name_latin1 varchar(30) character set latin1 collate latin1_swedish_ci,
     name_ascii varchar(30) character set ascii collate ascii_general_ci,
     name_text text character set utf8mb4 collate utf8mb4_general_ci,
-    name_blob blob
+    name_blob blob,
+    data_json json
 ) Engine=InnoDB;
 
 create table t1_id2_idx(

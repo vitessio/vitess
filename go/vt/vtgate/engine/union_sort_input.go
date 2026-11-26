@@ -44,9 +44,17 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 	if !ok {
 		return ms.Input, nil, nil
 	}
+	// Evalengine's JSON comparison differs from MySQL's JSON ORDER BY. An
+	// arm-local LIMIT would therefore discard rows using a different order.
+	if unionSortHasJSON(ms.OrderBy) {
+		return ms.Input, nil, nil
+	}
 	if metadata == nil {
 		// Known numeric UNIONs need neither metadata nor binary string keys.
 		if !unionSortNonText(ms.OrderBy) {
+			if unionSortCanCapWithoutMetadata(ms.OrderBy) {
+				return unionSortPlainInput(input, ms.OrderBy, count, nil, env), nil, nil
+			}
 			return ms.Input, nil, nil
 		}
 		if !unionSortNeedsNumericKeys(ms.OrderBy) {
@@ -385,11 +393,29 @@ func unionSortKey(value sqlparser.Expr, id collations.ID, env *collations.Enviro
 
 func unionSortNonText(order evalengine.Comparison) bool {
 	for _, key := range order {
-		if key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type()) {
+		if key.Type.Type() == sqltypes.Unknown || key.Type.Type() == sqltypes.TypeJSON || sqltypes.IsTextOrBinary(key.Type.Type()) {
 			return false
 		}
 	}
 	return len(order) > 0
+}
+
+func unionSortHasJSON(order evalengine.Comparison) bool {
+	for _, key := range order {
+		if key.Type.Type() == sqltypes.TypeJSON {
+			return true
+		}
+	}
+	return false
+}
+
+func unionSortCanCapWithoutMetadata(order evalengine.Comparison) bool {
+	for _, key := range order {
+		if (key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type())) && key.WeightStringCol < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // Floating-point UNION conversion can collapse distinct native values into a
@@ -454,6 +480,13 @@ func unionSortPlainInput(input *Concatenate, order evalengine.Comparison, count 
 
 func unionSortPlainSource(source Primitive, order evalengine.Comparison, count int, metadata *unionSortMetadata, env *collations.Environment) Primitive {
 	switch source := source.(type) {
+	case *Concatenate:
+		clone := *source
+		clone.Sources = make([]Primitive, len(source.Sources))
+		for i, arm := range source.Sources {
+			clone.Sources[i] = unionSortPlainSource(arm, order, count, metadata, env)
+		}
+		return &clone
 	case *SimpleProjection:
 		mapped := slices.Clone(order)
 		if source.Cols != nil {
@@ -473,8 +506,15 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 		return &clone
 	case *Route:
 		stmt, ok := source.QueryStatement.(*sqlparser.Select)
-		if !ok || stmt.Limit != nil || stmt.Distinct || stmt.GroupBy != nil || sqlparser.ContainsAggregation(stmt) || count == math.MaxInt {
+		if !ok || stmt.Limit != nil || stmt.Distinct || stmt.GroupBy != nil || sqlparser.ContainsAggregation(stmt) || len(source.OrderBy) > 0 || count == math.MaxInt {
 			return source
+		}
+		if metadata == nil {
+			for _, key := range order {
+				if (key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type())) && (key.WeightStringCol < 0 || key.WeightStringCol >= stmt.GetColumnCount()) {
+					return source
+				}
+			}
 		}
 		query := sqlparser.CloneRefOfSelect(stmt)
 		query.OrderBy = nil
@@ -482,6 +522,13 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 		clone.unionSortOriginal = source
 		clone.OrderBy = slices.Clone(order)
 		for i, key := range order {
+			orderCol := key.Col
+			if metadata == nil && (key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type())) {
+				clone.OrderBy[i].Col = key.WeightStringCol
+				clone.OrderBy[i].WeightStringCol = -1
+				clone.OrderBy[i].Type = evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID)
+				orderCol = key.WeightStringCol
+			}
 			if metadata != nil && sqltypes.IsTextOrBinary(key.Type.Type()) {
 				clone.OrderBy[i].Col = key.WeightStringCol
 				clone.OrderBy[i].WeightStringCol = -1
@@ -492,7 +539,7 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 			if key.Desc {
 				direction = sqlparser.DescOrder
 			}
-			query.OrderBy = append(query.OrderBy, &sqlparser.Order{Expr: sqlparser.NewIntLiteral(strconv.Itoa(key.Col + 1)), Direction: direction})
+			query.OrderBy = append(query.OrderBy, &sqlparser.Order{Expr: sqlparser.NewIntLiteral(strconv.Itoa(orderCol + 1)), Direction: direction})
 		}
 		query.Limit = &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(strconv.Itoa(count))}
 		clone.QueryStatement = query

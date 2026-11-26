@@ -56,12 +56,12 @@ func TestUnionSortCollationQueries(t *testing.T) {
 				route := input.(*engine.Route)
 				metadata := sort.CollationQueries[i].(*engine.Route)
 				assert.Same(t, route.Keyspace, metadata.Keyspace)
-				assert.Equal(t, engine.None, metadata.Opcode, "probe one shard through GetFields, independently of row routing")
+				assert.Equal(t, route.Opcode, metadata.Opcode, "transactional probes retain the arm's routing")
 				assert.NotContains(t, route.Query, ":__upper_limit", "resolve the global comparator before truncating arms")
 				assert.Contains(t, metadata.Query, "limit 0")
 				assert.Equal(t, 3*len(sort.OrderBy), strings.Count(metadata.Query, "(select __union_sort.c"))
 				assert.Contains(t, metadata.Query, "coercibility(")
-				assert.False(t, metadata.NoRoutesSpecialHandling, "empty metadata routes must retain the shard-affine GetFields fallback")
+				assert.False(t, metadata.NoRoutesSpecialHandling, "metadata probes do not scatter when an arm has no destination")
 				assert.NotContains(t, metadata.Query, "::__vals", "metadata must work even when IN routing has no destinations")
 				stmt, err := env.Parser().Parse(metadata.Query)
 				require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestUnionSortCollationQueryWrappers(t *testing.T) {
 			case *engine.VindexLookup:
 				metadata, ok := sort.CollationQueries[1].(*engine.Route)
 				require.True(t, ok, "metadata does not repeat the lookup")
-				assert.Equal(t, engine.None, metadata.Opcode)
+				assert.Equal(t, arm.SendTo.Opcode, metadata.Opcode)
 				assert.NotSame(t, arm.SendTo, metadata)
 				assert.Contains(t, metadata.Query, "coercibility(")
 

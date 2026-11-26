@@ -65,7 +65,11 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 	results := make([]*sqltypes.Result, len(ms.CollationQueries))
 	execute := func(i int) error {
 		var err error
-		results[i], err = vc.ExecutePrimitive(ctx, ms.CollationQueries[i], copyBindVars(bindVars), true)
+		query := ms.CollationQueries[i]
+		if route, ok := query.(*Route); ok {
+			query = unionSortProbeRoute(route, vc.Session().InTransaction() || vc.Session().InReservedConn())
+		}
+		results[i], err = vc.ExecutePrimitive(ctx, query, copyBindVars(bindVars), true)
 		return err
 	}
 	if vc.Session().InTransaction() || vc.Session().InReservedConn() {
@@ -156,6 +160,19 @@ func (ms *MemorySort) resolveUnionCollations(ctx context.Context, vc VCursor, bi
 		}
 	}
 	return metadata, nil
+}
+
+func unionSortProbeRoute(route *Route, keepArmRouting bool) *Route {
+	clone := *route
+	if route.RoutingParameters == nil || keepArmRouting {
+		return &clone
+	}
+	routing := *route.RoutingParameters
+	// Outside transaction state, a metadata-only probe may use any shard.
+	routing.Opcode = None
+	routing.TargetDestination = nil
+	clone.RoutingParameters = &routing
+	return &clone
 }
 
 // Metadata aggregation does not compare or decode values. An unsupported arm

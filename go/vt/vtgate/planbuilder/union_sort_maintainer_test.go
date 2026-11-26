@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -94,4 +95,60 @@ func TestUnionSortExplicitSharedColumnsAvoidMetadata(t *testing.T) {
 	sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions).(*engine.MemorySort)
 	require.True(t, sort.UnionCollationKnown)
 	require.Empty(t, sort.CollationQueries)
+}
+
+func TestUnionSortKnownColumnsRequiresMatchingCollations(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", false)
+	table := vschema.Keyspaces["unsharded_fk_allow"].Tables["u_tbl1"]
+	for i := range table.Columns {
+		if table.Columns[i].Name.EqualString("col1") {
+			table.Columns[i].CollationName = "utf8mb4_bin"
+		}
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+	plan, err := TestBuilder("select textcol1 as x from user union all select col1 from unsharded_fk_allow.u_tbl1 order by x limit 10", vw, vw.CurrentDb())
+	require.NoError(t, err)
+	sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions).(*engine.MemorySort)
+	require.False(t, sort.UnionCollationKnown)
+	require.Len(t, sort.CollationQueries, 2, "different known collations need runtime common-collation resolution")
+}
+
+func TestUnionSortKnownColumnsRejectsAggregateRoutes(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vw, err := vschemawrapper.NewVschemaWrapper(env, loadSchema(t, "vschemas/schema.json", true), TestBuilder)
+	require.NoError(t, err)
+	left := &engine.Route{QueryStatement: mustParseStatement(t, env, "select textcol1,max(id) from user group by textcol1")}
+	right := &engine.Route{QueryStatement: mustParseStatement(t, env, "select col1,max(col14) from unsharded_fk_allow.u_tbl1 group by col1")}
+	source := &operators.Union{Selects: [][]sqlparser.SelectExpr{
+		{&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("textcol1")}},
+		{&sqlparser.AliasedExpr{Expr: sqlparser.NewColName("col1")}},
+	}}
+	sort := &engine.MemorySort{Input: engine.NewConcatenate([]engine.Primitive{left, right}, nil), OrderBy: nil}
+	require.False(t, unionSortKnownColumns(&plancontext.PlanningContext{VSchema: vw}, source, sort), "aggregate arms are excluded from the shared-column shortcut")
+}
+
+func mustParseStatement(t *testing.T, env *vtenv.Environment, query string) sqlparser.Statement {
+	t.Helper()
+	stmt, err := env.Parser().Parse(query)
+	require.NoError(t, err)
+	return stmt
+}
+
+func TestUnionSortAliasAndOrdinalUseSameLocalTypeInference(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vw, err := vschemawrapper.NewVschemaWrapper(env, loadSchema(t, "vschemas/schema.json", false), TestBuilder)
+	require.NoError(t, err)
+	var sorts []*engine.MemorySort
+	for _, orderBy := range []string{"x", "1"} {
+		query := "select textcol1 as x from user union all select col1 from unsharded_fk_allow.u_tbl1 order by " + orderBy + " limit 10"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		require.NoError(t, err)
+		sorts = append(sorts, engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions).(*engine.MemorySort))
+	}
+	require.Equal(t, sorts[0].OrderBy[0].Type.Type(), sorts[1].OrderBy[0].Type.Type())
+	require.Equal(t, sorts[0].OrderBy[0].Type.Collation(), sorts[1].OrderBy[0].Type.Collation())
+	require.Equal(t, sorts[0].UnionCollationKnown, sorts[1].UnionCollationKnown)
+	require.Len(t, sorts[0].CollationQueries, len(sorts[1].CollationQueries))
 }

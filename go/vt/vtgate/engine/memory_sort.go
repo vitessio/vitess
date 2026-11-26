@@ -241,15 +241,6 @@ func unionSortComparison(orderBy evalengine.Comparison, fields []*querypb.Field,
 // Padding follows the collation that produced the key, independently of the
 // result's wire charset and of any common collation chosen for another sort.
 func unionSortPadWeight(env *collations.Environment, id collations.ID) ([]byte, error) {
-	// These server transforms are not order-preserving: Thai maps NUL to
-	// SPACE, Czech emits separate levels, and GB18030 folds characters that
-	// its comparison keeps distinct. Padding cannot repair those keys.
-	name, _ := env.LookupKnownCollation(id)
-	switch name {
-	case "tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci":
-		return nil, vterrors.VT12001("UNION ordering with non-order-preserving MySQL weight strings for " + name)
-	}
-
 	pad, known := env.PadSpace(id)
 	if !known {
 		return nil, vterrors.VT12001("UNION collation padding is unknown")

@@ -451,6 +451,7 @@ func createMemorySort(ctx *plancontext.PlanningContext, src engine.Primitive, or
 		})
 	}
 
+	unionSortSetKnownOutputTypes(ctx, ordering.Source, prim)
 	prim.UnionCollationKnown = unionSortKnownColumns(ctx, ordering.Source, prim)
 	if err := addUnionSortCollationQueries(ctx, prim); err != nil {
 		return nil, err

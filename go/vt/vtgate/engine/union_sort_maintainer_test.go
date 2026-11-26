@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -136,14 +138,136 @@ func TestUnionSortIndependentProbesRunConcurrently(t *testing.T) {
 	require.Len(t, vars, 1, "each concurrent probe owns its bind map")
 }
 
-func TestUnionSortRejectsNonOrderingServerKeys(t *testing.T) {
+func TestUnionSortPreservesLegacyCollationSupport(t *testing.T) {
 	for _, name := range []string{"tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci"} {
 		t.Run(name, func(t *testing.T) {
 			env := collations.MySQL8()
 			id, _ := env.LookupID(name)
 			_, err := unionSortPadWeight(env, id)
-			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
+			require.NoError(t, err)
 		})
+	}
+}
+
+func TestUnionSortJSONDoesNotUseCappedPlainPath(t *testing.T) {
+	env := collations.MySQL8()
+	input := NewConcatenate([]Primitive{unionSortTestRoute(t, "select value from t")}, nil)
+	sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, Type: evalengine.NewType(sqltypes.TypeJSON, collations.CollationBinaryID), CollationEnv: env}}}
+	got, layout, err := sort.unionSortInput(nil, 1, env)
+	require.NoError(t, err)
+	require.Nil(t, layout)
+	require.Same(t, input, got, "JSON uses MySQL ordering that differs from evalengine")
+}
+
+func TestUnionSortProbeFreeTextCapsEligibleArms(t *testing.T) {
+	env := collations.MySQL8()
+	aggregate := unionSortTestRoute(t, "select max(name) from t")
+	plain := unionSortTestRoute(t, "select name, weight_string(name) from t")
+	input := NewConcatenate([]Primitive{aggregate, plain}, nil)
+	sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.Unknown, collations.Unknown), CollationEnv: env}}}
+	got, _, err := sort.unionSortInput(nil, 3, env)
+	require.NoError(t, err)
+	sources := got.(*Concatenate).Sources
+	require.Same(t, aggregate, sources[0], "aggregate result selection is already bounded to one row")
+	route := sources[1].(*Route)
+	stmt := route.QueryStatement.(*sqlparser.Select)
+	require.NotNil(t, stmt.Limit)
+	require.Equal(t, "3", sqlparser.String(stmt.Limit.Rowcount))
+	require.Equal(t, "2", sqlparser.String(stmt.OrderBy[0].Expr), "use the arm's server weight-string key")
+
+	nestedRoute := unionSortTestRoute(t, "select name, weight_string(name) from nested_t")
+	nested := NewConcatenate([]Primitive{nestedRoute}, nil)
+	sort.Input = NewConcatenate([]Primitive{nested}, nil)
+	got, _, err = sort.unionSortInput(nil, 3, env)
+	require.NoError(t, err)
+	nestedResult := got.(*Concatenate).Sources[0].(*Concatenate)
+	require.NotNil(t, nestedResult.Sources[0].(*Route).QueryStatement.(*sqlparser.Select).Limit, "nested UNION arms retain bounded backend reads")
+}
+
+func TestUnionSortProbeRoutePreservesSessionRouting(t *testing.T) {
+	route := &Route{RoutingParameters: &RoutingParameters{Opcode: EqualUnique}}
+	transactional := unionSortProbeRoute(route, true)
+	require.Equal(t, EqualUnique, transactional.Opcode)
+	require.Same(t, route.RoutingParameters, transactional.RoutingParameters)
+	autocommit := unionSortProbeRoute(route, false)
+	require.Equal(t, None, autocommit.Opcode)
+	require.Nil(t, autocommit.TargetDestination)
+	require.Equal(t, EqualUnique, route.Opcode, "the cached arm route must stay unchanged")
+}
+
+func TestUnionSortGuardedPaths(t *testing.T) {
+	env := collations.MySQL8()
+	order := evalengine.Comparison{{Col: 0, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+	for _, tc := range []struct {
+		name  string
+		query string
+		count int
+		cap   bool
+	}{
+		{name: "plain", query: "select id from t", count: 3, cap: true},
+		{name: "limit", query: "select id from t limit 5", count: 3},
+		{name: "distinct", query: "select distinct id from t", count: 3},
+		{name: "group", query: "select id from t group by id", count: 3},
+		{name: "aggregate", query: "select count(*) from t", count: 3},
+		{name: "unbounded", query: "select id from t", count: math.MaxInt},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := unionSortTestRoute(t, tc.query)
+			got := unionSortPlainSource(source, order, tc.count, nil, env).(*Route)
+			stmt := got.QueryStatement.(*sqlparser.Select)
+			if tc.cap {
+				require.NotNil(t, stmt.Limit)
+				require.Equal(t, "3", sqlparser.String(stmt.Limit.Rowcount))
+			} else if tc.count == math.MaxInt || tc.name == "limit" || tc.name == "distinct" || tc.name == "group" || tc.name == "aggregate" {
+				require.Same(t, source, got)
+			} else {
+				require.Nil(t, stmt.Limit)
+			}
+		})
+	}
+
+	plain := NewConcatenate([]Primitive{unionSortTestRoute(t, "select id from t")}, nil)
+	function := NewConcatenate([]Primitive{unionSortTestRoute(t, "select lower(name) from t")}, nil)
+	require.True(t, unionSortRepeatableSources(plain))
+	require.False(t, unionSortRepeatableSources(function))
+	orderedRoute := unionSortTestRoute(t, "select name, weight_string(name) from t")
+	orderedRoute.OrderBy = evalengine.Comparison{{Col: 0, WeightStringCol: 1}}
+	require.Same(t, orderedRoute, unionSortPlainSource(orderedRoute, evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.Unknown, collations.Unknown)}}, 3, nil, env), "do not overwrite an existing arm comparator")
+}
+
+func TestUnionSortNativePathForRepeatableExpressions(t *testing.T) {
+	env := collations.MySQL8()
+	id := env.LookupByName("utf8mb4_general_ci")
+	input := NewConcatenate([]Primitive{unionSortTestRoute(t, "select name from t"), unionSortTestRoute(t, "select name from u")}, nil)
+	metadata := &unionSortMetadata{common: []collations.TypedCollation{{Collation: id}}, arms: make([][]collations.TypedCollation, 2), types: []sqltypes.Type{sqltypes.VarChar}, scales: []int32{0}, same: true}
+	sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: -1, Type: evalengine.NewType(sqltypes.VarChar, id), CollationEnv: env}}}
+	got, _, err := sort.unionSortInput(metadata, 3, env)
+	require.NoError(t, err)
+	for _, source := range got.(*Concatenate).Sources {
+		projection, ok := source.(*SimpleProjection)
+		require.True(t, ok, "repeatable projections use the native key path")
+		route := projection.Input.(*Route)
+		require.NotContains(t, route.Query, "__union_values")
+	}
+}
+
+func TestUnionSortRouteCapRespectsArmLimit(t *testing.T) {
+	env := collations.MySQL8()
+	order := evalengine.Comparison{{Col: 0, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)}}
+	for _, tc := range []struct {
+		query      string
+		outerLimit bool
+		innerLimit bool
+	}{
+		{query: "select id from t", outerLimit: true},
+		{query: "select id from t limit 5", innerLimit: true},
+	} {
+		route, _, _, err := unionSortRoute(unionSortTestRoute(t, tc.query), order, []collations.TypedCollation{{Collation: collations.CollationBinaryID}}, nil, 3, env)
+		require.NoError(t, err)
+		outer := route.QueryStatement.(*sqlparser.Select)
+		require.Equal(t, tc.outerLimit, outer.Limit != nil)
+		derived := outer.From[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.DerivedTable).Select.(*sqlparser.Select)
+		require.Equal(t, tc.innerLimit, derived.Limit != nil)
 	}
 }
 

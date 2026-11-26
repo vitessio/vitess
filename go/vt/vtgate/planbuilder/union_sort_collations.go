@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -159,15 +161,9 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		metadata := *route
 		metadata.Query, metadata.FieldQuery = query, query
 		metadata.QueryStatement = outer
-		routing := &engine.RoutingParameters{}
-		if route.RoutingParameters != nil {
-			*routing = *route.RoutingParameters
-		}
-		// None uses GetFields' existing-transaction-shard fallback, or one
-		// arbitrary shard outside a transaction. Never scatter a zero-row probe.
-		routing.Opcode = engine.None
-		routing.TargetDestination = nil
-		metadata.RoutingParameters = routing
+		// The executor chooses between this arm's routing and an arbitrary
+		// shard based on whether the session is transactional/reserved.
+		metadata.RoutingParameters = route.RoutingParameters
 		metadata.OrderBy = nil
 		metadata.TruncateColumnCount = 0
 		metadata.NoRoutesSpecialHandling = false
@@ -219,4 +215,51 @@ func unionSortKnownColumns(ctx *plancontext.PlanningContext, source operators.Op
 		}
 	}
 	return true
+}
+
+// UNION ORDER BY aliases and ordinals both refer to output columns. Infer a
+// sort type only when every arm has the same known type and collation. Keeping
+// this local to MemorySort avoids changing semantic typing for DISTINCT and
+// other consumers of a UNION's projected columns.
+func unionSortSetKnownOutputTypes(ctx *plancontext.PlanningContext, source operators.Operator, sort *engine.MemorySort) {
+	union, ok := source.(*operators.Union)
+	if !ok || len(union.Selects) == 0 {
+		return
+	}
+	for i := range sort.OrderBy {
+		col := sort.OrderBy[i].Col
+		var common evalengine.Type
+		typeKnown, collationKnown := true, true
+		for arm, columns := range union.Selects {
+			if col < 0 || col >= len(columns) {
+				typeKnown = false
+				break
+			}
+			expr, ok := columns[col].(*sqlparser.AliasedExpr)
+			if !ok {
+				typeKnown = false
+				break
+			}
+			typ, found := ctx.TypeForExpr(expr.Expr)
+			if !found || typ.Type() == sqltypes.Unknown {
+				typeKnown = false
+				break
+			}
+			if arm == 0 {
+				common = typ
+			} else {
+				if typ.Type() != common.Type() || typ.Scale() != common.Scale() {
+					typeKnown = false
+					break
+				}
+				collationKnown = collationKnown && typ.Collation() == common.Collation()
+			}
+		}
+		if typeKnown {
+			if !collationKnown {
+				common = evalengine.NewType(common.Type(), collations.Unknown)
+			}
+			sort.OrderBy[i].Type = common
+		}
+	}
 }

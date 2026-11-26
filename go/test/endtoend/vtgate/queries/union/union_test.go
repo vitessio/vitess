@@ -487,13 +487,18 @@ func TestUnionBackendCollationAndEligibility(t *testing.T) {
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 	mcmp.Exec("insert into union_collations(id,name_general) values (1,'a'),(4,'z')")
+	utils.Exec(t, mcmp.VtConn, "update union_collations set data_json='10' where id=1")
+	utils.Exec(t, mcmp.VtConn, "update union_collations set data_json='2.5' where id=4")
+	jsonQuery := "select data_json as x from union_collations where id in (1,4) union all select data_json from union_collations where id=999 order by x limit 1"
+	jsonResult := utils.Exec(t, mcmp.VtConn, jsonQuery)
+	require.Len(t, jsonResult.Rows, 1)
+	require.Equal(t, "2.5", jsonResult.Rows[0][0].ToString(), "keep both JSON values until the final comparator; MySQL and evalengine JSON ordering differ")
 	for _, workload := range []string{"oltp", "olap"} {
 		utils.Exec(t, mcmp.VtConn, "set workload="+workload)
 		for _, charset := range []string{"tis620", "cp1250", "gb18030"} {
 			collation := map[string]string{"tis620": "tis620_thai_ci", "cp1250": "cp1250_czech_cs", "gb18030": "gb18030_chinese_ci"}[charset]
 			query := "select convert(name_general using " + charset + ") collate " + collation + " as x from union_collations where id=1 union all select convert(name_general using " + charset + ") collate " + collation + " from union_collations where id=4 order by x"
-			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
-			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
+			mcmp.Exec(query)
 		}
 		mcmp.Exec("select convert(name_general using big5) as x from union_collations where id=1 union all select convert(name_general using big5) from union_collations where id=4 order by x limit 1")
 		mcmp.Exec("select name_general as x,id from union_collations where id=1 union all select name_general,sum(id) from union_collations where id=4 and name_general='z' order by x")

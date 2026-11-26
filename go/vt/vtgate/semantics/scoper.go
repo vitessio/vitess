@@ -296,12 +296,6 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
 		}
 	case *sqlparser.Union:
-		// All arms have been analyzed before ORDER BY. Reuse the same output
-		// types as derived UNIONs instead of typing synthetic AND expressions.
-		if err := s.binder.tc.visitUnion(parent); err != nil {
-			return err
-		}
-		info := s.binder.tc.unionInfo[parent]
 		nScope := newScope(nil)
 		nScope.isUnion = true
 		var tableInfo *vTableInfo
@@ -327,8 +321,6 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				}
 			}
 		}
-
-		tableInfo.types = info.types
 		s.push(nScope)
 	}
 	return nil

@@ -95,6 +95,34 @@ func TestUnionSortCollationsPerExecution(t *testing.T) {
 	}
 }
 
+func TestUnionSortMetadataSameRequiresMatchingArmTypesAndCollations(t *testing.T) {
+	metadataFields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
+	for _, tc := range []struct {
+		name       string
+		collations [2]string
+		secondType sqltypes.Type
+	}{
+		{name: "same", collations: [2]string{"utf8mb4_general_ci|2", "utf8mb4_general_ci|2"}, secondType: sqltypes.VarChar},
+		{name: "collation mismatch", collations: [2]string{"utf8mb4_general_ci|2", "utf8mb4_bin|2"}, secondType: sqltypes.VarChar},
+		{name: "type mismatch", collations: [2]string{"utf8mb4_general_ci|2", "utf8mb4_general_ci|2"}, secondType: sqltypes.Int64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			queries := make([]Primitive, 2)
+			for i, collation := range tc.collations {
+				result := unionSortMetadataResult(metadataFields, collation)
+				if i == 1 {
+					result.Fields[2].Type = tc.secondType
+				}
+				queries[i] = &fakePrimitive{results: []*sqltypes.Result{result}}
+			}
+			sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0}}, CollationQueries: queries}
+			metadata, err := sort.resolveUnionCollations(t.Context(), &noopVCursor{}, nil)
+			require.NoError(t, err)
+			assert.Equal(t, tc.name == "same", metadata.same)
+		})
+	}
+}
+
 func TestUnionSortCollationCoercibility(t *testing.T) {
 	metadataFields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 	for _, reverse := range []bool{false, true} {
