@@ -74,7 +74,9 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return fields.Truncate(ms.TruncateColumnCount), nil
 	}
 
-	ctx = withUnionSortLookupCache(ctx)
+	if len(ms.CollationQueries) > 0 {
+		ctx = withUnionSortLookupCache(ctx)
+	}
 	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -137,7 +139,9 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return callback(fields.Truncate(ms.TruncateColumnCount))
 	}
 
-	ctx = withUnionSortLookupCache(ctx)
+	if len(ms.CollationQueries) > 0 {
+		ctx = withUnionSortLookupCache(ctx)
+	}
 	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
