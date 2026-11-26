@@ -426,7 +426,7 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 }
 
 func destinationsEqual(d1, d2 key.ShardDestination) bool {
-	if d1 == d2 {
+	if d1 == nil && d2 == nil {
 		return true
 	}
 	if d1 == nil || d2 == nil {

@@ -118,11 +118,31 @@
   },
   {
     "comment": "Drop view with key range qualifier",
-    "query": "drop view `user:80-`.a",
+    "query": "drop view `user[-80]`.a",
     "plan": {
       "Type": "DirectDDL",
       "QueryType": "DDL",
-      "Original": "drop view `user:80-`.a",
+      "Original": "drop view `user[-80]`.a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "drop view a"
+      },
+      "TablesUsed": [
+        "user.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view with keyspace id qualifier",
+    "query": "drop view `user[80]`.a",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop view `user[80]`.a",
       "Instructions": {
         "OperatorType": "DDL",
         "Keyspace": {

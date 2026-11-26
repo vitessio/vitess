@@ -310,6 +310,12 @@ func (s *planTestSuite) TestViews() {
 	s.Require().NoError(err)
 	s.Require().Equal("DestinationExactKeyRange(-80)", destKR.String())
 
+	stmtKSID, err := sqlparser.NewTestParser().Parse("drop view `user[80]`.a")
+	s.Require().NoError(err)
+	destKSID, _, err := buildDropView(vw, stmtKSID.(sqlparser.DDLStatement))
+	s.Require().NoError(err)
+	s.Require().Equal(key.DestinationKeyspaceID([]byte{0x80}), destKSID)
+
 	stmtAll, err := sqlparser.NewTestParser().Parse("drop view main.a")
 	s.Require().NoError(err)
 	destAll, _, err := buildDropView(vw, stmtAll.(sqlparser.DDLStatement))
