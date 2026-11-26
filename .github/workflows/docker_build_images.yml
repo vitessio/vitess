@@ -21,6 +21,10 @@ jobs:
     environment:
       name: dockerhub
       deployment: false
+    permissions:
+      contents: read
+      # Signs in to Docker Hub through its OIDC connection, without a stored token.
+      id-token: write
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -41,9 +45,10 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: vitess
 
       - name: Set Dockerfile path
         run: |
@@ -87,6 +92,10 @@ jobs:
     environment:
       name: dockerhub
       deployment: false
+    permissions:
+      contents: read
+      # Signs in to Docker Hub through its OIDC connection, without a stored token.
+      id-token: write
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -102,9 +111,10 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: vitess
 
       - name: Set Dockerfile path
         run: |
@@ -156,6 +166,10 @@ jobs:
     environment:
       name: dockerhub
       deployment: false
+    permissions:
+      contents: read
+      # Signs in to Docker Hub through its OIDC connection, without a stored token.
+      id-token: write
     if: github.repository == 'vitessio/vitess' && needs.build_and_push_lite.result == 'success'
     needs:
       - build_and_push_lite
@@ -174,9 +188,10 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: vitess
 
       - name: Set Docker context path
         run: |
