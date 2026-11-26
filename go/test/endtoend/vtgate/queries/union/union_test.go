@@ -17,6 +17,7 @@ limitations under the License.
 package union
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -99,12 +100,18 @@ func TestUnionOrderByLookupCollations(t *testing.T) {
 		})
 	}
 	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
+	utils.Exec(t, mcmp.VtConn, "set sql_mode = ''")
+	for _, predicate := range []string{"t.id2 = 4", "t.id2 in (999)"} {
+		query := "select 'All' as name from union_collations where id = 4 union all select c.name_general from union_collations c join t1 t on t.id1 = c.id where " + predicate + " order by name"
+		utils.Exec(t, mcmp.VtConn, query)
+	}
 	utils.Exec(t, mcmp.VtConn, "set transaction_mode = 'SINGLE'")
 	t.Cleanup(func() {
 		_, _ = mcmp.ExecAndIgnore("rollback")
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set transaction_mode = 'MULTI'")
 	})
 	mcmp.Exec("begin")
+	mcmp.Exec("select 'All' as name from union_collations where id = 4 union all select c.name_general from union_collations c join t1 t on t.id1 = c.id where t.id2 = 4 order by name")
 	// A lookup miss must resolve metadata on the transaction's existing
 	// shard. Opening an arbitrary different shard would fail SINGLE mode.
 	mcmp.Exec("select 'All' as name from union_collations where id = 4 union all select c.name_general from union_collations c join t1 t on t.id1 = c.id where t.id2 in (999) order by name")
@@ -495,10 +502,15 @@ func TestUnionBackendCollationAndEligibility(t *testing.T) {
 	require.Equal(t, "2.5", jsonResult.Rows[0][0].ToString(), "keep both JSON values until the final comparator; MySQL and evalengine JSON ordering differ")
 	for _, workload := range []string{"oltp", "olap"} {
 		utils.Exec(t, mcmp.VtConn, "set workload="+workload)
-		for _, charset := range []string{"tis620", "cp1250", "gb18030"} {
-			collation := map[string]string{"tis620": "tis620_thai_ci", "cp1250": "cp1250_czech_cs", "gb18030": "gb18030_chinese_ci"}[charset]
-			query := "select convert(name_general using " + charset + ") collate " + collation + " as x from union_collations where id=1 union all select convert(name_general using " + charset + ") collate " + collation + " from union_collations where id=4 order by x"
-			mcmp.Exec(query)
+		for _, tc := range []struct{ charset, collation, left, right string }{
+			{"tis620", "tis620_thai_ci", "a", "a\x00"},
+			{"cp1250", "cp1250_czech_cs", "", "  "},
+			{"gb18030", "gb18030_chinese_ci", "ss", "ı"},
+		} {
+			leftHex, rightHex := hex.EncodeToString([]byte(tc.left)), hex.EncodeToString([]byte(tc.right))
+			query := fmt.Sprintf("select convert(_utf8mb4 X'%s' using %s) collate %s as x from union_collations where id=1 union all select convert(_utf8mb4 X'%s' using %s) collate %s from union_collations where id=4 order by x", leftHex, tc.charset, tc.collation, rightHex, tc.charset, tc.collation)
+			_, err := utils.ExecAllowError(t, mcmp.VtConn, query)
+			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
 		}
 		mcmp.Exec("select convert(name_general using big5) as x from union_collations where id=1 union all select convert(name_general using big5) from union_collations where id=4 order by x limit 1")
 		mcmp.Exec("select name_general as x,id from union_collations where id=1 union all select name_general,sum(id) from union_collations where id=4 and name_general='z' order by x")

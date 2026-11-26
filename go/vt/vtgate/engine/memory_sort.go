@@ -74,6 +74,7 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return fields.Truncate(ms.TruncateColumnCount), nil
 	}
 
+	ctx = withUnionSortLookupCache(ctx)
 	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -136,6 +137,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return callback(fields.Truncate(ms.TruncateColumnCount))
 	}
 
+	ctx = withUnionSortLookupCache(ctx)
 	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
@@ -241,6 +243,10 @@ func unionSortComparison(orderBy evalengine.Comparison, fields []*querypb.Field,
 // Padding follows the collation that produced the key, independently of the
 // result's wire charset and of any common collation chosen for another sort.
 func unionSortPadWeight(env *collations.Environment, id collations.ID) ([]byte, error) {
+	if err := unionSortUnsupportedWeightKey(env, id); err != nil {
+		return nil, err
+	}
+
 	pad, known := env.PadSpace(id)
 	if !known {
 		return nil, vterrors.VT12001("UNION collation padding is unknown")
@@ -262,6 +268,15 @@ func unionSortPadWeight(env *collations.Environment, id collations.ID) ([]byte, 
 		return nil, vterrors.VT13001("UNION collation has no SPACE weight")
 	}
 	return weight, nil
+}
+
+func unionSortUnsupportedWeightKey(env *collations.Environment, id collations.ID) error {
+	name, _ := env.LookupKnownCollation(id)
+	switch name {
+	case "tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci":
+		return vterrors.VT12001("UNION ordering with non-order-preserving MySQL weight strings for " + name)
+	}
+	return nil
 }
 
 // GetFields satisfies the Primitive interface.

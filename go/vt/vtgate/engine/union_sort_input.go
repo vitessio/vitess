@@ -52,9 +52,8 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 	if metadata == nil {
 		// Known numeric UNIONs need neither metadata nor binary string keys.
 		if !unionSortNonText(ms.OrderBy) {
-			if unionSortCanCapWithoutMetadata(ms.OrderBy) {
-				return unionSortPlainInput(input, ms.OrderBy, count, nil, env), nil, nil
-			}
+			// Without the common server collation, a text or Unknown key cannot
+			// safely order each arm before applying a cap.
 			return ms.Input, nil, nil
 		}
 		if !unionSortNeedsNumericKeys(ms.OrderBy) {
@@ -76,6 +75,11 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 	global := slices.Clone(ms.OrderBy)
 	for i := range global {
 		global[i].Type = evalengine.NewTypeEx(metadata.types[i], resolved[i].Collation, true, 0, metadata.scales[i], nil)
+		if sqltypes.IsTextOrBinary(global[i].Type.Type()) {
+			if err := unionSortUnsupportedWeightKey(env, resolved[i].Collation); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	if !unionSortNeedsNumericKeys(global) && unionSortSimpleSources(input) && (unionSortNonText(global) || unionSortRepeatableSources(input) && unionSortReusable(ms.OrderBy, metadata, env)) {
 		return unionSortPlainInput(input, global, count, metadata, env), nil, nil
@@ -179,6 +183,7 @@ func unionSortSource(source Primitive, global evalengine.Comparison, resolved []
 			return nil, nil, err
 		}
 		clone := *source
+		clone.unionSortLookupSource = source.unionSortLookupKey()
 		clone.SendTo = route
 		projection.Input = &clone
 		return projection, layout, nil
@@ -409,15 +414,6 @@ func unionSortHasJSON(order evalengine.Comparison) bool {
 	return false
 }
 
-func unionSortCanCapWithoutMetadata(order evalengine.Comparison) bool {
-	for _, key := range order {
-		if (key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type())) && key.WeightStringCol < 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // Floating-point UNION conversion can collapse distinct native values into a
 // tie. Generate separate converted keys before applying the global top-N, while
 // retaining the original selected expressions and their public field metadata.
@@ -502,6 +498,7 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 		return &clone
 	case *VindexLookup:
 		clone := *source
+		clone.unionSortLookupSource = source.unionSortLookupKey()
 		clone.SendTo = unionSortPlainSource(source.SendTo, order, count, metadata, env).(*Route)
 		return &clone
 	case *Route:
@@ -522,13 +519,6 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 		clone.unionSortOriginal = source
 		clone.OrderBy = slices.Clone(order)
 		for i, key := range order {
-			orderCol := key.Col
-			if metadata == nil && (key.Type.Type() == sqltypes.Unknown || sqltypes.IsTextOrBinary(key.Type.Type())) {
-				clone.OrderBy[i].Col = key.WeightStringCol
-				clone.OrderBy[i].WeightStringCol = -1
-				clone.OrderBy[i].Type = evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID)
-				orderCol = key.WeightStringCol
-			}
 			if metadata != nil && sqltypes.IsTextOrBinary(key.Type.Type()) {
 				clone.OrderBy[i].Col = key.WeightStringCol
 				clone.OrderBy[i].WeightStringCol = -1
@@ -539,7 +529,7 @@ func unionSortPlainSource(source Primitive, order evalengine.Comparison, count i
 			if key.Desc {
 				direction = sqlparser.DescOrder
 			}
-			query.OrderBy = append(query.OrderBy, &sqlparser.Order{Expr: sqlparser.NewIntLiteral(strconv.Itoa(orderCol + 1)), Direction: direction})
+			query.OrderBy = append(query.OrderBy, &sqlparser.Order{Expr: sqlparser.NewIntLiteral(strconv.Itoa(key.Col + 1)), Direction: direction})
 		}
 		query.Limit = &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral(strconv.Itoa(count))}
 		clone.QueryStatement = query
@@ -688,6 +678,7 @@ func unionSortNativeInput(input *Concatenate, global evalengine.Comparison, meta
 		projection.Input = &copyRoute
 		if lookup, ok := source.(*VindexLookup); ok {
 			copyLookup := *lookup
+			copyLookup.unionSortLookupSource = lookup.unionSortLookupKey()
 			copyLookup.SendTo = &copyRoute
 			projection.Input = &copyLookup
 		}

@@ -19,10 +19,12 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -38,6 +40,40 @@ type unionSortMetadata struct {
 	types  []sqltypes.Type
 	scales []int32
 	same   bool
+}
+
+type unionSortLookupCacheContextKey struct{}
+
+type unionSortLookupResult struct {
+	ids  []sqltypes.Value
+	dest []key.ShardDestination
+}
+
+type unionSortLookupCache struct {
+	mu      sync.Mutex
+	results map[*VindexLookup]unionSortLookupResult
+}
+
+func withUnionSortLookupCache(ctx context.Context) context.Context {
+	return context.WithValue(ctx, unionSortLookupCacheContextKey{}, &unionSortLookupCache{results: make(map[*VindexLookup]unionSortLookupResult)})
+}
+
+func unionSortLookupCacheFromContext(ctx context.Context) *unionSortLookupCache {
+	cache, _ := ctx.Value(unionSortLookupCacheContextKey{}).(*unionSortLookupCache)
+	return cache
+}
+
+func (cache *unionSortLookupCache) get(key *VindexLookup) (unionSortLookupResult, bool) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	result, ok := cache.results[key]
+	return result, ok
+}
+
+func (cache *unionSortLookupCache) set(key *VindexLookup, result unionSortLookupResult) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	cache.results[key] = result
 }
 
 // resolveUnionCollations asks MySQL about expression collations rather than

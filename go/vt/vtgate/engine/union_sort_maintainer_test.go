@@ -138,13 +138,31 @@ func TestUnionSortIndependentProbesRunConcurrently(t *testing.T) {
 	require.Len(t, vars, 1, "each concurrent probe owns its bind map")
 }
 
-func TestUnionSortPreservesLegacyCollationSupport(t *testing.T) {
-	for _, name := range []string{"tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci"} {
+func TestMemorySortRejectsKnownBadServerWeightKeys(t *testing.T) {
+	for _, tc := range []struct{ collation, left, right string }{
+		{"tis620_thai_ci", "a", "a\x00"},
+		{"cp1250_czech_cs", "", "  "},
+		{"gb18030_chinese_ci", "ss", "ı"},
+	} {
+		name := tc.collation
 		t.Run(name, func(t *testing.T) {
 			env := collations.MySQL8()
 			id, _ := env.LookupID(name)
-			_, err := unionSortPadWeight(env, id)
-			require.NoError(t, err)
+			input := NewConcatenate([]Primitive{
+				unionSortTestRoute(t, "select value, weight_string(value) from t"),
+				unionSortTestRoute(t, "select value, weight_string(value) from u"),
+			}, nil)
+			metadata := &unionSortMetadata{
+				common: []collations.TypedCollation{{Collation: id}},
+				arms:   make([][]collations.TypedCollation, len(input.Sources)),
+				types:  []sqltypes.Type{sqltypes.VarChar},
+				scales: []int32{0},
+				same:   true,
+			}
+			sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.VarChar, id)}}}
+			_, _, err := sort.unionSortInput(metadata, 1, env)
+			require.ErrorContains(t, err, "non-order-preserving MySQL weight strings")
+			t.Logf("counterexample values: %q / %q", tc.left, tc.right)
 		})
 	}
 }
@@ -159,7 +177,7 @@ func TestUnionSortJSONDoesNotUseCappedPlainPath(t *testing.T) {
 	require.Same(t, input, got, "JSON uses MySQL ordering that differs from evalengine")
 }
 
-func TestUnionSortProbeFreeTextCapsEligibleArms(t *testing.T) {
+func TestUnionSortProbeFreeTextDoesNotCapArms(t *testing.T) {
 	env := collations.MySQL8()
 	aggregate := unionSortTestRoute(t, "select max(name) from t")
 	plain := unionSortTestRoute(t, "select name, weight_string(name) from t")
@@ -167,21 +185,7 @@ func TestUnionSortProbeFreeTextCapsEligibleArms(t *testing.T) {
 	sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.Unknown, collations.Unknown), CollationEnv: env}}}
 	got, _, err := sort.unionSortInput(nil, 3, env)
 	require.NoError(t, err)
-	sources := got.(*Concatenate).Sources
-	require.Same(t, aggregate, sources[0], "aggregate result selection is already bounded to one row")
-	route := sources[1].(*Route)
-	stmt := route.QueryStatement.(*sqlparser.Select)
-	require.NotNil(t, stmt.Limit)
-	require.Equal(t, "3", sqlparser.String(stmt.Limit.Rowcount))
-	require.Equal(t, "2", sqlparser.String(stmt.OrderBy[0].Expr), "use the arm's server weight-string key")
-
-	nestedRoute := unionSortTestRoute(t, "select name, weight_string(name) from nested_t")
-	nested := NewConcatenate([]Primitive{nestedRoute}, nil)
-	sort.Input = NewConcatenate([]Primitive{nested}, nil)
-	got, _, err = sort.unionSortInput(nil, 3, env)
-	require.NoError(t, err)
-	nestedResult := got.(*Concatenate).Sources[0].(*Concatenate)
-	require.NotNil(t, nestedResult.Sources[0].(*Route).QueryStatement.(*sqlparser.Select).Limit, "nested UNION arms retain bounded backend reads")
+	require.Same(t, input, got, "without a common server collation, even existing arm weight strings are not safe to cap")
 }
 
 func TestUnionSortProbeRoutePreservesSessionRouting(t *testing.T) {

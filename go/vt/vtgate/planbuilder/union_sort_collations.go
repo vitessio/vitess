@@ -89,8 +89,17 @@ func unionSortCollationQuery(ctx *plancontext.PlanningContext, source engine.Pri
 		}
 		return unionSortCollationQuery(ctx, source.Input, offsets)
 	case *engine.VindexLookup:
-		// The probe has no row predicate and does not need a lookup value.
-		return unionSortCollationQuery(ctx, source.SendTo, offsets)
+		probe, err := unionSortCollationQuery(ctx, source.SendTo, offsets)
+		if err != nil || probe == nil {
+			return probe, err
+		}
+		route, ok := probe.(*engine.Route)
+		if !ok {
+			return nil, nil
+		}
+		// Preserve destination resolution. MemorySort shares the lookup result
+		// with the corresponding data arm for this execution.
+		return engine.NewUnionSortLookupProbe(source, route), nil
 	case *engine.Route:
 		route := source
 		// FieldQuery already removes row predicates and their shard-specific

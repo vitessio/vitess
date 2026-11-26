@@ -90,11 +90,12 @@ func TestUnionSortCollationQueryWrappers(t *testing.T) {
 			union := sort.Input.(*engine.Concatenate)
 			switch arm := union.Sources[1].(type) {
 			case *engine.VindexLookup:
-				metadata, ok := sort.CollationQueries[1].(*engine.Route)
-				require.True(t, ok, "metadata does not repeat the lookup")
-				assert.Equal(t, arm.SendTo.Opcode, metadata.Opcode)
-				assert.NotSame(t, arm.SendTo, metadata)
-				assert.Contains(t, metadata.Query, "coercibility(")
+				metadata, ok := sort.CollationQueries[1].(*engine.VindexLookup)
+				require.True(t, ok, "metadata probes retain the vindex lookup routing wrapper")
+				assert.Equal(t, arm.Opcode, metadata.Opcode)
+				assert.NotSame(t, arm, metadata)
+				assert.NotSame(t, arm.SendTo, metadata.SendTo)
+				assert.Contains(t, metadata.SendTo.Query, "coercibility(")
 
 			case *engine.Limit:
 				assert.Equal(t, "2", sqlparser.String(arm.Count), "keep arm-local row selection")

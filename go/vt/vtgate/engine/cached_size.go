@@ -1693,6 +1693,8 @@ func (cached *VindexLookup) CachedSize(alloc bool) int64 {
 	}
 	// field SendTo *vitess.io/vitess/go/vt/vtgate/engine.Route
 	size += cached.SendTo.CachedSize(true)
+	// field unionSortLookupSource *vitess.io/vitess/go/vt/vtgate/engine.VindexLookup
+	size += cached.unionSortLookupSource.CachedSize(true)
 	return size
 }
 

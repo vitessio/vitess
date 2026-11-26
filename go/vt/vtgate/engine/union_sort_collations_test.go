@@ -123,6 +123,57 @@ func TestUnionSortMetadataSameRequiresMatchingArmTypesAndCollations(t *testing.T
 	}
 }
 
+func TestUnionSortLookupProbeReusesResolvedLookup(t *testing.T) {
+	lookupVindex, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{"table": "lkp", "from": "from", "to": "toc", "write_only": "true"})
+	require.NoError(t, err)
+	planable, ok := lookupVindex.(vindexes.LookupPlanable)
+	require.True(t, ok)
+	_, args := planable.Query()
+	for _, tc := range []struct {
+		name     string
+		hit      bool
+		inTx     bool
+		reserved bool
+	}{
+		{name: "transaction hit", hit: true, inTx: true},
+		{name: "transaction miss", inTx: true},
+		{name: "reserved hit", hit: true, reserved: true},
+		{name: "reserved miss", reserved: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lookupFields := sqltypes.MakeTestFields("id|keyspace_id", "int64|varbinary")
+			lookupResult := &sqltypes.Result{Fields: lookupFields}
+			if tc.hit {
+				lookupResult = sqltypes.MakeTestResult(lookupFields, "1|\x10")
+			}
+			lookup := &fakePrimitive{results: []*sqltypes.Result{lookupResult}}
+			keyspace := &vindexes.Keyspace{Name: "ks", Sharded: true}
+			source := &VindexLookup{
+				Opcode: EqualUnique, Vindex: planable, Keyspace: keyspace, Arguments: args,
+				Values: []evalengine.Expr{evalengine.NewLiteralInt(1)}, Lookup: lookup,
+				SendTo: NewRoute(ByDestination, keyspace, "select value from data", "select value from data"),
+			}
+			probeRoute := NewRoute(ByDestination, keyspace, "select metadata", "select metadata")
+			probe := NewUnionSortLookupProbe(source, probeRoute)
+			vc := &loggingVCursor{
+				shards:       []string{"-20"},
+				shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
+				results: []*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("value", "varchar"), "metadata"),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("value", "varchar"), "data"),
+				},
+			}
+			vc.inTx, vc.inReservedConn = tc.inTx, tc.reserved
+			ctx := withUnionSortLookupCache(t.Context())
+			_, err := probe.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
+			require.NoError(t, err)
+			_, err = source.TryExecute(ctx, vc, map[string]*querypb.BindVariable{}, true)
+			require.NoError(t, err)
+			require.Equal(t, 1, lookup.curResult, "the data read must reuse the probe's lookup result")
+		})
+	}
+}
+
 func TestUnionSortCollationCoercibility(t *testing.T) {
 	metadataFields := sqltypes.MakeTestFields("collation|coercibility", "varchar|int64")
 	for _, reverse := range []bool{false, true} {
