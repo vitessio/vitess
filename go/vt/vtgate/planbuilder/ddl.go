@@ -394,21 +394,24 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 	if !vschema.IsViewsEnabled() {
 		return buildDropTable(vschema, ddlStatement)
 	}
+	var destination key.ShardDestination
 	var ks *vindexes.Keyspace
 	viewMap := make(map[string]any)
 	tables := ddlStatement.GetFromTables()
 	for i, tbl := range tables {
-		ksForView, err := vschema.FindViewTarget(tbl)
+		dest, ksForView, err := vschema.FindViewTarget(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
 		if ksForView == nil {
 			return nil, nil, vterrors.VT09005()
 		}
-		if ks == nil {
+		if destination == nil && ks == nil {
+			destination = dest
 			ks = ksForView
-		} else if ks.Name != ksForView.Name {
-			return nil, nil, vterrors.VT12001("cannot drop views from multiple keyspace in a single statement")
+		}
+		if !destinationsEqual(destination, dest) || ks.Name != ksForView.Name {
+			return nil, nil, vterrors.VT12001(DifferentDestinations)
 		}
 		if _, exists := viewMap[tbl.Name.String()]; exists {
 			return nil, nil, vterrors.VT03013(tbl.Name.String())
@@ -416,7 +419,20 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 		viewMap[tbl.Name.String()] = nil
 		tables[i].Qualifier = sqlparser.NewIdentifierCS("")
 	}
-	return key.DestinationAllShards{}, ks, nil
+	if destination == nil {
+		destination = key.DestinationAllShards{}
+	}
+	return destination, ks, nil
+}
+
+func destinationsEqual(d1, d2 key.ShardDestination) bool {
+	if d1 == d2 {
+		return true
+	}
+	if d1 == nil || d2 == nil {
+		return false
+	}
+	return d1.String() == d2.String()
 }
 
 func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.ShardDestination, *vindexes.Keyspace, error) {

@@ -89,11 +89,56 @@
   {
     "comment": "Drop mixed keyspace view",
     "query": "drop view main.a, user.b",
-    "plan": "VT12001: unsupported: cannot drop views from multiple keyspace in a single statement"
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "Drop same views",
     "query": "drop view main.a, main.b, main.a",
     "plan": "VT03013: not unique table/alias: 'a'"
+  },
+  {
+    "comment": "Drop view with shard qualifier",
+    "query": "drop view `user:-80`.a",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop view `user:-80`.a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "drop view a"
+      },
+      "TablesUsed": [
+        "user.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view with key range qualifier",
+    "query": "drop view `user:80-`.a",
+    "plan": {
+      "Type": "DirectDDL",
+      "QueryType": "DDL",
+      "Original": "drop view `user:80-`.a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "drop view a"
+      },
+      "TablesUsed": [
+        "user.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view with mixed destinations",
+    "query": "drop view `user:-80`.a, `user:80-`.b",
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   }
 ]

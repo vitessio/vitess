@@ -263,15 +263,15 @@ func (vw *VSchemaWrapper) FindView(tab sqlparser.TableName) (sqlparser.TableStat
 	return vw.V.FindView(destKeyspace, tab.Name.String()), nil
 }
 
-func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
-	destKeyspace, _, _, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+func (vw *VSchemaWrapper) FindViewTarget(name sqlparser.TableName) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destKeyspace, _, dest, _, err := topoproto.ParseDestination(name.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if ks, ok := vw.V.Keyspaces[destKeyspace]; ok {
-		return ks.Keyspace, nil
+		return dest, ks.Keyspace, nil
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (vw *VSchemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error) {

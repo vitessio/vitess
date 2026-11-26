@@ -201,7 +201,7 @@ func createPlanContext(st *semantics.SemTable) *PlanningContext {
 
 type vschema struct{}
 
-func (v *vschema) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
+func (v *vschema) FindViewTarget(name sqlparser.TableName) (key.ShardDestination, *vindexes.Keyspace, error) {
 	// TODO implement me
 	panic("implement me")
 }
