@@ -198,7 +198,7 @@ func (asm *assembler) PushBVar_d(key string) {
 
 func push_f(env *ExpressionEnv, raw []byte) int {
 	var fval float64
-	fval, env.vm.err = fastparse.ParseFloat64(hack.String(raw))
+	fval, env.vm.err = fastparse.ParseFloat64Special(hack.String(raw))
 	env.vm.stack[env.vm.sp] = env.vm.arena.newEvalFloat(fval)
 	env.vm.sp++
 	return 1

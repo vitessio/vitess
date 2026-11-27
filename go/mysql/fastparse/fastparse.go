@@ -244,6 +244,15 @@ next:
 // It is equivalent to strconv.ParseFloat(s, 64) in case it succeeds,
 // but on error it will return the best effort value of what it has parsed so far.
 func ParseFloat64(s string) (float64, error) {
+	return parseFloat64(s, false)
+}
+
+// ParseFloat64Special parses floating-point number s, including NaN and Inf special values.
+func ParseFloat64Special(s string) (float64, error) {
+	return parseFloat64(s, true)
+}
+
+func parseFloat64(s string, withSpecial bool) (float64, error) {
 	if len(s) == 0 {
 		return 0.0, errors.New("cannot parse float64 from empty string")
 	}
@@ -255,6 +264,22 @@ func ParseFloat64(s string) (float64, error) {
 		i++
 	}
 	ws := i
+
+	if withSpecial {
+		if val, n, ok := special(s[ws:]); ok {
+			l := n
+			for l < len(s[ws:]) {
+				if !isSpace(s[ws+uint(l)]) {
+					break
+				}
+				l++
+			}
+			if l < len(s[ws:]) {
+				return val, fmt.Errorf("unparsed tail left after parsing float64 from %q: %q", s, s[ws+uint(l):])
+			}
+			return val, nil
+		}
+	}
 
 	// We only care to parse as many of the initial float characters of the
 	// string as possible.
