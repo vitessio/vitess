@@ -1184,6 +1184,37 @@ func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {
 	require.ErrorContains(t, err, `expected "0-1"`)
 }
 
+func TestIncrementalRestoreCleansUpAfterStorageReadFailure(t *testing.T) {
+	stagingRoot := t.TempDir()
+	t.Setenv("TMPDIR", stagingRoot)
+	readErr := errors.New("backup storage read failed")
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return nil, readErr
+		},
+	}
+	params := RestoreParams{
+		Cnf:         &Mycnf{},
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+	}
+	bm := builtinBackupManifest{
+		BackupManifest: BackupManifest{Incremental: true},
+		FileEntries:    []FileEntry{{Base: backupBinlogDir, Name: "binlog.000001"}},
+		SkipCompress:   true,
+	}
+
+	// No Mysqld is needed because a failed extraction must return before replay.
+	err := (&BuiltinBackupEngine{}).executeRestoreIncrementalBackup(t.Context(), params, bh, bm)
+	assert.ErrorContains(t, err, "failed to restore files")
+	assert.ErrorContains(t, err, readErr.Error())
+	assert.NotEmpty(t, bh.ReadFileCalls)
+	entries, err := os.ReadDir(stagingRoot)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
 func TestRestoreFileChunkRejectsDecompressedSizeMismatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	cnf := &Mycnf{DataDir: tmpDir}
