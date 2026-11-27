@@ -703,6 +703,55 @@ func getLogLevel() aws.ClientLogMode {
 	return l
 }
 
+// legacyRetryCost is what a retry after a non-timeout error took from the
+// retry token bucket before aws-sdk-go-v2 v1.48.0 (the now deprecated
+// retry.DefaultRetryCost). A retry after a timeout took 10, but the SDK no
+// longer tells timeouts apart, so they now cost 5 as well.
+const legacyRetryCost = 5
+
+// withLegacyRetryBackoff keeps the retry timing and, apart from timeouts, the
+// retry cost that aws-sdk-go-v2 used before v1.48.0 made Retry Behavior 2.1
+// the default. Under 2.1 the first retry after a transient error, such as a
+// connection reset or a 500, waits 25ms on average instead of about 1s, and
+// each retry takes 14 tokens from the bucket that the client shares across a
+// whole backup or restore instead of 5. One request that runs out of attempts
+// fails the whole backup or restore, so it is worth riding out a short S3
+// outage.
+func withLegacyRetryBackoff(o *retry.StandardOptions) {
+	o.Backoff = retry.NewExponentialJitterBackoff(o.MaxBackoff)
+	o.RetryCost = legacyRetryCost
+}
+
+// configureRetryer sets the retryer of the S3 client. With
+// --s3-backup-aws-retries it also retries closed connection errors. Without
+// it, the retry mode and max attempts come from the AWS config
+// (AWS_RETRY_MODE, AWS_MAX_ATTEMPTS, ...), as they did before: the client has
+// resolved the mode by the time it applies these options, and it wraps the
+// retryer with the max attempts after them. This replaces whatever retryer
+// the client resolved, so it also replaces one passed with
+// config.WithRetryer, which Vitess does not use.
+func configureRetryer(o *s3.Options) {
+	if retryCount >= 0 {
+		o.RetryMaxAttempts = retryCount
+		o.Retryer = &ClosedConnectionRetryer{
+			awsRetryer: retry.NewStandard(func(so *retry.StandardOptions) {
+				so.MaxAttempts = retryCount
+				withLegacyRetryBackoff(so)
+			}),
+		}
+		return
+	}
+
+	switch o.RetryMode {
+	case aws.RetryModeAdaptive:
+		o.Retryer = retry.NewAdaptiveMode(func(ao *retry.AdaptiveModeOptions) {
+			ao.StandardOptions = append(ao.StandardOptions, withLegacyRetryBackoff)
+		})
+	default:
+		o.Retryer = retry.NewStandard(withLegacyRetryBackoff)
+	}
+}
+
 func (bs *S3BackupStorage) client() (*s3.Client, error) {
 	bs.mu.Lock()
 	defer bs.mu.Unlock()
@@ -724,15 +773,8 @@ func (bs *S3BackupStorage) client() (*s3.Client, error) {
 		options := []func(options *s3.Options){
 			func(o *s3.Options) {
 				o.UsePathStyle = forcePath
-				if retryCount >= 0 {
-					o.RetryMaxAttempts = retryCount
-					o.Retryer = &ClosedConnectionRetryer{
-						awsRetryer: retry.NewStandard(func(options *retry.StandardOptions) {
-							options.MaxAttempts = retryCount
-						}),
-					}
-				}
 			},
+			configureRetryer,
 		}
 		if endpoint != "" {
 			options = append(options, s3.WithEndpointResolverV2(newEndpointResolver()))

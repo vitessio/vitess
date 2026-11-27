@@ -13,7 +13,7 @@ Available Commands:
   help                 Help about any command
 
 Flags:
-  -h, --help          help for vttlstest
-      --root string   root directory for all artifacts (default ".")
+  -h, --help[=true|false]   help for vttlstest
+      --root string         root directory for all artifacts (default ".")
 
 Use "vttlstest [command] --help" for more information about a command.
