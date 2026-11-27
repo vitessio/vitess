@@ -30,7 +30,9 @@ func (cached *Environment) CachedSize(alloc bool) int64 {
 	// field collationEnv *vitess.io/vitess/go/mysql/collations.Environment
 	size += cached.collationEnv.CachedSize(true)
 	// field parser *vitess.io/vitess/go/vt/sqlparser.Parser
-	size += cached.parser.CachedSize(true)
+	if cached.parser != nil {
+		size += hack.RuntimeAllocSize(int64(24))
+	}
 	// field mysqlVersion string
 	size += hack.RuntimeAllocSize(int64(len(cached.mysqlVersion)))
 	return size

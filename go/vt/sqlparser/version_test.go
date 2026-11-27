@@ -59,3 +59,8 @@ func TestConvertMySQLVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRejectsOverflowingVersion(t *testing.T) {
+	_, err := New(Options{MySQLServerVersion: "8.4.99999999999999999"})
+	require.EqualError(t, err, "MySQL version not correctly setup - 8.4.99999999999999999.")
+}
