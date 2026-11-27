@@ -2600,6 +2600,7 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 		return nil
 	}
 	out := *n
+	out.Exprs = CloneSliceOfExpr(n.Exprs)
 	return &out
 }
 

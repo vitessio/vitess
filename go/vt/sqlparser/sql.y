@@ -1052,7 +1052,7 @@ variable_expr:
 do_statement:
   DO expression_list
   {
-    $$ = &OtherAdmin{}
+    $$ = &OtherAdmin{Exprs: $2}
   }
 
 load_statement:

@@ -3489,6 +3489,11 @@ func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	for _, el := range in.Exprs {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

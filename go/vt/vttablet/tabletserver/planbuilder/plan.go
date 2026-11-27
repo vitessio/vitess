@@ -353,15 +353,21 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 		return nil, err
 	}
 	plan.stmtType = uint8(sqlparser.ASTToStatementType(statement))
-	// A lock function reached through DML mutates or acquires connection-
-	// scoped lock state exactly as it does in a SELECT predicate; the plan
-	// type stays DML (dispatch is unchanged) but the timeout and reservation
-	// consequences carry over. See lockFuncs.
+	// A lock function reached through DML or DO mutates or acquires
+	// connection-scoped lock state exactly as it does in a SELECT predicate;
+	// the plan type stays as it is (dispatch is unchanged) but the timeout and
+	// reservation consequences carry over. See lockFuncs.
 	switch statement.(type) {
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		mutating, acquiring := lockFuncs(statement)
 		plan.KillsConnOnTimeout = mutating
 		if acquiring {
+			plan.NeedsReservedConn = true
+		}
+	case *sqlparser.OtherAdmin:
+		// DO only needs the reservation: a plan of this type never keeps its
+		// connection on a query timeout, so KillsConnOnTimeout adds nothing.
+		if _, acquiring := lockFuncs(statement); acquiring {
 			plan.NeedsReservedConn = true
 		}
 	}
@@ -407,11 +413,11 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // (is_free_lock, is_used_lock) stay ordinary wherever they appear.
 func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
-		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
+		typ, isLFunc := sqlparser.LockingFuncTypeOf(in)
 		if !isLFunc {
 			return true, nil
 		}
-		switch lFunc.Type {
+		switch typ {
 		case sqlparser.GetLock:
 			mutating = true
 			acquiring = true
