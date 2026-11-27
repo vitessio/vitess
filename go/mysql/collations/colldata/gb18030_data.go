@@ -16,13 +16,17 @@ limitations under the License.
 
 package colldata
 
-// This file has the tables of gb18030_chinese_ci and gb18030_bin. With these
-// values, the weight string and the case conversion of every code point are
-// the ones of MySQL 8.4.13 and 8.0.46.
+// This file has the tables of gb18030_chinese_ci, from
+// my_caseinfo_pages_gb18030, gb18030_2_weight_py, gb18030_4_weight_py_p1 and
+// gb18030_4_weight_py_p2 in MySQL's strings/ctype-gb18030.cc.
+// With these values, the weight string of every code point is the one of
+// MySQL 8.4.13 and 8.0.46.
 //
-// The gb18030CasePlane tables have the case conversion. Each entry of a page
-// is {ToUpper, ToLower, Sort} for one case code, see gb18030CaseCode for
-// what a case code is.
+// The gb18030CasePlane tables have the case table of the character set.
+// Each entry of a page is {ToUpper, ToLower, Sort} for one case code, as in
+// MySQL; gb18030Upper, which gives the upper case that gb18030_chinese_ci
+// sorts a character by, reads only ToUpper. See gb18030Upper for what a case
+// code is.
 //
 // The gb18030PinyinWeights tables have the position of a Chinese character
 // in the pinyin order, one table for the two-byte characters and two for the

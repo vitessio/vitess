@@ -86,9 +86,10 @@ func gb18030AppendCode(dst []byte, code uint32) []byte {
 	return dst
 }
 
-// gb18030CaseCode returns the upper-case or lower-case form of a multi-byte
-// character as a number, and 0 when the character has none. The upper case
-// of the full-width "ａ" (A3 E1) is 0xA3C1, "Ａ".
+// gb18030Upper returns the upper case of a multi-byte character as a number,
+// and 0 when the character has none. The upper case of the full-width "ａ"
+// (A3 E1) is 0xA3C1, "Ａ". gb18030_chinese_ci sorts a character that is not
+// a Chinese character by its upper case, see gb18030Weight.
 //
 // The case table has 256 pages of 256 case codes. A case code is
 // one of three things. A two-byte character with a first byte A0-DF is its
@@ -96,7 +97,7 @@ func gb18030AppendCode(dst []byte, code uint32) []byte {
 // case code position + 0x80. A four-byte character at a position
 // 0x2E600-0x2E6FF has the case code 0xE600-0xE6FF. No other character has a
 // case code, so no other character changes.
-func gb18030CaseCode(char []byte, upper bool) uint32 {
+func gb18030Upper(char []byte) uint32 {
 	var caseCode uint32
 	switch len(char) {
 	case 2:
@@ -121,10 +122,7 @@ func gb18030CaseCode(char []byte, upper bool) uint32 {
 	if page == nil {
 		return 0
 	}
-	converted := uint32((*page)[caseCode&0xFF].ToLower)
-	if upper {
-		converted = uint32((*page)[caseCode&0xFF].ToUpper)
-	}
+	converted := uint32((*page)[caseCode&0xFF].ToUpper)
 
 	switch {
 	case converted < 0x80, 0xA000 <= converted && converted <= 0xDFFF:
@@ -175,7 +173,7 @@ func gb18030Weight(char []byte) uint32 {
 		return gb18030PinyinWeightBase + uint32(pinyin)
 	}
 
-	upper := gb18030CaseCode(char, true)
+	upper := gb18030Upper(char)
 	if upper == 0 {
 		upper = code
 	}
