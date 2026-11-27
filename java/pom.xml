@@ -67,15 +67,16 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Define versions which are also used by grpc-client/pom.xml. -->
     <grpc.version>1.67.1</grpc.version>
-    <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
-      https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-    <netty.handler.version>4.1.118.Final</netty.handler.version>
-    <tcnative.boring.ssl.version>2.0.65.Final</tcnative.boring.ssl.version>
+    <!-- NOTE Netty and boring SSL must be kept compatible with grpc
+      https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty
+      The Netty BOM also aligns the Netty modules that grpc-netty pulls in. -->
+    <netty.version>4.1.139.Final</netty.version>
+    <tcnative.boring.ssl.version>2.0.84.Final</tcnative.boring.ssl.version>
 
     <protobuf.java.version>3.25.5</protobuf.java.version>
     <protobuf.protoc.version>3.25.5</protobuf.protoc.version>
     <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
-    <log4j2.version>2.25.3</log4j2.version>
+    <log4j2.version>2.25.5</log4j2.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->
@@ -149,8 +150,10 @@
       </dependency>
       <dependency>
         <groupId>io.netty</groupId>
-        <artifactId>netty-handler</artifactId>
-        <version>${netty.handler.version}</version>
+        <artifactId>netty-bom</artifactId>
+        <version>${netty.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
       <!-- TODO(mberlin): When we upgrade grpc, check if we can remove this. Without,
         grpc-client TLS tests fail with error "Jetty ALPN/NPN has not been properly configured.". -->

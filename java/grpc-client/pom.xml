@@ -60,6 +60,22 @@
       <groupId>io.netty</groupId>
       <artifactId>netty-handler</artifactId>
     </dependency>
+    <!-- grpc-netty depends on these at the Netty version it was built with.
+      Declaring them here lets the Netty BOM in the parent pom set their
+      version for applications that depend on this artifact, too. -->
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-codec-http2</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-handler-proxy</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.netty</groupId>
+      <artifactId>netty-transport-native-unix-common</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-tcnative-boringssl-static</artifactId>
@@ -142,6 +158,11 @@
               been properly configured." -->
             <usedDependency>io.netty:netty-tcnative-boringssl-static</usedDependency>
             <usedDependency>javax.annotation:javax.annotation-api</usedDependency>
+            <!-- Declared only to pin grpc-netty's Netty modules to the Netty BOM
+              version for applications that depend on this artifact. -->
+            <usedDependency>io.netty:netty-codec-http2</usedDependency>
+            <usedDependency>io.netty:netty-handler-proxy</usedDependency>
+            <usedDependency>io.netty:netty-transport-native-unix-common</usedDependency>
           </usedDependencies>
         </configuration>
       </plugin>
