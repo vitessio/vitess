@@ -46,6 +46,13 @@ func New(key [Size]byte) *Digest {
 	return h
 }
 
+// New256Value returns a HighwayHash-256 digest by value.
+func New256Value(key [Size]byte) Digest {
+	h := Digest{size: Size, key: key}
+	h.Reset()
+	return h
+}
+
 // New128 returns a hash.Hash computing the HighwayHash-128 checksum.
 // It returns a non-nil error if the key is not 32 bytes long.
 func New128(key [Size]byte) *Digest {
