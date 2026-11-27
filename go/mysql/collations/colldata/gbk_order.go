@@ -17,10 +17,10 @@ limitations under the License.
 package colldata
 
 // gbkOrder has the position of each two-byte gbk character in the order of
-// gbk_chinese_ci, see gbkSortOrder for the index of a character. Every
-// position from 0 to 23939 is in the table once. With these values, the
-// weight string of every two-byte gbk character is the one of MySQL 8.4.13
-// and 8.0.46.
+// gbk_chinese_ci, see gbkSortOrder for the index of a character. It is
+// gbk_order of MySQL's strings/ctype-gbk.cc. Every position from 0 to 23939
+// is in the table once. With these values, the weight string of every
+// two-byte gbk character is the one of MySQL 8.4.13 and 8.0.46.
 var gbkOrder = [...]uint16{
 	0x21cd, 0x37c5, 0x42dc, 0x2cda, 0x2b98, 0x0abf, 0x3915, 0x0f49, 0x3419, 0x2663, 0x4c28, 0x06df, 0x1fa9, 0x1bbf, 0x1e9c, 0x1606,
 	0x08af, 0x53b9, 0x16f6, 0x1f46, 0x12f3, 0x494e, 0x49bf, 0x4158, 0x1fc1, 0x1838, 0x4abd, 0x18f5, 0x09c4, 0x4a8c, 0x3f64, 0x13d2,

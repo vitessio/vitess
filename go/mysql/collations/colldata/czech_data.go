@@ -20,6 +20,12 @@ package colldata
 // the weight string of every string of one byte and of two bytes is the one
 // of MySQL 8.4.13 and 8.0.46.
 //
+// The latin2CzechPass tables are literal0 to literal3 (CZ_SORT_TABLE) of
+// MySQL's strings/ctype-czech.cc, and the cp1250CzechPass tables are
+// _sort_order_win1250ch1 and _sort_order_win1250ch2 of
+// strings/ctype-win1250ch.cc. latin2CzechDoubles and cp1250CzechDoubles in
+// czech.go are the doubles tables of the same files.
+//
 // The latin2CzechPass tables have the value of every byte in each of the
 // four passes of latin2_czech_cs. A value 0 is a character that the pass
 // ignores, 2 is a space, and 255 is "c" or "C", which can start the letter

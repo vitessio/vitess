@@ -23,7 +23,9 @@ package traditionalchinese
 //
 // big5Decode has the code point of each two-byte character, and 0 where big5
 // has no character. A row is one first byte, A1 to F9, and has 157 second
-// bytes: 40-7E and then A1-FE.
+// bytes: 40-7E and then A1-FE. It has the values of tab_big5_uni0 and
+// tab_big5_uni1 of MySQL's strings/ctype-big5.cc, without the second bytes
+// that are not valid.
 var big5Decode = [...]uint16{
 	0x3000, 0xff0c, 0x3001, 0x3002, 0xff0e, 0x2022, 0xff1b, 0xff1a, 0xff1f, 0xff01, 0xfe30, 0x2026, 0x2025, 0xfe50, 0xff64, 0xfe52,
 	0x00b7, 0xfe54, 0xfe55, 0xfe56, 0xfe57, 0xff5c, 0x2013, 0xfe31, 0x2014, 0xfe33, 0xfffd, 0xfe34, 0xfe4f, 0xff08, 0xff09, 0xfe35,
