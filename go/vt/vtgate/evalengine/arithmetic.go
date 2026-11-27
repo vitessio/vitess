@@ -323,11 +323,22 @@ func mathAdd_fx(v1 float64, v2 evalNumeric) (*evalFloat, error) {
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return mathAdd_ff(v1, v2f.f), nil
+	return mathAdd_ff(v1, v2f.f)
 }
 
-func mathAdd_ff(v1, v2 float64) *evalFloat {
-	return newEvalFloat(v1 + v2)
+func mathAdd_ff(v1, v2 float64) (*evalFloat, error) {
+	result, err := mathAdd_ff0(v1, v2)
+	return newEvalFloat(result), err
+}
+
+// mathAdd_ff0 adds two floats. Like MySQL, it returns an error instead of
+// an infinite result when the sum overflows a DOUBLE.
+func mathAdd_ff0(v1, v2 float64) (float64, error) {
+	result := v1 + v2
+	if !isFinite(result) {
+		return 0, dataOutOfRangeError(v1, v2, "DOUBLE", "+")
+	}
+	return result, nil
 }
 
 func mathAdd_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
@@ -402,7 +413,7 @@ func mathSub_fx(v1 float64, v2 evalNumeric) (*evalFloat, error) {
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return mathSub_ff(v1, v2f.f), nil
+	return mathSub_ff(v1, v2f.f)
 }
 
 func mathSub_xf(v1 evalNumeric, v2 float64) (*evalFloat, error) {
@@ -410,11 +421,22 @@ func mathSub_xf(v1 evalNumeric, v2 float64) (*evalFloat, error) {
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return mathSub_ff(v1f.f, v2), nil
+	return mathSub_ff(v1f.f, v2)
 }
 
-func mathSub_ff(v1, v2 float64) *evalFloat {
-	return newEvalFloat(v1 - v2)
+func mathSub_ff(v1, v2 float64) (*evalFloat, error) {
+	result, err := mathSub_ff0(v1, v2)
+	return newEvalFloat(result), err
+}
+
+// mathSub_ff0 subtracts two floats. Like MySQL, it returns an error instead of
+// an infinite result when the difference overflows a DOUBLE.
+func mathSub_ff0(v1, v2 float64) (float64, error) {
+	result := v1 - v2
+	if !isFinite(result) {
+		return 0, dataOutOfRangeError(v1, v2, "DOUBLE", "-")
+	}
+	return result, nil
 }
 
 func mathSub_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
@@ -483,11 +505,22 @@ func mathMul_fx(v1 float64, v2 evalNumeric) (eval, error) {
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return mathMul_ff(v1, v2f.f), nil
+	return mathMul_ff(v1, v2f.f)
 }
 
-func mathMul_ff(v1, v2 float64) *evalFloat {
-	return newEvalFloat(v1 * v2)
+func mathMul_ff(v1, v2 float64) (*evalFloat, error) {
+	result, err := mathMul_ff0(v1, v2)
+	return newEvalFloat(result), err
+}
+
+// mathMul_ff0 multiplies two floats. Like MySQL, it returns an error instead of
+// an infinite result when the product overflows a DOUBLE.
+func mathMul_ff0(v1, v2 float64) (float64, error) {
+	result := v1 * v2
+	if !isFinite(result) {
+		return 0, dataOutOfRangeError(v1, v2, "DOUBLE", "*")
+	}
+	return result, nil
 }
 
 func mathMul_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {

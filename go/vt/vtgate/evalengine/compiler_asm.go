@@ -122,7 +122,7 @@ func (asm *assembler) Add_ff() {
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		r := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		l.f += r.f
+		l.f, env.vm.err = mathAdd_ff0(l.f, r.f)
 		env.vm.sp--
 		return 1
 	}, "ADD FLOAT64(SP-2), FLOAT64(SP-1)")
@@ -3416,7 +3416,7 @@ func (asm *assembler) Mul_ff() {
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		r := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		l.f *= r.f
+		l.f, env.vm.err = mathMul_ff0(l.f, r.f)
 		env.vm.sp--
 		return 1
 	}, "MUL FLOAT64(SP-2), FLOAT64(SP-1)")
@@ -3675,7 +3675,7 @@ func (asm *assembler) Sub_ff() {
 	asm.emit(func(env *ExpressionEnv) int {
 		l := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		r := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		l.f -= r.f
+		l.f, env.vm.err = mathSub_ff0(l.f, r.f)
 		env.vm.sp--
 		return 1
 	}, "SUB FLOAT64(SP-2), FLOAT64(SP-1)")
