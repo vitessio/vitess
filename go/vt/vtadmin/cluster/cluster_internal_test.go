@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/resolver"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
@@ -48,12 +49,31 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-type vtctldProxy struct {
-	vtctldclient.VtctldClient
-	dialErr error
-}
+type (
+	vtctldProxy struct {
+		vtctldclient.VtctldClient
+		dialErr error
+	}
+
+	contextCheckingDiscovery struct {
+		discovery.Discovery
+	}
+)
 
 func (fake *vtctldProxy) Dial(ctx context.Context) error { return fake.dialErr }
+
+func (d *contextCheckingDiscovery) DiscoverVTGateAddrs(ctx context.Context, _ []string) ([]string, error) {
+	return nil, ctx.Err()
+}
+
+func TestEqualPropagatesCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	c := &Cluster{Discovery: &contextCheckingDiscovery{}}
+	_, err := c.Equal(ctx, &Cluster{Discovery: &contextCheckingDiscovery{}})
+	require.ErrorIs(t, err, context.Canceled)
+}
 
 func TestDeleteTablets(t *testing.T) {
 	t.Parallel()

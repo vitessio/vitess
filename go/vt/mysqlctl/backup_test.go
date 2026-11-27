@@ -552,6 +552,47 @@ func TestRestoreManifestMySQLVersionValidation(t *testing.T) {
 	}
 }
 
+// failingUpgradeMysqlDaemon runs upgrade in place of mysql_upgrade.
+type failingUpgradeMysqlDaemon struct {
+	*FakeMysqlDaemon
+	upgrade func(context.Context) error
+}
+
+func (d *failingUpgradeMysqlDaemon) RunMysqlUpgrade(ctx context.Context) error {
+	return d.upgrade(ctx)
+}
+
+// TestRestoreShutsDownTemporaryMysqldOnMysqlUpgradeCancellation checks that a
+// failed or cancelled mysql_upgrade doesn't leave the --skip-grant-tables
+// mysqld running.
+func TestRestoreShutsDownTemporaryMysqldOnMysqlUpgradeCancellation(t *testing.T) {
+	for name, cancelRestore := range map[string]bool{"error": false, "cancellation": true} {
+		t.Run(name, func(t *testing.T) {
+			env := createFakeBackupRestoreEnv(t)
+			ctx, cancel := context.WithCancel(env.ctx)
+			t.Cleanup(cancel)
+			var runningDuringUpgrade bool
+			env.restoreParams.Mysqld = &failingUpgradeMysqlDaemon{
+				FakeMysqlDaemon: env.mysqld,
+				upgrade: func(ctx context.Context) error {
+					runningDuringUpgrade = env.mysqld.Running
+					if cancelRestore {
+						cancel()
+						return ctx.Err()
+					}
+					return errors.New("upgrade failed")
+				},
+			}
+
+			_, err := Restore(ctx, env.restoreParams)
+
+			require.ErrorContains(t, err, "mysql_upgrade failed")
+			assert.True(t, runningDuringUpgrade, "mysql_upgrade runs against the temporary mysqld")
+			assert.False(t, env.mysqld.Running, "the temporary mysqld must be shut down")
+		})
+	}
+}
+
 // TestFindBackupToRestoreSkipVersionCheck tests that FindBackupToRestore skips
 // the MySQL version compatibility check exactly when the engine that created the
 // backup reports ShouldSkipVersionCheck() == true.

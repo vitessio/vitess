@@ -180,8 +180,10 @@ type fakeAPI struct {
 	vtadminpb.UnimplementedVTAdminServer
 }
 
-func (api *fakeAPI) WithCluster(c *cluster.Cluster, id string) (API, error) { return api, nil }
-func (api *fakeAPI) Handler() http.Handler                                  { return nil }
+func (api *fakeAPI) WithCluster(_ context.Context, c *cluster.Cluster, id string) (API, error) {
+	return api, nil
+}
+func (api *fakeAPI) Handler() http.Handler { return nil }
 
 func TestUnaryServerInterceptorLogs(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)

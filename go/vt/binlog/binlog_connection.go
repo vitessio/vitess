@@ -67,7 +67,12 @@ func getRandomInitialServerID() uint32 {
 
 // NewBinlogConnection creates a new binlog connection to the mysqld instance.
 func NewBinlogConnection(cp dbconfigs.Connector) (*BinlogConnection, error) {
-	conn, err := connectForReplication(cp)
+	return NewBinlogConnectionContext(context.Background(), cp)
+}
+
+// NewBinlogConnectionContext bounds the initial connection and handshake with ctx.
+func NewBinlogConnectionContext(ctx context.Context, cp dbconfigs.Connector) (*BinlogConnection, error) {
+	conn, err := connectForReplication(ctx, cp)
 	if err != nil {
 		return nil, err
 	}
@@ -87,15 +92,22 @@ func (bc *BinlogConnection) ServerID() uint32 {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
-	ctx := context.Background()
+func connectForReplication(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
 	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
-	if _, err := conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
+	stopClose := context.AfterFunc(ctx, conn.Close)
+	_, err = conn.ExecuteFetch("SET @source_binlog_checksum = @@global.binlog_checksum, @master_binlog_checksum=@@global.binlog_checksum", 0, false)
+	stopClose()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		conn.Close()
+		return nil, ctxErr
+	}
+	if err != nil {
+		conn.Close()
 		return nil, fmt.Errorf("failed to set @source_binlog_checksum=@@global.binlog_checksum: %v", err)
 	}
 
@@ -232,8 +244,14 @@ func (bc *BinlogConnection) StartBinlogDumpFromBinlogBeforeTimestamp(ctx context
 }
 
 func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timestamp int64) (filename string, err error) {
-	// List the binlogs.
+	// List the binlogs. Closing the connection when ctx ends stops a stalled
+	// server from holding the caller.
+	stopClose := context.AfterFunc(ctx, bc.Conn.Close)
 	binlogs, err := bc.ExecuteFetch("SHOW BINARY LOGS", 1000, false)
+	stopClose()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", ctxErr
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to SHOW BINARY LOGS: %v", err)
 	}
@@ -248,7 +266,7 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 		}
 
 		filename := row[0].ToString()
-		blTimestamp, err := bc.getBinlogTimeStamp(filename)
+		blTimestamp, err := bc.getBinlogTimeStamp(ctx, filename)
 		if err != nil {
 			return "", err
 		}
@@ -264,14 +282,21 @@ func (bc *BinlogConnection) findFileBeforeTimestamp(ctx context.Context, timesta
 	return "", ErrBinlogUnavailable
 }
 
-func (bc *BinlogConnection) getBinlogTimeStamp(filename string) (blTimestamp int64, err error) {
-	conn, err := connectForReplication(bc.cp)
+func (bc *BinlogConnection) getBinlogTimeStamp(ctx context.Context, filename string) (blTimestamp int64, err error) {
+	conn, err := connectForReplication(ctx, bc.cp)
 	if err != nil {
 		return 0, err
 	}
 	defer conn.Close()
+	// Closing the connection when ctx ends stops a server that never sends
+	// the first event from holding the caller.
+	stopClose := context.AfterFunc(ctx, conn.Close)
+	defer stopClose()
 
 	if err := conn.WriteComBinlogDump(bc.serverID, filename, 4, 0); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return 0, ctxErr
+		}
 		return 0, fmt.Errorf("failed to send the ComBinlogDump command: %v", err)
 	}
 
@@ -281,6 +306,9 @@ func (bc *BinlogConnection) getBinlogTimeStamp(filename string) (blTimestamp int
 	for {
 		event, err := conn.ReadBinlogEvent()
 		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return 0, ctxErr
+			}
 			return 0, fmt.Errorf("error reading binlog event %v: %v", filename, err)
 		}
 		if !event.IsValid() {
