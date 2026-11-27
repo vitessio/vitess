@@ -85,16 +85,24 @@ jobs:
         timeout-minutes: 15
         uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
 
+  # A separate job, so that only this step can read the webhook from the
+  # slack environment.
+  slack_notification:
+    name: Slack Notification if failed
+    if: ${{ failure() && github.repository == 'vitessio/vitess' }}
+    needs:
+      - analyze
+    runs-on: ubuntu-24.04
+    environment:
+      name: slack
+      deployment: false
+    permissions:
+      actions: read
+    steps:
       - name: Slack Workflow Notification
-        if: ${{ failure() }}
         uses: Gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d # v2.0.0
         with:
           repo_token: ${{secrets.GITHUB_TOKEN}}
           slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
           channel: '#codeql'
           name: 'CodeQL Workflows'
-
-      - name: Fail if needed
-        if: ${{ failure() }}
-        run: |
-          exit 1

@@ -25,6 +25,9 @@ jobs:
     # Skip the other vitessio repositories, such as vitess-security.
     if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     runs-on: ubuntu-latest
+    environment:
+      name: github-app
+      deployment: false
     timeout-minutes: 15
 
     steps:
