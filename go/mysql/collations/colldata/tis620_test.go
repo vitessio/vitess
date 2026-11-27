@@ -17,7 +17,9 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"encoding/hex"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -167,4 +169,78 @@ func TestTIS620ThaiCIZeroByte(t *testing.T) {
 	} {
 		assert.Equal(t, decode(weights), coll.WeightString(nil, decode(input), 0), "WEIGHT_STRING(x'%s')", input)
 	}
+}
+
+// thaiSortableMySQL is thai2sortable() of MySQL's strings/ctype-tis620.cc,
+// which moves each mark to the end of the string by shifting the rest of the
+// string. thaiSortable must write the same bytes in one pass.
+func thaiSortableMySQL(buf []byte, tolower *[256]byte) {
+	n := len(buf)
+	bias := byte(256 - 8)
+
+	p := 0
+	for left := n; left > 0; p, left = p+1, left-1 {
+		c := buf[p]
+		if c < 128 {
+			bias -= 8
+			buf[p] = tolower[c]
+			continue
+		}
+
+		if isThaiConsonant(c) {
+			bias -= 8
+		}
+		if isThaiLeadingVowel(c) && left != 1 && isThaiConsonant(buf[p+1]) {
+			buf[p], buf[p+1] = buf[p+1], c
+			p++
+			left--
+			continue
+		}
+		if rank := thaiSecondLevel(c); rank != 0 {
+			copy(buf[p:], buf[p+1:p+left])
+			buf[n-1] = bias + rank
+			p--
+		}
+	}
+}
+
+// TestTIS620ThaiCISortableMatchesMySQL checks thaiSortable and
+// TinyWeightString against thaiSortableMySQL on random strings of letters,
+// leading vowels, marks, ASCII and zero bytes.
+func TestTIS620ThaiCISortableMatchesMySQL(t *testing.T) {
+	coll := testcollation(t, "tis620_thai_ci").(*Collation_tis620_thai_ci)
+	alphabet := []byte{'a', 'B', 0, ' ', 0x80, 0xA1, 0xA2, 0xCE, 0xD1, 0xD2, 0xE0, 0xE1, 0xE4, 0xE7, 0xE8, 0xEB, 0xEC, 0xFF}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for range 200000 {
+		src := make([]byte, rng.IntN(40))
+		for i := range src {
+			src[i] = alphabet[rng.IntN(len(alphabet))]
+		}
+
+		want := bytes.Clone(src)
+		thaiSortableMySQL(want, coll.tolower)
+		got := bytes.Clone(src)
+		thaiSortable(got, coll.tolower)
+		require.Equal(t, want, got, "thaiSortable(%x)", src)
+
+		var w32 [4]byte
+		copy(w32[:], want)
+		wantTiny := uint32(w32[0])<<24 | uint32(w32[1])<<16 | uint32(w32[2])<<8 | uint32(w32[3])
+		require.Equal(t, wantTiny, coll.TinyWeightString(src), "TinyWeightString(%x)", src)
+	}
+}
+
+// TestTIS620ThaiCIDoesNotAllocate checks that Collate, Hash and
+// TinyWeightString of short strings, which a sort calls for every row, put
+// the sortable forms on the stack.
+func TestTIS620ThaiCIDoesNotAllocate(t *testing.T) {
+	coll := testcollation(t, "tis620_thai_ci")
+	left, right := []byte("\xA1\xE8\xD2 abc"), []byte("\xE0\xA1\xE9 abd")
+	hasher := vthash.New()
+	allocs := testing.AllocsPerRun(100, func() {
+		coll.Collate(left, right, false)
+		coll.Hash(&hasher, left, 0)
+		coll.(TinyWeightCollation).TinyWeightString(left)
+	})
+	assert.Zero(t, allocs)
 }

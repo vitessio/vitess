@@ -90,42 +90,66 @@ func thaiSecondLevel(b byte) byte {
 //
 // The function does what MySQL does also where that is not the Thai order:
 // every mark is written to the last byte, so with two marks in a string the
-// first is lost and the byte before the last is a copy of a letter.
+// first is lost, and the bytes between the letters and the last byte are
+// copies of the last byte of src.
+//
+// MySQL moves each mark to the end by shifting the rest of the string, which
+// takes time quadratic in the number of marks. thaiSortable writes the same
+// bytes in one pass.
 func thaiSortable(buf []byte, tolower *[256]byte) {
 	n := len(buf)
 	bias := byte(256 - 8)
 
-	p := 0
-	for left := n; left > 0; p, left = p+1, left-1 {
-		c := buf[p]
+	// w is where the next letter goes. The letters stay in their order, so
+	// w is never after r.
+	w, marks := 0, 0
+	var last byte
+	for r := 0; r < n; r++ {
+		c := buf[r]
 		if c < 128 {
 			bias -= 8
-			buf[p] = tolower[c]
+			buf[w] = tolower[c]
+			w++
 			continue
 		}
 
 		if isThaiConsonant(c) {
 			bias -= 8
 		}
-		if isThaiLeadingVowel(c) && left != 1 && isThaiConsonant(buf[p+1]) {
-			buf[p], buf[p+1] = buf[p+1], c
-			p++
-			left--
+		if isThaiLeadingVowel(c) && r+1 < n && isThaiConsonant(buf[r+1]) {
+			buf[w], buf[w+1] = buf[r+1], c
+			w += 2
+			r++
 			continue
 		}
 		if rank := thaiSecondLevel(c); rank != 0 {
-			copy(buf[p:], buf[p+1:p+left])
-			buf[n-1] = bias + rank
-			p--
+			marks++
+			last = bias + rank
+			continue
 		}
+		buf[w] = c
+		w++
+	}
+	if marks > 0 {
+		// The last byte of src is still at n-1, because each mark leaves
+		// w one byte further behind r.
+		tail := buf[n-1]
+		for i := w; i < n-1; i++ {
+			buf[i] = tail
+		}
+		buf[n-1] = last
 	}
 }
 
-// sortable returns a copy of src in the form of thaiSortable.
-func (c *Collation_tis620_thai_ci) sortable(src []byte) []byte {
-	buf := bytes.Clone(src)
-	thaiSortable(buf, c.tolower)
-	return buf
+// thaiSortableBuffer is the size of the buffers on the stack that Collate,
+// Hash and TinyWeightString put the sortable form of a short string into.
+const thaiSortableBuffer = 64
+
+// sortable appends the sortable form of src to dst[:0], see thaiSortable.
+func (c *Collation_tis620_thai_ci) sortable(dst, src []byte) []byte {
+	dst = append(dst[:0], src...)
+	thaiSortable(dst, c.tolower)
+	return dst
 }
 
 // Collate compares the sortable forms of left and right byte by byte. A zero
@@ -140,24 +164,58 @@ func (c *Collation_tis620_thai_ci) Collate(left, right []byte, rightIsPrefix boo
 	if rightIsPrefix && len(left) > len(right) {
 		left = left[:len(right)]
 	}
-	return bytes.Compare(c.sortable(left), c.sortable(right))
+	var lbuf, rbuf [thaiSortableBuffer]byte
+	return bytes.Compare(c.sortable(lbuf[:0], left), c.sortable(rbuf[:0], right))
 }
 
-// weights returns the weight string of src without padding: the sortable form
-// of src up to its first zero byte.
-func (c *Collation_tis620_thai_ci) weights(src []byte) []byte {
+// appendWeights appends the weight string of src without padding to dst: the
+// sortable form of src up to its first zero byte. It returns dst and the
+// length of the weight string.
+func (c *Collation_tis620_thai_ci) appendWeights(dst, src []byte) ([]byte, int) {
 	if i := bytes.IndexByte(src, 0); i >= 0 {
 		src = src[:i]
 	}
-	return c.sortable(src)
+	start := len(dst)
+	dst = append(dst, src...)
+	thaiSortable(dst[start:], c.tolower)
+	return dst, len(src)
 }
 
 // TinyWeightString returns the first four bytes of the sortable form of src,
 // which is what Collate compares. It is not the start of the weight string
 // when src has a zero byte.
+//
+// The first four bytes are the first four letters, in the order of
+// thaiSortable, when src has four letters. Only a shorter src needs the
+// whole sortable form, for its marks and the copies of its last byte.
 func (c *Collation_tis620_thai_ci) TinyWeightString(src []byte) uint32 {
 	var w32 [4]byte
-	copy(w32[:], c.sortable(src))
+	w := 0
+	for r := 0; r < len(src) && w < len(w32); r++ {
+		ch := src[r]
+		switch {
+		case ch < 128:
+			w32[w] = c.tolower[ch]
+			w++
+		case isThaiLeadingVowel(ch) && r+1 < len(src) && isThaiConsonant(src[r+1]):
+			w32[w] = src[r+1]
+			w++
+			if w < len(w32) {
+				w32[w] = ch
+				w++
+			}
+			r++
+		case thaiSecondLevel(ch) != 0:
+		default:
+			w32[w] = ch
+			w++
+		}
+	}
+	if w < len(w32) {
+		var buf [thaiSortableBuffer]byte
+		w32 = [4]byte{}
+		copy(w32[:], c.sortable(buf[:0], src))
+	}
 	return uint32(w32[0])<<24 | uint32(w32[1])<<16 | uint32(w32[2])<<8 | uint32(w32[3])
 }
 
@@ -177,9 +235,8 @@ func (c *Collation_tis620_thai_ci) WeightString(dst, src []byte, numCodepoints i
 		numCodepoints = len(src)
 	}
 
-	weights := c.weights(src[:min(len(src), numCodepoints)])
-	dst = append(dst, weights...)
-	return weightStringPadingSimple(' ', dst, numCodepoints-len(weights), padToMax)
+	dst, n := c.appendWeights(dst, src[:min(len(src), numCodepoints)])
+	return weightStringPadingSimple(' ', dst, numCodepoints-n, padToMax)
 }
 
 // Hash hashes the sortable form of src, which is what Collate compares, so
@@ -191,7 +248,8 @@ func (c *Collation_tis620_thai_ci) Hash(hasher *vthash.Hasher, src []byte, numCo
 	if numCodepoints == 0 {
 		numCodepoints = len(src)
 	}
-	sortable := c.sortable(src[:min(len(src), numCodepoints)])
+	var buf [thaiSortableBuffer]byte
+	sortable := c.sortable(buf[:0], src[:min(len(src), numCodepoints)])
 
 	hasher.Write64(uint64(c.id))
 	hasher.Write(sortable)
