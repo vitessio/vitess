@@ -2,7 +2,7 @@
 
 exports[`WorkflowStreamsLagChart > formatSeries > should return series for all streams in the workflow 1`] = `
 {
-  "us_east_1a-123456/1": [
+  "us_east_1a-0000123456/1": [
     {
       "x": 999997852000,
       "y": 0,
@@ -724,7 +724,7 @@ exports[`WorkflowStreamsLagChart > formatSeries > should return series for all s
       "y": 1,
     },
   ],
-  "us_east_1a-123456/2": [
+  "us_east_1a-0000123456/2": [
     {
       "x": 999997852000,
       "y": 0,
@@ -1446,7 +1446,7 @@ exports[`WorkflowStreamsLagChart > formatSeries > should return series for all s
       "y": 2,
     },
   ],
-  "us_east_1a-789012/1": [
+  "us_east_1a-0000789012/1": [
     {
       "x": 999997852000,
       "y": 0,

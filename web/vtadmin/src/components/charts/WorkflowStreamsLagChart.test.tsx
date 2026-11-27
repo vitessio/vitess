@@ -45,7 +45,7 @@ describe('WorkflowStreamsLagChart', () => {
             const queries: Partial<UseQueryResult<TabletDebugVarsResponse, Error>>[] = [
                 {
                     data: {
-                        params: { alias: 'us_east_1a-123456', clusterID: 'zone1' },
+                        params: { alias: 'us_east_1a-0000123456', clusterID: 'zone1' },
                         data: {
                             VReplicationLag: {
                                 All: [3, 3, 3],
@@ -58,7 +58,7 @@ describe('WorkflowStreamsLagChart', () => {
                 },
                 {
                     data: {
-                        params: { alias: 'us_east_1a-789012', clusterID: 'zone1' },
+                        params: { alias: 'us_east_1a-0000789012', clusterID: 'zone1' },
                         data: {
                             VReplicationLag: {
                                 All: [],

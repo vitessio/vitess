@@ -119,7 +119,7 @@ describe('getStream', () => {
                         },
                     },
                 }),
-                'us_east_1a-123456/2',
+                'us_east_1a-0000123456/2',
             ],
             expected: {
                 id: 2,
@@ -151,7 +151,7 @@ describe('getStream', () => {
                         },
                     },
                 }),
-                'us_east_1a-123456/2',
+                'us_east_1a-0000123456/2',
             ],
             expected: undefined,
         },
@@ -220,7 +220,7 @@ describe('getStreamTablets', () => {
                     },
                 }),
             ],
-            expected: ['us_east_1a-123456', 'us_east_1a-789012'],
+            expected: ['us_east_1a-0000123456', 'us_east_1a-0000789012'],
         },
         {
             name: 'should handle empty workflow',

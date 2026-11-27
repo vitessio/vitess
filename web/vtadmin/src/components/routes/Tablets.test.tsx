@@ -75,10 +75,10 @@ describe('Tablets', () => {
                     }),
                 ],
                 expected: [
-                    { alias: 'cell1-3', type: 'PRIMARY' },
-                    { alias: 'cell1-4', type: 'BACKUP' },
-                    { alias: 'cell1-1', type: 'REPLICA' },
-                    { alias: 'cell1-2', type: 'REPLICA' },
+                    { alias: 'cell1-0000000003', type: 'PRIMARY' },
+                    { alias: 'cell1-0000000004', type: 'BACKUP' },
+                    { alias: 'cell1-0000000001', type: 'REPLICA' },
+                    { alias: 'cell1-0000000002', type: 'REPLICA' },
                 ],
             },
         ];
