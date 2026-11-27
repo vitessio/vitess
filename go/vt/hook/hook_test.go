@@ -399,6 +399,16 @@ func TestString(t *testing.T) {
 			expected: "result: HOOK_VTROOT_ERROR",
 		},
 		{
+			name:     "HOOK_GENERIC_ERROR",
+			input:    HookResult{ExitStatus: HOOK_GENERIC_ERROR},
+			expected: "result: HOOK_GENERIC_ERROR",
+		},
+		{
+			name:     "HOOK_TIMEOUT_ERROR",
+			input:    HookResult{ExitStatus: HOOK_TIMEOUT_ERROR},
+			expected: "result: HOOK_TIMEOUT_ERROR",
+		},
+		{
 			name:     "case default",
 			input:    HookResult{ExitStatus: 42},
 			expected: "result: exit(42)",
