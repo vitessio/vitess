@@ -213,8 +213,28 @@ func (c *Collation_latin2_czech_cs) Hash(hasher *vthash.Hasher, src []byte, numC
 		src = src[:min(len(src), numCodepoints)]
 	}
 	hasher.Write64(uint64(c.id))
-	hasher.Write(c.weights(nil, src))
+	// The values are what weights appends, written in chunks so that a
+	// long string needs no buffer for all of them.
+	var chunk [czechHashChunk]byte
+	n := 0
+	s := latin2CzechScanner{src: src}
+	for {
+		value := s.next()
+		chunk[n] = value
+		n++
+		if n == len(chunk) || value == 0 {
+			hasher.Write(chunk[:n])
+			n = 0
+		}
+		if value == 0 {
+			return
+		}
+	}
 }
+
+// czechHashChunk is the size of the buffer on the stack that Hash writes the
+// values of a string to the hasher from, for both Czech collations.
+const czechHashChunk = 128
 
 // WeightStringLen returns four values for each character, one in each pass,
 // and the four values that end the passes.
@@ -391,7 +411,20 @@ func (c *Collation_cp1250_czech_cs) Hash(hasher *vthash.Hasher, src []byte, numC
 		src = src[:min(len(src), numCodepoints)]
 	}
 	hasher.Write64(uint64(c.id))
-	hasher.Write(c.weights(nil, bytes.TrimRight(src, " ")))
+	// The values are what weights appends, written in chunks, see
+	// Collation_latin2_czech_cs.Hash.
+	var chunk [czechHashChunk]byte
+	n := 0
+	s := cp1250CzechScanner{src: bytes.TrimRight(src, " ")}
+	for value := s.next(); value != 0; value = s.next() {
+		chunk[n] = value
+		n++
+		if n == len(chunk) {
+			hasher.Write(chunk[:n])
+			n = 0
+		}
+	}
+	hasher.Write(chunk[:n])
 }
 
 // WeightStringLen returns two values for each character, one in each pass.

@@ -313,3 +313,41 @@ func TestLatin2CzechScannerMatchesMySQL(t *testing.T) {
 		require.True(t, bytes.Equal(want, got), "values of %q: want %x, got %x", src, want, got)
 	}
 }
+
+// TestCzechHashStreamsValues checks that Hash of both Czech collations hashes
+// the values that weights appends, without the buffer for all of them that
+// it used to build: for 64 KiB of latin2_czech_cs that was 1.2 MB.
+func TestCzechHashStreamsValues(t *testing.T) {
+	type weighter interface {
+		Collation
+		weights(dst, src []byte) []byte
+	}
+	rng := rand.New(rand.NewPCG(5, 6))
+	alphabet := []byte("aAcChH -\t1")
+	for _, name := range []string{"latin2_czech_cs", "cp1250_czech_cs"} {
+		t.Run(name, func(t *testing.T) {
+			coll := testcollation(t, name).(weighter)
+			for range 2000 {
+				src := make([]byte, rng.IntN(600))
+				for i := range src {
+					src[i] = alphabet[rng.IntN(len(alphabet))]
+				}
+				trimmed := src
+				if name == "cp1250_czech_cs" {
+					trimmed = bytes.TrimRight(src, " ")
+				}
+
+				want := vthash.New()
+				want.Write64(uint64(coll.ID()))
+				want.Write(coll.weights(nil, trimmed))
+				got := vthash.New()
+				coll.Hash(&got, src, 0)
+				require.Equal(t, want.Sum128(), got.Sum128(), "Hash(%q)", src)
+			}
+
+			src := bytes.Repeat([]byte("chata "), 1000)
+			hasher := vthash.New()
+			assert.Zero(t, testing.AllocsPerRun(10, func() { coll.Hash(&hasher, src, 0) }))
+		})
+	}
+}
