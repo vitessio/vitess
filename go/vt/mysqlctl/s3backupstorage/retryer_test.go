@@ -20,15 +20,16 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
 
 type testRetryer struct{ retry bool }
@@ -83,19 +84,28 @@ func TestShouldRetry(t *testing.T) {
 	}
 }
 
-// TestConfigureRetryerKeepsLegacyBackoff checks that the S3 client keeps the
-// retry timing and retry budget that aws-sdk-go-v2 had before v1.48.0 made
-// Retry Behavior 2.1 the default, with and without --s3-backup-aws-retries,
-// and that the retry mode and max attempts from the AWS config still apply.
-func TestConfigureRetryerKeepsLegacyBackoff(t *testing.T) {
+// setGlobal sets a package-level flag variable for the duration of a test.
+func setGlobal[T any](t *testing.T, v *T, value T) {
+	t.Helper()
+	old := *v
+	*v = value
+	t.Cleanup(func() { *v = old })
+}
+
+// TestClientKeepsLegacyRetryBackoff checks that the client that
+// S3BackupStorage builds keeps the retry timing and retry cost that
+// aws-sdk-go-v2 had before v1.48.0 made Retry Behavior 2.1 the default, with
+// and without --s3-backup-aws-retries, and that the retry mode and max
+// attempts from the AWS config still apply.
+func TestClientKeepsLegacyRetryBackoff(t *testing.T) {
 	tests := []struct {
-		name              string
-		retries           int
-		mode              aws.RetryMode
-		configMaxAttempts int
-		wantMaxAttempts   int
-		wantAdaptive      bool
-		wantClosedConn    bool
+		name            string
+		retries         int
+		awsRetryMode    string
+		awsMaxAttempts  string
+		wantMaxAttempts int
+		wantAdaptive    bool
+		wantClosedConn  bool
 	}{
 		{
 			name:            "SDK default retryer",
@@ -105,15 +115,15 @@ func TestConfigureRetryerKeepsLegacyBackoff(t *testing.T) {
 		{
 			name:            "adaptive retry mode from the AWS config",
 			retries:         -1,
-			mode:            aws.RetryModeAdaptive,
+			awsRetryMode:    "adaptive",
 			wantMaxAttempts: retry.DefaultMaxAttempts,
 			wantAdaptive:    true,
 		},
 		{
-			name:              "max attempts from the AWS config",
-			retries:           -1,
-			configMaxAttempts: 7,
-			wantMaxAttempts:   7,
+			name:            "max attempts from the AWS config",
+			retries:         -1,
+			awsMaxAttempts:  "7",
+			wantMaxAttempts: 7,
 		},
 		{
 			name:            "--s3-backup-aws-retries",
@@ -130,17 +140,32 @@ func TestConfigureRetryerKeepsLegacyBackoff(t *testing.T) {
 		Err:      errors.New("internal error"),
 	}
 
+	mockServer := newMockS3Server()
+	t.Cleanup(mockServer.Close)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldRetryCount := retryCount
-			retryCount = test.retries
-			t.Cleanup(func() { retryCount = oldRetryCount })
+			// Keep the AWS config to what the test sets, whatever the
+			// environment of the test run holds.
+			noFile := filepath.Join(t.TempDir(), "none")
+			t.Setenv("AWS_CONFIG_FILE", noFile)
+			t.Setenv("AWS_SHARED_CREDENTIALS_FILE", noFile)
+			t.Setenv("AWS_PROFILE", "")
+			t.Setenv("AWS_ACCESS_KEY_ID", "test")
+			t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+			t.Setenv("AWS_RETRY_MODE", test.awsRetryMode)
+			t.Setenv("AWS_MAX_ATTEMPTS", test.awsMaxAttempts)
 
-			client := s3.New(s3.Options{
-				Region:           "us-east-1",
-				RetryMode:        test.mode,
-				RetryMaxAttempts: test.configMaxAttempts,
-			}, configureRetryer)
+			setGlobal(t, &endpoint, mockServer.URL())
+			setGlobal(t, &forcePath, true)
+			setGlobal(t, &region, "us-east-1")
+			setGlobal(t, &bucket, "test-bucket")
+			setGlobal(t, &retryCount, test.retries)
+
+			bs := &S3BackupStorage{params: backupstorage.NoParams(), transport: &http.Transport{}}
+			t.Cleanup(func() { _ = bs.Close() })
+			client, err := bs.client()
+			require.NoError(t, err)
 			retryer := client.Options().Retryer
 
 			if test.wantAdaptive {
@@ -170,7 +195,7 @@ func TestConfigureRetryerKeepsLegacyBackoff(t *testing.T) {
 				_, err := retryer.GetRetryToken(t.Context(), serverErr)
 				require.NoError(t, err, "retry %d", i+1)
 			}
-			_, err := retryer.GetRetryToken(t.Context(), serverErr)
+			_, err = retryer.GetRetryToken(t.Context(), serverErr)
 			assert.Error(t, err)
 		})
 	}
