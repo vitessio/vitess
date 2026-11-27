@@ -1319,6 +1319,47 @@ func TestCompilerNonConstant(t *testing.T) {
 	}
 }
 
+func TestIssueDecimalScaleDropped(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	schema := []*querypb.Field{{
+		Name:         "d",
+		Type:         sqltypes.Decimal,
+		Charset:      uint32(collations.CollationBinaryID),
+		ColumnLength: 10,
+		Decimals:     2,
+	}}
+	fields := evalengine.FieldResolver(schema)
+	cfg := &evalengine.Config{
+		ResolveColumn: fields.Column,
+		ResolveType: func(expr sqlparser.Expr) (evalengine.Type, bool) {
+			return evalengine.NewTypeFromField(schema[0]), true
+		},
+		Collation:   collations.CollationUtf8mb4ID,
+		Environment: venv,
+	}
+	for _, query := range []string{
+		"case when 1 then time(d) else time'00:00:00' end",
+		"case when 1 then time(abs(d)) else time'00:00:00' end",
+		"case when 1 then time(coalesce(d, d)) else time'00:00:00' end",
+	} {
+		t.Run(query, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(query)
+			require.NoError(t, err)
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = []sqltypes.Value{sqltypes.NewDecimal("12.55")}
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			compiled, err := env.Evaluate(converted)
+			require.NoError(t, err)
+			require.Equal(t, `TIME("00:00:12.55")`, interpreted.String())
+			require.Equal(t, `TIME("00:00:12.55")`, compiled.String())
+		})
+	}
+}
+
 // TestCompiledJSONInList checks that a compiled IN over a list of JSON literals
 // agrees with the interpreter. The compiled form builds a static hash table and
 // treats a hash hit as equality without comparing the candidate, so documents

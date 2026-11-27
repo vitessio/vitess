@@ -94,7 +94,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		return 1
 	}, "COALESCE (SP-%d) ... (SP-1)", args)
 
-	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
+	return ctype{Type: ta.result(), Flag: f, Col: ca.result(), Size: ta.size, Scale: ta.scale}, nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {
