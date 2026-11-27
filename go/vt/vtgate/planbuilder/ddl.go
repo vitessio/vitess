@@ -396,7 +396,8 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 	}
 	var ks *vindexes.Keyspace
 	viewMap := make(map[string]any)
-	for _, tbl := range ddlStatement.GetFromTables() {
+	fromTables := ddlStatement.GetFromTables()
+	for i, tbl := range fromTables {
 		ksForView, err := vschema.FindViewTarget(tbl)
 		if err != nil {
 			return nil, nil, err
@@ -413,7 +414,12 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 			return nil, nil, vterrors.VT03013(tbl.Name.String())
 		}
 		viewMap[tbl.Name.String()] = nil
+		// Clear the keyspace qualifier so the statement sent to the tablet
+		// targets the view by name. The MySQL database is vt_<keyspace>, so a
+		// keyspace-qualified name does not resolve there. tbl is a copy of the
+		// slice element, so the cleared qualifier has to be written back.
 		tbl.Qualifier = sqlparser.NewIdentifierCS("")
+		fromTables[i] = tbl
 	}
 	return key.DestinationAllShards{}, ks, nil
 }
