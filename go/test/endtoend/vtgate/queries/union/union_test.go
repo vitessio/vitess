@@ -154,3 +154,41 @@ func TestUnion(t *testing.T) {
 	mcmp.AssertMatches(`(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 }
+
+// TestUnionArmsOfDifferentWidths covers union queries whose inputs are planned
+// wider than the union's own columns: a distinct arm carries the weight_string
+// columns its dedup needs, a recursive CTE arm keeps the columns the recursion
+// joins on, and an ApplyJoin arm carries its join columns. The planner trims the
+// wider arms so the Concatenate sees equal widths, and the results match MySQL.
+// Each arm also keeps its own literal column, so the projection above the union
+// resolves per-arm literals to real columns and the query returns the same rows
+// as MySQL. In setups where the dedup needs weight_string columns (see the plan
+// tests in union_cases.json), the union's own columns are padded and a
+// projection that resolves to one of those padding columns fails cleanly with
+// 1222 at execution instead of returning wrong data or panicking.
+func TestUnionArmsOfDifferentWidths(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into u1(id, name, manager_id) values(1, 'root', null), (2, 'alice', 1), (3, 'bob', 1), (4, 'carol', 2)")
+	mcmp.Exec("insert into u2(id, name) values(10, 'alice'), (11, 'dave')")
+
+	// a recursive CTE arm keeps the id column the recursion joins on; the wider CTE
+	// arm is trimmed to the union's own columns (issue #21960)
+	mcmp.AssertMatchesNoOrder(`with recursive cte as (select name, id from u1 where manager_id is null union all select e.name, e.id from u1 e inner join cte on e.manager_id = cte.id) select name from cte union all select name from u2`,
+		`[[VARCHAR("root")] [VARCHAR("alice")] [VARCHAR("bob")] [VARCHAR("carol")] [VARCHAR("alice")] [VARCHAR("dave")]]`)
+
+	// the distinct arm carries the weight_string column its dedup needs (issue #21995)
+	mcmp.AssertMatchesNoOrder(`select name from u1 union select name from u2 union all select name from u1`,
+		`[[VARCHAR("root")] [VARCHAR("alice")] [VARCHAR("bob")] [VARCHAR("carol")] [VARCHAR("dave")] [VARCHAR("root")] [VARCHAR("alice")] [VARCHAR("bob")] [VARCHAR("carol")]]`)
+
+	// an ApplyJoin arm next to a distinct arm that carries extra columns
+	mcmp.AssertMatchesNoOrder(`select name from u1 union select name from u2 union all select a.name from u1 a join u2 b on a.name = b.name`,
+		`[[VARCHAR("root")] [VARCHAR("alice")] [VARCHAR("bob")] [VARCHAR("carol")] [VARCHAR("dave")] [VARCHAR("alice")]]`)
+
+	// MySQL returns the distinct names of u1 and u2 followed by u2's rows with the
+	// literal 1. Every arm keeps its own literal column, so the projection above
+	// the union reads per-arm literals and vitess returns the same rows as MySQL.
+	mcmp.AssertMatchesNoOrder(`select name, 0 from u1 union select name, 0 from u2 union all select name, 1 from u2`,
+		`[[VARCHAR("root") INT64(0)] [VARCHAR("alice") INT64(0)] [VARCHAR("bob") INT64(0)] [VARCHAR("carol") INT64(0)] [VARCHAR("dave") INT64(0)] [VARCHAR("alice") INT64(1)] [VARCHAR("dave") INT64(1)]]`)
+}

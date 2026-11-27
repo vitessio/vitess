@@ -64,6 +64,22 @@
           "name": "hash"
         }
       ]
+    },
+    "u1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "u2": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }
