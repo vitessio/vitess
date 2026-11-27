@@ -44,6 +44,10 @@ import (
 
 const failedToRecordHeartbeatMsg = "failed to record heartbeat"
 
+// replicatePhase is the phase of the vplayer that runs once the copy phase is
+// done, as opposed to the catch-up and fast-forward of the copy phase.
+const replicatePhase = "replicate"
+
 var (
 	// At what point should we consider the vplayer to be stalled and return an error.
 	// 5 minutes is well beyond a reasonable amount of time for a transaction to be
@@ -544,9 +548,16 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 // updatePos should get called at a minimum of vreplicationMinimumHeartbeatUpdateInterval.
 func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, err error) {
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vp.vr.workflowConfig.StoreCompressedGTID)
+	// In the copy phase (catch-up and fast-forward), keep an error kept from
+	// a failed run: replaying the binlog does not show that this run got
+	// past it. The first save of the replicate phase clears it.
+	replicating := vp.phase == replicatePhase
+	update := vp.vr.generateUpdatePos(vp.pos, ts, !replicating)
 	if _, err := vp.query(ctx, update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
+	}
+	if replicating {
+		vp.vr.preserveMessage.Store(false)
 	}
 	vp.numAccumulatedHeartbeats = 0
 	vp.unsavedEvent = nil
@@ -1030,6 +1041,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 		if !vp.vr.dbClient.InTransaction {
+			// In the copy phase, the copy itself has to make progress (see
+			// clearPreservedMessageOnCopyProgress). A throttled heartbeat
+			// has already cleared the kept error in updateTimeThrottled.
+			if vp.phase == replicatePhase {
+				vp.vr.clearPreservedMessageOnIdle()
+			}
 			vp.numAccumulatedHeartbeats++
 			if err := vp.recordHeartbeat(); err != nil {
 				return err
