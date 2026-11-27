@@ -255,8 +255,8 @@ func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvk
 	}
 }
 
-func MockGetVersionFromTablet(addrVersionMap map[string]string) func(ta string) (string, error) {
-	return func(tabletAddr string) (string, error) {
+func MockGetVersionFromTablet(addrVersionMap map[string]string) func(ctx context.Context, ta string) (string, error) {
+	return func(_ context.Context, tabletAddr string) (string, error) {
 		return addrVersionMap[tabletAddr], nil
 	}
 }
