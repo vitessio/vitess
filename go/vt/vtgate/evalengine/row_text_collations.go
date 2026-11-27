@@ -70,3 +70,15 @@ func NeedsServerWeightString(collation collations.ID) bool {
 	_, ok := rowTextCollations[collation]
 	return ok
 }
+
+// RowTextCollation returns collation, or collations.Unknown when VTGate does
+// not compare the text of rows in it, see NeedsServerWeightString. It is for
+// callers that compare the text of rows from MySQL themselves, and compare it
+// as bytes when they have no collation for it, as VDiff does. They did that
+// for these collations before Vitess implemented them, and keep doing it.
+func RowTextCollation(collation collations.ID) collations.ID {
+	if NeedsServerWeightString(collation) {
+		return collations.Unknown
+	}
+	return collation
+}

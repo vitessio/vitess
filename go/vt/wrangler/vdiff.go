@@ -608,7 +608,9 @@ func getColumnCollations(venv *vtenv.Environment, table *tabletmanagerdatapb.Tab
 			columnCollations[column.Name.Lowered()] = collations.Unknown
 			continue
 		}
-		columnCollations[column.Name.Lowered()] = getColumnCollation(column)
+		// A collation that VTGate does not compare rows in is compared
+		// as bytes, as before Vitess implemented it.
+		columnCollations[column.Name.Lowered()] = evalengine.RowTextCollation(getColumnCollation(column))
 		if len(column.Type.EnumValues) == 0 {
 			continue
 		}

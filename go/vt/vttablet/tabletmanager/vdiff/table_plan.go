@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -303,7 +304,10 @@ func (tp *tablePlan) getPKColumnCollations(dbClient binlogplayer.DBClient, colla
 		collateName := strings.ToLower(row["collation_name"].ToString())
 		for i := range tp.comparePKs {
 			if strings.EqualFold(tp.comparePKs[i].colName, columnName) {
-				tp.comparePKs[i].collation = collationEnv.LookupByName(collateName)
+				// A collation that VTGate does not compare rows
+				// in is compared as bytes, as before Vitess
+				// implemented it.
+				tp.comparePKs[i].collation = evalengine.RowTextCollation(collationEnv.LookupByName(collateName))
 				break
 			}
 		}

@@ -42,6 +42,7 @@ func TestRowTextCollations(t *testing.T) {
 			id := env.LookupByName(name)
 			require.True(t, env.IsSupported(id))
 			require.True(t, NeedsServerWeightString(id))
+			assert.Equal(t, collations.Unknown, RowTextCollation(id))
 
 			_, err := NullsafeCompare(left, right, env, id, nil)
 			require.ErrorAs(t, err, &UnsupportedCollationError{})
@@ -68,6 +69,7 @@ func TestRowTextCollations(t *testing.T) {
 	for _, name := range []string{"latin1_swedish_ci", "utf8mb4_0900_ai_ci", "utf8mb3_tolower_ci", "utf8mb3_general_mysql500_ci"} {
 		id := env.LookupByName(name)
 		assert.False(t, NeedsServerWeightString(id), name)
+		assert.Equal(t, id, RowTextCollation(id), name)
 		_, err := NullsafeCompare(left, right, env, id, nil)
 		assert.NoError(t, err, name)
 	}
