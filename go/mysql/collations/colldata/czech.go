@@ -246,24 +246,6 @@ func (c *Collation_latin2_czech_cs) Wildcard(pat []byte, matchOne rune, matchMan
 	return newEightbitWildcardMatcher(&sortOrderIdentity, collationBinary, pat, matchOne, matchMany, escape)
 }
 
-func (c *Collation_latin2_czech_cs) ToLower(dst, src []byte) []byte {
-	lowerTable := c.tolower
-
-	for _, c := range src {
-		dst = append(dst, lowerTable[c])
-	}
-	return dst
-}
-
-func (c *Collation_latin2_czech_cs) ToUpper(dst, src []byte) []byte {
-	upperTable := c.toupper
-
-	for _, c := range src {
-		dst = append(dst, upperTable[c])
-	}
-	return dst
-}
-
 // Collation_cp1250_czech_cs is cp1250_czech_cs, the Czech dictionary order
 // for the cp1250 character set. It reads a string in two passes and compares
 // the values of the first pass, and then of the second: first the letters
@@ -435,24 +417,5 @@ func (c *Collation_cp1250_czech_cs) WeightStringLen(numBytes int) int {
 // Wildcard returns a matcher that compares one byte with one byte by the sort
 // table, as LIKE does in MySQL for this collation. It does not use Collate.
 func (c *Collation_cp1250_czech_cs) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	simple := &Collation_8bit_simple_ci{simpletables: c.simpletables}
-	return newEightbitWildcardMatcher(c.sort, simple.Collate, pat, matchOne, matchMany, escape)
-}
-
-func (c *Collation_cp1250_czech_cs) ToLower(dst, src []byte) []byte {
-	lowerTable := c.tolower
-
-	for _, c := range src {
-		dst = append(dst, lowerTable[c])
-	}
-	return dst
-}
-
-func (c *Collation_cp1250_czech_cs) ToUpper(dst, src []byte) []byte {
-	upperTable := c.toupper
-
-	for _, c := range src {
-		dst = append(dst, upperTable[c])
-	}
-	return dst
+	return c.sortWildcard(pat, matchOne, matchMany, escape)
 }

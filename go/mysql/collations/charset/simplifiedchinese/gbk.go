@@ -124,13 +124,8 @@ func (Charset_gbk) DecodeRune(src []byte) (rune, int, bool) {
 	}
 
 	c1 := src[1]
-	idx := int(c0-0x81) * 190
-	switch {
-	case 0x40 <= c1 && c1 <= 0x7E:
-		idx += int(c1 - 0x40)
-	case 0x80 <= c1 && c1 <= 0xFE:
-		idx += int(c1 - 0x41)
-	default:
+	idx, ok := TwoByteIndex(c0, c1)
+	if !ok {
 		return utf8.RuneError, 1, false
 	}
 
@@ -140,4 +135,23 @@ func (Charset_gbk) DecodeRune(src []byte) (rune, int, bool) {
 		return utf8.RuneError, 2, false
 	}
 	return rune(decode[idx]), 2, true
+}
+
+// TwoByteIndex returns the position of a two-byte character of gbk and
+// gb18030 among all of them, in the order of their bytes: 0 for 81 40, 190
+// for 82 40. It returns false when the bytes are not a two-byte character,
+// which has a first byte 81-FE and a second byte 40-7E or 80-FE. It does not
+// check that the character set has a character there.
+func TwoByteIndex(lead, trail byte) (int, bool) {
+	if lead < 0x81 || lead > 0xFE {
+		return 0, false
+	}
+	idx := int(lead-0x81) * 190
+	switch {
+	case 0x40 <= trail && trail <= 0x7E:
+		return idx + int(trail-0x40), true
+	case 0x80 <= trail && trail <= 0xFE:
+		return idx + int(trail-0x41), true
+	}
+	return 0, false
 }

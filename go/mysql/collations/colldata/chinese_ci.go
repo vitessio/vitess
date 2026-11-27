@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/simplifiedchinese"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -125,18 +126,10 @@ func (c *Collation_chinese_ci) WeightString(dst, src []byte, numCodepoints int) 
 		left--
 	}
 
-	switch numCodepoints {
-	case 0:
-	case PadToMax:
-		for len(dst) < cap(dst) {
-			dst = append(dst, ' ')
-		}
-	default:
-		for ; left > 0; left-- {
-			dst = append(dst, ' ')
-		}
+	if numCodepoints == 0 || numCodepoints == PadToMax {
+		left = 0
 	}
-	return dst
+	return weightStringPadingSimple(' ', dst, left, numCodepoints == PadToMax)
 }
 
 func (c *Collation_chinese_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
@@ -175,13 +168,7 @@ func (c *Collation_chinese_ci) Wildcard(pat []byte, matchOne rune, matchMany run
 // gbk_chinese_ci: 0x8100 and its position in gbkOrder. "中" (D6 D0) is
 // 0xD321. The order has the Chinese characters of GB 2312 by pinyin.
 func gbkSortOrder(code uint16) uint16 {
-	idx := int(code & 0xFF)
-	if idx > 0x7F {
-		idx -= 0x41
-	} else {
-		idx -= 0x40
-	}
-	idx += (int(code>>8) - 0x81) * 0xBE
+	idx, _ := simplifiedchinese.TwoByteIndex(byte(code>>8), byte(code))
 	return 0x8100 + gbkOrder[idx]
 }
 
@@ -190,14 +177,10 @@ func charLenGBK(src []byte) int {
 	if len(src) < 2 {
 		return 0
 	}
-	lead, trail := src[0], src[1]
-	if lead < 0x81 || lead > 0xFE {
+	if _, ok := simplifiedchinese.TwoByteIndex(src[0], src[1]); !ok {
 		return 0
 	}
-	if (0x40 <= trail && trail <= 0x7E) || (0x80 <= trail && trail <= 0xFE) {
-		return 2
-	}
-	return 0
+	return 2
 }
 
 // charLenBig5 is for big5: a lead byte A1-F9, and a second byte 40-7E or

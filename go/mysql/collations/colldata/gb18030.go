@@ -21,6 +21,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/simplifiedchinese"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -33,11 +34,11 @@ func gb18030CharLen(src []byte) int {
 	if len(src) < 2 || src[0] < 0x81 || src[0] > 0xFE {
 		return 0
 	}
-	isDigit := func(b byte) bool { return 0x30 <= b && b <= 0x39 }
-	switch {
-	case (0x40 <= src[1] && src[1] <= 0x7E) || (0x80 <= src[1] && src[1] <= 0xFE):
+	if _, ok := simplifiedchinese.TwoByteIndex(src[0], src[1]); ok {
 		return 2
-	case len(src) > 3 && isDigit(src[1]) && 0x81 <= src[2] && src[2] <= 0xFE && isDigit(src[3]):
+	}
+	isDigit := func(b byte) bool { return 0x30 <= b && b <= 0x39 }
+	if len(src) > 3 && isDigit(src[1]) && 0x81 <= src[2] && src[2] <= 0xFE && isDigit(src[3]) {
 		return 4
 	}
 	return 0
@@ -159,10 +160,7 @@ func gb18030Weight(char []byte) uint32 {
 	var pinyin uint16
 	switch {
 	case 0x8140 <= code && code <= 0xFE9F:
-		idx := uint32(char[0]-0x81)*0xBE + uint32(char[1]) - 0x40
-		if char[1] > 0x7F {
-			idx--
-		}
+		idx, _ := simplifiedchinese.TwoByteIndex(char[0], char[1])
 		pinyin = gb18030PinyinWeights2[idx]
 	case 0x8138FD38 <= code && code <= 0x82359232:
 		pinyin = gb18030PinyinWeights4a[gb18030Diff(char)-11328]
@@ -275,18 +273,10 @@ func (c *Collation_gb18030_chinese_ci) WeightString(dst, src []byte, numCodepoin
 		left--
 	}
 
-	switch numCodepoints {
-	case 0:
-	case PadToMax:
-		for len(dst) < cap(dst) {
-			dst = append(dst, ' ')
-		}
-	default:
-		for ; left > 0; left-- {
-			dst = append(dst, ' ')
-		}
+	if numCodepoints == 0 || numCodepoints == PadToMax {
+		left = 0
 	}
-	return dst
+	return weightStringPadingSimple(' ', dst, left, numCodepoints == PadToMax)
 }
 
 func (c *Collation_gb18030_chinese_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {

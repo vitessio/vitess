@@ -44,6 +44,42 @@ type simpletables struct {
 	sort    *[256]byte
 }
 
+// ToLower appends the lower case of src to dst, by the case table of the
+// collation. Every collation that has simpletables has it.
+func (t *simpletables) ToLower(dst, src []byte) []byte {
+	for _, c := range src {
+		dst = append(dst, t.tolower[c])
+	}
+	return dst
+}
+
+// ToUpper appends the upper case of src to dst, see ToLower.
+func (t *simpletables) ToUpper(dst, src []byte) []byte {
+	for _, c := range src {
+		dst = append(dst, t.toupper[c])
+	}
+	return dst
+}
+
+// The collations with simpletables convert case with its tables.
+var (
+	_ CaseAwareCollation = (*Collation_8bit_bin)(nil)
+	_ CaseAwareCollation = (*Collation_8bit_simple_ci)(nil)
+	_ CaseAwareCollation = (*Collation_latin1_german2_ci)(nil)
+	_ CaseAwareCollation = (*Collation_tis620_thai_ci)(nil)
+	_ CaseAwareCollation = (*Collation_latin2_czech_cs)(nil)
+	_ CaseAwareCollation = (*Collation_cp1250_czech_cs)(nil)
+)
+
+// sortWildcard returns a matcher for LIKE that compares one byte with one
+// byte by the sort table, for a collation whose LIKE in MySQL does not use
+// the comparison of the collation, such as latin1_german2_ci, where 'ä' =
+// 'ae' is true and 'ä' LIKE 'ae' is false.
+func (t *simpletables) sortWildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	simple := &Collation_8bit_simple_ci{simpletables: *t}
+	return newEightbitWildcardMatcher(t.sort, simple.Collate, pat, matchOne, matchMany, escape)
+}
+
 type Collation_8bit_bin struct {
 	id   collations.ID
 	name string
@@ -111,24 +147,6 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
-}
-
-func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
-	lowerTable := c.tolower
-
-	for _, c := range src {
-		dst = append(dst, lowerTable[c])
-	}
-	return dst
-}
-
-func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
-	upperTable := c.toupper
-
-	for _, c := range src {
-		dst = append(dst, upperTable[c])
-	}
-	return dst
 }
 
 type Collation_8bit_simple_ci struct {
@@ -240,24 +258,6 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 			dst = append(dst, padChar)
 			numCodepoints--
 		}
-	}
-	return dst
-}
-
-func (c *Collation_8bit_simple_ci) ToLower(dst, src []byte) []byte {
-	lowerTable := c.tolower
-
-	for _, c := range src {
-		dst = append(dst, lowerTable[c])
-	}
-	return dst
-}
-
-func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
-	upperTable := c.toupper
-
-	for _, c := range src {
-		dst = append(dst, upperTable[c])
 	}
 	return dst
 }
