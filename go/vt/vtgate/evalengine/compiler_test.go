@@ -224,6 +224,37 @@ func TestCompilerSingle(t *testing.T) {
 			result:     "INT64(2)",
 		},
 		{
+			expression: "left(column0, 0xffffffffffffffff)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("abc")`,
+		},
+		{
+			expression: "substring(column0, 2, 0xffffffffffffffff)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("bc")`,
+		},
+		{
+			// An unsigned length above MaxInt64 saturates instead of wrapping negative.
+			expression: "left(column0, 18446744073709551615)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("abc")`,
+		},
+		{
+			expression: "right(column0, 18446744073709551615)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("abc")`,
+		},
+		{
+			expression: "substring(column0, 2, 18446744073709551615)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("bc")`,
+		},
+		{
+			expression: "substring(column0, 18446744073709551615)",
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("")`,
+		},
+		{
 			// A NULL string operand must collapse both LOCATE operands before outer
 			// expressions consume the result.
 			expression: "null <=> locate('foo', column0)",

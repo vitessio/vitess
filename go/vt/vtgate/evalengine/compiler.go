@@ -279,6 +279,15 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 	return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
 }
 
+// compileToLengthInt64 is the compiled counterpart of evalToLengthInt64.
+func (c *compiler) compileToLengthInt64(ct ctype, offset int) ctype {
+	if ct.Type == sqltypes.Int64 {
+		return ct
+	}
+	c.asm.Convert_xl(offset)
+	return ctype{Type: sqltypes.Int64, Flag: ct.Flag, Col: collationNumeric}
+}
+
 func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 	switch ct.Type {
 	case sqltypes.Uint64:

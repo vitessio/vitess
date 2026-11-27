@@ -1160,7 +1160,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	length := evalToInt64(l).i
+	length := evalToLengthInt64(l)
 	if length <= 0 {
 		return newEvalText(nil, text.col), nil
 	}
@@ -1202,7 +1202,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, col.Collation, nil)
 	}
-	_ = c.compileToInt64(l, 1)
+	_ = c.compileToLengthInt64(l, 1)
 
 	if call.left {
 		c.asm.Fn_LEFT(col)
@@ -1594,7 +1594,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	pos := evalToInt64(p).i
+	pos := evalToLengthInt64(p)
 	if pos == 0 {
 		return newEvalRaw(tt, nil, text.col), nil
 	}
@@ -1609,7 +1609,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if len(call.Arguments) > 2 {
-		ll := evalToInt64(l).i
+		ll := evalToLengthInt64(l)
 		if ll < 1 {
 			return newEvalRaw(tt, nil, text.col), nil
 		}
@@ -1644,7 +1644,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		tt = sqltypes.VarChar
 		c.asm.Convert_xc(2, tt, col.Collation, nil)
 	}
-	_ = c.compileToInt64(p, 1)
+	_ = c.compileToLengthInt64(p, 1)
 
 	cs := colldata.Lookup(str.Col.Collation).Charset()
 	var skip2 *jump
@@ -1654,7 +1654,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 		skip2 = c.compileNullCheckArg(l, 2)
-		_ = c.compileToInt64(l, 1)
+		_ = c.compileToLengthInt64(l, 1)
 		c.asm.Fn_SUBSTRING3(tt, cs, col)
 	} else {
 		c.asm.Fn_SUBSTRING2(tt, cs, col)

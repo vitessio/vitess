@@ -1152,6 +1152,13 @@ func (asm *assembler) Convert_xi(offset int) {
 	}, "CONV (SP-%d), INT64", offset)
 }
 
+func (asm *assembler) Convert_xl(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(evalToLengthInt64(env.vm.stack[env.vm.sp-offset]))
+		return 1
+	}, "CONV LENGTH (SP-%d), INT64", offset)
+}
+
 func (asm *assembler) Convert_xu(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := evalToInt64(env.vm.stack[env.vm.sp-offset])
