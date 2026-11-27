@@ -1777,7 +1777,7 @@ func TestPlayerPartialImages(t *testing.T) {
 				input: `update src set id = id+10 where id = 3`,
 				output: []string{
 					"delete from dst where id=3",
-					"insert into dst(id,jd,bd) values (13,JSON_OBJECT(_utf8mb4'idontknow', null, _utf8mb4'idontknoweither', _utf8mb4'null', _utf8mb4'key3', _utf8mb4'val3'),_binary'blob data3')",
+					"insert into dst(id,jd,bd) values (13,JSON_OBJECT(_utf8mb4'key3', _utf8mb4'val3', _utf8mb4'idontknow', null, _utf8mb4'idontknoweither', _utf8mb4'null'),_binary'blob data3')",
 				},
 				data: [][]string{
 					{"1", "{\"key1\": \"val1\", \"color\": \"red\", \"years\": 5, \"hobbies\": [\"skiing\", \"video games\", \"hiking\"]}", "blob data"},

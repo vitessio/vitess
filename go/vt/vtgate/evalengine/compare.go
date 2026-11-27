@@ -288,9 +288,6 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 			if lks[i] > rks[i] {
 				return 1, nil
 			}
-		}
-
-		for i := range lks {
 			cmp, err := compareJSONValue(lo.Get(lks[i]), ro.Get(rks[i]))
 			if err != nil {
 				return 0, err
