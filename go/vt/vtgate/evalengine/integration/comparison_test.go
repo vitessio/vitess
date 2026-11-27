@@ -212,7 +212,8 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 var seenGoldenTests []GoldenTest
 
 type vcursor struct {
-	env *vtenv.Environment
+	env     *vtenv.Environment
+	sqlMode string
 }
 
 func (vc *vcursor) SetLastInsertID(id uint64) {}
@@ -228,6 +229,9 @@ func (vc *vcursor) TimeZone() *time.Location {
 }
 
 func (vc *vcursor) SQLMode() string {
+	if vc.sqlMode != "" {
+		return vc.sqlMode
+	}
 	return config.DefaultSQLMode
 }
 
@@ -281,7 +285,15 @@ func TestMySQL(t *testing.T) {
 			ctx := callerid.NewContext(t.Context(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{
 				Username: "vt_dba",
 			})
-			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})
+			if tc.SQLMode != "" {
+				_, err := conn.ExecuteFetch(fmt.Sprintf("SET sql_mode = '%s'", tc.SQLMode), 0, false)
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, err := conn.ExecuteFetch("SET sql_mode = DEFAULT", 0, false)
+					assert.NoError(t, err)
+				})
+			}
+			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv, sqlMode: tc.SQLMode})
 			tc.Run(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
 				env.Row = row
 				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare, skipCollationCheck)

@@ -21,11 +21,13 @@ import (
 	"cmp"
 	"math"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -121,7 +123,20 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
-func compareDates(l, r *evalTemporal) int {
+// compareDates compares two temporal values. now is the statement's time in
+// the session's time zone: MySQL compares a TIME with a DATE, DATETIME or
+// TIMESTAMP by first placing the TIME on the session's current date.
+func compareDates(l, r *evalTemporal, now time.Time) int {
+	ltime, rtime := l.SQLType() == sqltypes.Time, r.SQLType() == sqltypes.Time
+	if ltime != rtime {
+		ldt, rdt := l.dt, r.dt
+		if ltime {
+			ldt = l.dt.Time.ToDateTime(now)
+		} else {
+			rdt = r.dt.Time.ToDateTime(now)
+		}
+		return ldt.Compare(rdt)
+	}
 	return l.dt.Compare(r.dt)
 }
 
