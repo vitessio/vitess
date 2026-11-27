@@ -1127,7 +1127,16 @@ func createAssignmentExpressions(
 			panic(vterrors.VT03015(assignment.Name.Name))
 		}
 		found = true
-		pv, err := evalengine.Translate(assignment.Expr.EvalExpr, &evalengine.Config{
+		expr := assignment.Expr.EvalExpr
+		if subqueries, ok := assignment.Expr.Info.(SubQueryExpression); ok {
+			for _, sq := range subqueries {
+				subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
+			}
+			// These subqueries cannot merge into the update route. Expand their row
+			// arguments before compiling the expression for vindex maintenance.
+			expr, _ = expandRowSubqueryArgs(ctx, subqueries, expr)
+		}
+		pv, err := evalengine.Translate(expr, &evalengine.Config{
 			ResolveType: ctx.TypeForExpr,
 			Collation:   ctx.SemTable.Collation,
 			Environment: ctx.VSchema.Environment(),
@@ -1136,17 +1145,8 @@ func createAssignmentExpressions(
 			panic(invalidUpdateExpr(assignment.Name.Name.String(), assignment.Expr.EvalExpr))
 		}
 
-		if assignment.Expr.Info != nil {
-			sqe, ok := assignment.Expr.Info.(SubQueryExpression)
-			if ok {
-				for _, sq := range sqe {
-					subQueriesArgOnChangedVindex = append(subQueriesArgOnChangedVindex, sq.ArgName)
-				}
-			}
-		}
-
 		vindexValueMap[vcol.String()] = pv
-		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, assignment.Expr.EvalExpr, nil))
+		compExprs = append(compExprs, sqlparser.NewComparisonExpr(sqlparser.EqualOp, assignment.Name, expr, nil))
 	}
 	return subQueriesArgOnChangedVindex, compExprs
 }

@@ -136,6 +136,20 @@ func TestSubqueryInUpdate(t *testing.T) {
 	utils.AssertMatches(t, conn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (2,10)`, `[[INT64(2) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
 }
 
+func TestRowSubqueryInOwnedLookupUpdate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.Exec(`INSERT INTO t1(id1, id2) VALUES (1, 10)`)
+	mcmp.Exec(`INSERT INTO t2(id3, id4) VALUES (5, 4)`)
+	utils.AssertMatches(t, mcmp.VtConn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (1, 10)`, `[[INT64(10) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+
+	mcmp.Exec(`UPDATE t1 SET id2 = ((5, 4) = (SELECT id3, id4 FROM t2 WHERE id3 = 5)) WHERE id1 = 1`)
+	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 = 1`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, mcmp.VtConn, `SELECT id2, keyspace_id FROM t1_id2_idx WHERE id2 IN (1, 10)`, `[[INT64(1) VARBINARY("\x16k@\xb4J\xbaK\xd6")]]`)
+}
+
 func TestSubqueryInReference(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
