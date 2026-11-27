@@ -6166,5 +6166,113 @@ func init() {
 	})
 }
 
+func TestMissingNestedRequest(t *testing.T) {
+	t.Parallel()
+
+	c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+		Cluster: &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+	})
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, Options{})
+	t.Cleanup(func() { _ = api.Close() })
+
+	ctx := t.Context()
+	tests := []struct {
+		name string
+		call func() (any, error)
+	}{
+		{"ApplySchema", func() (any, error) {
+			return api.ApplySchema(ctx, &vtadminpb.ApplySchemaRequest{ClusterId: "c1", Sql: "select 1"})
+		}},
+		{"CancelSchemaMigration", func() (any, error) {
+			return api.CancelSchemaMigration(ctx, &vtadminpb.CancelSchemaMigrationRequest{ClusterId: "c1"})
+		}},
+		{"CleanupSchemaMigration", func() (any, error) {
+			return api.CleanupSchemaMigration(ctx, &vtadminpb.CleanupSchemaMigrationRequest{ClusterId: "c1"})
+		}},
+		{"CompleteSchemaMigration", func() (any, error) {
+			return api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{ClusterId: "c1"})
+		}},
+		{"EmergencyFailoverShard", func() (any, error) {
+			return api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{ClusterId: "c1"})
+		}},
+		{"GetSchemaMigrations", func() (any, error) {
+			return api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{
+				ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{{ClusterId: "c1"}},
+			})
+		}},
+		{"GetSchemaMigrations null cluster request", func() (any, error) {
+			return api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{
+				ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{nil},
+			})
+		}},
+		{"GetTablet", func() (any, error) {
+			return api.GetTablet(ctx, &vtadminpb.GetTabletRequest{ClusterIds: []string{"c1"}})
+		}},
+		{"GetTransactionInfo", func() (any, error) {
+			return api.GetTransactionInfo(ctx, &vtadminpb.GetTransactionInfoRequest{ClusterId: "c1"})
+		}},
+		{"LaunchSchemaMigration", func() (any, error) {
+			return api.LaunchSchemaMigration(ctx, &vtadminpb.LaunchSchemaMigrationRequest{ClusterId: "c1"})
+		}},
+		{"MaterializeCreate", func() (any, error) {
+			return api.MaterializeCreate(ctx, &vtadminpb.MaterializeCreateRequest{ClusterId: "c1"})
+		}},
+		{"MaterializeCreate without settings", func() (any, error) {
+			return api.MaterializeCreate(ctx, &vtadminpb.MaterializeCreateRequest{ClusterId: "c1", Request: &vtctldatapb.MaterializeCreateRequest{}})
+		}},
+		{"MoveTablesComplete", func() (any, error) {
+			return api.MoveTablesComplete(ctx, &vtadminpb.MoveTablesCompleteRequest{ClusterId: "c1"})
+		}},
+		{"MoveTablesCreate", func() (any, error) {
+			return api.MoveTablesCreate(ctx, &vtadminpb.MoveTablesCreateRequest{ClusterId: "c1"})
+		}},
+		{"PlannedFailoverShard", func() (any, error) {
+			return api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{ClusterId: "c1"})
+		}},
+		{"ReshardCreate", func() (any, error) {
+			return api.ReshardCreate(ctx, &vtadminpb.ReshardCreateRequest{ClusterId: "c1"})
+		}},
+		{"RetrySchemaMigration", func() (any, error) {
+			return api.RetrySchemaMigration(ctx, &vtadminpb.RetrySchemaMigrationRequest{ClusterId: "c1"})
+		}},
+		{"VDiffCreate", func() (any, error) {
+			return api.VDiffCreate(ctx, &vtadminpb.VDiffCreateRequest{ClusterId: "c1"})
+		}},
+		{"VDiffShow", func() (any, error) {
+			return api.VDiffShow(ctx, &vtadminpb.VDiffShowRequest{ClusterId: "c1"})
+		}},
+		{"WorkflowDelete", func() (any, error) {
+			return api.WorkflowDelete(ctx, &vtadminpb.WorkflowDeleteRequest{ClusterId: "c1"})
+		}},
+		{"WorkflowSwitchTraffic", func() (any, error) {
+			return api.WorkflowSwitchTraffic(ctx, &vtadminpb.WorkflowSwitchTrafficRequest{ClusterId: "c1"})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := tt.call()
+			require.ErrorIs(t, err, vtadminerrors.ErrInvalidRequest)
+			assert.Nil(t, resp)
+		})
+	}
+
+	t.Run("GetSchemaMigrations skips a cluster the caller can't see", func(t *testing.T) {
+		opts := Options{RBAC: &rbac.Config{}}
+		require.NoError(t, opts.RBAC.Reify())
+		c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{Id: "c2", Name: "cluster2"},
+		})
+		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, opts)
+		t.Cleanup(func() { _ = api.Close() })
+
+		resp, err := api.GetSchemaMigrations(rbac.NewContext(ctx, &rbac.Actor{Name: "unauthorized"}), &vtadminpb.GetSchemaMigrationsRequest{
+			ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{{ClusterId: "c2"}},
+		})
+		require.NoError(t, err)
+		assert.Empty(t, resp.SchemaMigrations)
+	})
+}
+
 //go:generate -command authztestgen go run ./testutil/authztestgen
 //go:generate authztestgen -c ./testutil/authztestgen/config.json -o ./api_authz_test.go
