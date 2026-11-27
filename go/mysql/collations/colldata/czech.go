@@ -86,6 +86,11 @@ type latin2CzechScanner struct {
 	// where the other of the first two passes goes on.
 	pos, store int
 	pass       int
+	// runEnd is the end of the last run of spaces that the pass found, so
+	// that the fourth pass, which returns a value for each space of a run,
+	// does not look for the end of the run again at each space. MySQL does,
+	// which takes time quadratic in the length of the run.
+	runEnd int
 }
 
 // next returns the next value: 1 at the end of a pass, and 0 at the end of
@@ -102,6 +107,7 @@ func (s *latin2CzechScanner) next() byte {
 				s.pos = 0
 			}
 			s.pass++
+			s.runEnd = 0
 			return 1
 		}
 
@@ -118,9 +124,13 @@ func (s *latin2CzechScanner) next() byte {
 			// after it, and in the first two passes it changes to
 			// the other pass for the word it has just read.
 			s.pos++
-			runner := s.pos
-			for runner < len(s.src) && table[s.src[runner]] == 2 {
-				runner++
+			runner := s.runEnd
+			if runner < s.pos {
+				runner = s.pos
+				for runner < len(s.src) && table[s.src[runner]] == 2 {
+					runner++
+				}
+				s.runEnd = runner
 			}
 			if runner >= len(s.src) || s.pass <= 2 {
 				s.pos = runner
@@ -133,6 +143,7 @@ func (s *latin2CzechScanner) next() byte {
 			}
 			s.pass = 1 - s.pass
 			s.pos, s.store = s.store, s.pos
+			s.runEnd = 0
 			return value
 
 		case 255:

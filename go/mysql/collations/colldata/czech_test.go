@@ -17,7 +17,9 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"encoding/hex"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -199,4 +201,115 @@ func TestLatin2CzechConversion(t *testing.T) {
 	assert.Equal(t, -1, czech.EncodeRune(buf[:], 0x80))
 	require.Equal(t, 1, czech.EncodeRune(buf[:], 0xC1))
 	assert.Equal(t, byte(0xC1), buf[0])
+}
+
+// latin2CzechScannerMySQL is latin2CzechScanner as my_strnxfrm_czech() of
+// MySQL's strings/ctype-czech.cc scans a string: in the fourth pass it looks
+// for the end of a run of spaces again at each space of the run.
+// latin2CzechScanner must return the same values without that.
+type latin2CzechScannerMySQL struct {
+	src        []byte
+	pos, store int
+	pass       int
+}
+
+func (s *latin2CzechScannerMySQL) next() byte {
+	for {
+		if s.pos >= len(s.src) {
+			if s.pass == 3 {
+				return 0
+			}
+			if s.pass == 0 {
+				s.pos = s.store
+			} else {
+				s.pos = 0
+			}
+			s.pass++
+			return 1
+		}
+
+		table := latin2CzechPasses[s.pass]
+		value := table[s.src[s.pos]]
+		switch value {
+		case 0:
+			// The pass ignores the character.
+			s.pos++
+			continue
+
+		case 2:
+			// A space ends a word. The scanner skips the spaces
+			// after it, and in the first two passes it changes to
+			// the other pass for the word it has just read.
+			s.pos++
+			runner := s.pos
+			for runner < len(s.src) && table[s.src[runner]] == 2 {
+				runner++
+			}
+			if runner >= len(s.src) || s.pass <= 2 {
+				s.pos = runner
+			}
+			if s.pos >= len(s.src) {
+				continue
+			}
+			if s.pass > 1 {
+				return value
+			}
+			s.pass = 1 - s.pass
+			s.pos, s.store = s.store, s.pos
+			return value
+
+		case 255:
+			for _, double := range latin2CzechDoubles {
+				if bytes.HasPrefix(s.src[s.pos:], []byte(double.word)) {
+					value = double.values[s.pass]
+					s.pos += len(double.word) - 1
+					break
+				}
+			}
+		}
+
+		s.pos++
+		return value
+	}
+}
+
+// TestLatin2CzechScannerMatchesMySQL checks latin2CzechScanner against
+// latin2CzechScannerMySQL on random strings of letters, "ch", spaces and
+// characters that some passes ignore.
+func TestLatin2CzechScannerMatchesMySQL(t *testing.T) {
+	alphabet := []byte{'a', 'c', 'h', 'C', 'H', ' ', '\t', 0, '-', '1', 0x7F, 0xC8, 0xE8, 0xFF}
+	inputs := [][]byte{
+		[]byte("a     b  ch   c"),
+		[]byte("     "),
+		[]byte("ch\t \t  a -  "),
+		append(bytes.Repeat([]byte(" "), 1000), 'a'),
+	}
+	rng := rand.New(rand.NewPCG(3, 4))
+	for range 200000 {
+		src := make([]byte, rng.IntN(40))
+		for i := range src {
+			src[i] = alphabet[rng.IntN(len(alphabet))]
+		}
+		inputs = append(inputs, src)
+	}
+
+	for _, src := range inputs {
+		var want, got []byte
+		ref, scanner := latin2CzechScannerMySQL{src: src}, latin2CzechScanner{src: src}
+		for {
+			value := ref.next()
+			want = append(want, value)
+			if value == 0 {
+				break
+			}
+		}
+		for {
+			value := scanner.next()
+			got = append(got, value)
+			if value == 0 {
+				break
+			}
+		}
+		require.True(t, bytes.Equal(want, got), "values of %q: want %x, got %x", src, want, got)
+	}
 }
