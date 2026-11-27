@@ -1225,7 +1225,13 @@ func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
 	}
 	defer recycle(ctx, conn)
 
-	return conn.Conn.GetGTIDMode()
+	var gtidMode string
+	err = mysqld.executeWithContext(ctx, conn, "gtid_mode", func() error {
+		var err error
+		gtidMode, err = conn.Conn.GetGTIDMode()
+		return err
+	})
+	return gtidMode, err
 }
 
 // FlushBinaryLogs is part of the MysqlDaemon interface.

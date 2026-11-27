@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -447,6 +448,96 @@ func TestStartCheckMysql(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), ti.MysqlPort)
 	assert.Equal(t, "foo", ti.MysqlHostname)
+}
+
+// grantsOrderDaemon records whether the startup replication deprecation check
+// read from mysqld before the DBA grants wait returned.
+type grantsOrderDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	grantsWaited  atomic.Bool
+	earlyReads    atomic.Int64
+	gtidModeCalls atomic.Int64
+}
+
+func (d *grantsOrderDaemon) WaitForDBAGrants(ctx context.Context, waitTime time.Duration) error {
+	err := d.FakeMysqlDaemon.WaitForDBAGrants(ctx, waitTime)
+	d.grantsWaited.Store(true)
+	return err
+}
+
+func (d *grantsOrderDaemon) GetVersionString(ctx context.Context) (string, error) {
+	if !d.grantsWaited.Load() {
+		d.earlyReads.Add(1)
+	}
+	return d.FakeMysqlDaemon.GetVersionString(ctx)
+}
+
+func (d *grantsOrderDaemon) GetGTIDMode(ctx context.Context) (string, error) {
+	if !d.grantsWaited.Load() {
+		d.earlyReads.Add(1)
+	}
+	d.gtidModeCalls.Add(1)
+	return d.FakeMysqlDaemon.GetGTIDMode(ctx)
+}
+
+// TestStartChecksReplicationAfterDBAGrants checks that Start only runs the
+// replication deprecation check once the DBA grants wait has returned, and not
+// at all for an unmanaged tablet. A DBA pool connection opened before the grants
+// keeps the old privileges, which is #15730. With --restore-from-backup, the
+// check runs in the background restore goroutine instead.
+func TestStartChecksReplicationAfterDBAGrants(t *testing.T) {
+	for _, tc := range []struct {
+		name                  string
+		unmanaged             bool
+		restoring             bool
+		expectedGTIDModeCalls int64
+	}{
+		{name: "managed", expectedGTIDModeCalls: 1},
+		{name: "unmanaged", unmanaged: true},
+		{name: "restoring", restoring: true, expectedGTIDModeCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := memorytopo.NewServer(t.Context(), "cell1")
+			t.Cleanup(ts.Close)
+			daemon := &grantsOrderDaemon{FakeMysqlDaemon: newTestMysqlDaemon(t, 1)}
+			cp := mysql.ConnParams{Host: "foo", Port: 1}
+			tm := &TabletManager{
+				BatchCtx:            t.Context(),
+				TopoServer:          ts,
+				MysqlDaemon:         daemon,
+				DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, ""),
+				QueryServiceControl: tabletservermock.NewController(),
+			}
+			if tc.restoring {
+				// mysqld already has the tablet's database, so the restore
+				// goroutine skips the restore and goes straight to the grants.
+				savedRestore := restoreFromBackup
+				t.Cleanup(func() { restoreFromBackup = savedRestore })
+				restoreFromBackup = true
+				tm.Cnf = &mysqlctl.Mycnf{}
+				daemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
+					"SHOW DATABASES": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("vt_ks")}}},
+				}
+			}
+			// An empty DB config has no global settings, so Start waits for the
+			// grants.
+			config := &tabletenv.TabletConfig{DB: &dbconfigs.DBConfigs{}, Unmanaged: tc.unmanaged}
+
+			require.NoError(t, tm.Start(newTestTablet(t, 1, "ks", "0", nil), config))
+			t.Cleanup(tm.Stop)
+
+			// The state manager opens after the check, in the restore goroutine
+			// when restoring.
+			assert.Eventually(t, func() bool {
+				tm.tmState.mu.Lock()
+				defer tm.tmState.mu.Unlock()
+				return tm.tmState.isOpen
+			}, 30*time.Second, 10*time.Millisecond)
+			assert.True(t, daemon.grantsWaited.Load())
+			assert.Zero(t, daemon.earlyReads.Load(), "the check read from mysqld before the DBA grants wait returned")
+			assert.Equal(t, tc.expectedGTIDModeCalls, daemon.gtidModeCalls.Load())
+		})
+	}
 }
 
 // TestStartFindMysqlPort tests the functionality of findMySQLPort on tablet startup
