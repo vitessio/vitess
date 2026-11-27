@@ -4215,6 +4215,74 @@
     }
   },
   {
+    "comment": "left join predicate only depending on the RHS does not pin the merged route when pushed into a derived table",
+    "query": "select u.id, m.x from user u left join (select user_id, col as x from music where exists (select 1 from user_extra where user_extra.user_id = music.user_id)) m on m.user_id = 6 and m.user_id = u.id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id, m.x from user u left join (select user_id, col as x from music where exists (select 1 from user_extra where user_extra.user_id = music.user_id)) m on m.user_id = 6 and m.user_id = u.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, m.x from `user` as u left join (select user_id, col as x from music where 1 != 1) as m on m.user_id = 6 and m.user_id = u.id where 1 != 1",
+        "Query": "select u.id, m.x from `user` as u left join (select user_id, col as x from music where exists (select 1 from user_extra where user_extra.user_id = music.user_id)) as m on m.user_id = 6 and m.user_id = u.id"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "left join predicate only depending on the RHS stays inside the derived table when the merge with a dual table is declined",
+    "query": "select d.id, m.x from (select 1 as id from dual) d left join (select user_id, col as x from music where exists (select 1 from user_extra where user_extra.user_id = music.user_id)) m on m.user_id = 6",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select d.id, m.x from (select 1 as id from dual) d left join (select user_id, col as x from music where exists (select 1 from user_extra where user_extra.user_id = music.user_id)) m on m.user_id = 6",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,R:0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select d.id from (select 1 as id from dual where 1 != 1) as d where 1 != 1",
+            "Query": "select d.id from (select 1 as id from dual) as d"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select m.x from (select user_id, col as x from music where 1 != 1) as m where 1 != 1",
+            "Query": "select m.x from (select user_id, col as x from music where user_id = 6 and exists (select 1 from user_extra where user_extra.user_id = music.user_id)) as m",
+            "Values": [
+              "6"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
     "comment": "left join with using has to be transformed into inner join with on condition",
     "query": "SELECT * FROM unsharded_authoritative as A LEFT JOIN unsharded_authoritative as B USING(col1)",
     "plan": {
