@@ -52,6 +52,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [VTGate implements every collation of MySQL 8.0 and 8.4](#vtgate-all-mysql-collations)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -652,6 +653,18 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-all-mysql-collations"/>VTGate implements every collation of MySQL 8.0 and 8.4</a>
+
+VTGate can now compare, sort, group and hash text in the collations it used to reject with `cannot compare strings, collation is unknown or unsupported`, or sort only with weight strings from the shards: `utf8mb3_tolower_ci`, `utf8mb3_general_mysql500_ci`, `ucs2_general_mysql500_ci`, `latin1_german2_ci`, `gb18030_chinese_ci`, `gb18030_bin`, `gbk_chinese_ci`, `gbk_bin`, `big5_chinese_ci`, `big5_bin`, `tis620_thai_ci`, `tis620_bin`, `latin2_czech_cs` and `cp1250_czech_cs`, with the `gbk`, `big5` and `tis620` character sets. Vitess now has all 286 collations of MySQL 8.0 and 8.4.
+
+Where these collations differ from MySQL:
+
+- `big5_chinese_ci` orders two-byte characters by their bytes everywhere, as MySQL does in comparisons, `GROUP BY`, `DISTINCT`, unique keys and an `ORDER BY` that reads an index. MySQL's `WEIGHT_STRING()` and an `ORDER BY` without an index sort them by their number of strokes instead ([MySQL bug #65899](https://bugs.mysql.com/bug.php?id=65899)), so a `WEIGHT_STRING()` that VTGate evaluates differs from MySQL's, and an `ORDER BY` across shards on a column without an index can return rows that are not in either order.
+- In `gb18030_chinese_ci`, where a two-byte and a four-byte character with the same weight are followed by more text, VTGate follows the order of `WEIGHT_STRING()`, because MySQL's comparison has no consistent order there.
+- VTGate does not evaluate `UPPER()` and `LOWER()` for text in `gbk`, `big5` or `gb18030`, as for the other multi-byte character sets such as `sjis`.
+
+`gbk`, `big5` and `gb18030` are still not accepted as connection character sets (see [Connection character sets restricted](#vttablet-connection-charsets-restricted)); tables and columns can use them.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
