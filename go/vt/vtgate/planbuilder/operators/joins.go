@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -103,6 +104,9 @@ func AddPredicate(
 //
 // This is based on the paper "Canonical Abstraction for Outerjoin Optimization" by J Rao et al.
 func canConvertToInner(ctx *plancontext.PlanningContext, expr sqlparser.Expr, rhs semantics.TableSet) bool {
+	if jp, ok := expr.(*predicates.JoinPredicate); ok {
+		expr = jp.Current()
+	}
 	isColNameFromRHS := func(e sqlparser.Expr) bool {
 		return sqlparser.IsColName(e) && ctx.SemTable.RecursiveDeps(e).IsSolvedBy(rhs)
 	}

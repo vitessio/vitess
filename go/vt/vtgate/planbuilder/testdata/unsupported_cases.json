@@ -345,6 +345,16 @@
     "plan": "VT12001: unsupported: do not support CTE that use the CTE alias inside the CTE query"
   },
   {
+    "comment": "Recursive CTE whose term outer joins the recursive reference and does not merge",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from cte left join user e on e.manager_id = cte.id where e.id > cte.id) select name from cte",
+    "plan": "VT12001: unsupported: outer join condition on a recursive CTE reference"
+  },
+  {
+    "comment": "Recursive CTE that does not merge, ordered by an expression over its declared columns",
+    "query": "with recursive cte(a, b) as (select id, id + 1 from user where id = 5 union all select e.id, cte.b - 1 from cte join user_extra e on e.user_id = cte.a where cte.b > 1) select a, b from cte order by a + 1",
+    "plan": "VT12001: unsupported: expression over recursive CTE columns: a + 1"
+  },
+  {
     "comment": "correlated subqueries in select expressions are unsupported",
     "query": "SELECT (SELECT sum(user.name) FROM music LIMIT 1) FROM user",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
