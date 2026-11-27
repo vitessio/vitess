@@ -929,6 +929,44 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
+// TestSelectClientFoundRowsAndSkipQueryPlanCache checks that @@client_found_rows and
+// @@skip_query_plan_cache each report their own session option.
+func TestSelectClientFoundRowsAndSkipQueryPlanCache(t *testing.T) {
+	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+
+	tcases := []struct {
+		clientFoundRows    bool
+		skipQueryPlanCache bool
+	}{
+		{clientFoundRows: true, skipQueryPlanCache: false},
+		{clientFoundRows: false, skipQueryPlanCache: true},
+		{clientFoundRows: true, skipQueryPlanCache: true},
+	}
+	for _, tc := range tcases {
+		t.Run(fmt.Sprintf("client_found_rows=%t,skip_query_plan_cache=%t", tc.clientFoundRows, tc.skipQueryPlanCache), func(t *testing.T) {
+			session := &vtgatepb.Session{
+				TargetString: "@primary",
+				Options: &querypb.ExecuteOptions{
+					ClientFoundRows:    tc.clientFoundRows,
+					SkipQueryPlanCache: tc.skipQueryPlanCache,
+				},
+			}
+			result, err := executorExec(ctx, executor, session, "select @@client_found_rows, @@skip_query_plan_cache", nil)
+			require.NoError(t, err)
+			require.Len(t, result.Rows, 1)
+			assert.Equal(t, sqltypes.NewInt64(sqlBool(tc.clientFoundRows)), result.Rows[0][0], "@@client_found_rows")
+			assert.Equal(t, sqltypes.NewInt64(sqlBool(tc.skipQueryPlanCache)), result.Rows[0][1], "@@skip_query_plan_cache")
+		})
+	}
+}
+
+func sqlBool(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func TestSelectUserDefinedVariable(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 	logChan := executor.queryLogger.Subscribe("Test")
