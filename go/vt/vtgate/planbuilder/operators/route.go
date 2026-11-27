@@ -41,8 +41,8 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
-		// ContainsSpecialUnionInput is set when an empty destination can still
-		// produce rows from a reference or dual UNION input.
+		// ContainsSpecialUnionInput records a reference or dual UNION input.
+		// Runtime fallback also requires the final routing to use a lookup vindex.
 		ContainsSpecialUnionInput bool
 
 		Routing Routing

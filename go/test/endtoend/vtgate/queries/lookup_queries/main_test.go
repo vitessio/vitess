@@ -107,7 +107,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"user", "lookup", "lookup_non_planable_map"}
+		tables := []string{"user", "lookup", "lookup_unique", "lookup_non_planable_map"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -154,9 +154,11 @@ func TestLookupQueries(t *testing.T) {
 	}
 }
 
+// Lookup misses must preserve the reference UNION input through route merges,
+// including true multi-value IN fallback in buffered and streaming execution.
 func TestReferenceUnionAllLookupMiss(t *testing.T) {
 	mcmp, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
@@ -164,16 +166,18 @@ func TestReferenceUnionAllLookupMiss(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcmp.AssertMatches(
-		"select id from ref union all select id from user where lookup_unique = 'not there'",
-		"[[INT64(100)]]",
-	)
-	mcmp.AssertMatches(
-		"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') as d cross join ref r",
-		"[[INT64(100)]]",
-	)
-	mcmp.AssertMatches(
-		"select id from ref union all select id from user where lookup_non_planable in ('not there')",
-		"[[INT64(100)]]",
-	)
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, query := range []string{
+				"select id from ref union all select id from user where lookup_unique = 'not there'",
+				"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') as d cross join ref r",
+				"select d.id from ref r cross join (select id from ref union all select id from user where lookup_unique = 'not there') as d",
+				"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') d where d.id = 5 or exists (select 1 from ref)",
+				"select id from ref union all select id from user where lookup_non_planable in ('not there', 'also missing')",
+			} {
+				mcmp.AssertMatches(query, "[[INT64(100)]]")
+			}
+		})
+	}
 }

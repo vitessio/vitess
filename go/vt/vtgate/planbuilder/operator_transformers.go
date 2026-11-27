@@ -553,12 +553,15 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, hints *queryHints) (*engine.Route, error) {
 	rp := newRoutingParams(ctx, op.Routing.OpCode())
 	op.Routing.UpdateRoutingParams(ctx, rp)
+	// The marker records UNION provenance, but later merges may replace lookup
+	// routing with None or another routing that must not execute on a random shard.
+	_, isLookup := rp.Vindex.(vindexes.Lookup)
 
 	e := &engine.Route{
 		RoutingParameters:       rp,
 		TruncateColumnCount:     op.ResultColumns,
 		FetchLastInsertID:       ctx.SemTable.ShouldFetchLastInsertID(),
-		NoRoutesSpecialHandling: op.ContainsSpecialUnionInput,
+		NoRoutesSpecialHandling: op.ContainsSpecialUnionInput && isLookup,
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
