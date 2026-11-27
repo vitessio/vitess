@@ -1364,6 +1364,18 @@ func TestValidateFlags(t *testing.T) {
 
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
+
+	oldFullStatusTimeout := fullStatusConsolidationTimeout
+	t.Cleanup(func() { fullStatusConsolidationTimeout = oldFullStatusTimeout })
+
+	fullStatusConsolidationTimeout = -time.Second
+	require.ErrorContains(t, validateFlags(), "--full-status-consolidation-timeout cannot be negative")
+
+	fullStatusConsolidationTimeout = 0
+	require.NoError(t, validateFlags())
+
+	fullStatusConsolidationTimeout = 5 * time.Second
+	require.NoError(t, validateFlags())
 }
 
 // TestStartFailureStopsBackgroundGoroutines checks that a failed Start promptly

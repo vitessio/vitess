@@ -65,20 +65,28 @@ var (
 // not supported, because the mandatory variables include server_uuid, gtid_mode,
 // and super_read_only, none of which MariaDB has.
 func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error) {
-	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	conn, err := mysqld.dbaPool.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer recycle(ctx, conn)
+	defer func() {
+		// Recycling a closed connection dials its replacement with no deadline by
+		// default, so don't make the caller wait for it.
+		if conn.Conn.IsClosed() {
+			go conn.Recycle()
+			return
+		}
+		conn.Recycle()
+	}()
 
 	if conn.Conn.IsMariaDB() {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "FullStatus is not supported on MariaDB")
 	}
 
 	var variables *mysql.FullStatusVariables
-	err = runFullStatusQuery(ctx, conn, "variables", func() error {
+	err = mysqld.runFullStatusQuery(ctx, conn, "variables", func() error {
 		var queryErr error
-		variables, queryErr = mysqld.fetchFullStatusVariables(ctx, conn)
+		variables, queryErr = mysqld.fetchFullStatusVariables(conn)
 		return queryErr
 	})
 	if err != nil {
@@ -105,7 +113,7 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	}
 
 	var replicationStatus replication.ReplicationStatus
-	err = runFullStatusQuery(ctx, conn, "replication status", func() error {
+	err = mysqld.runFullStatusQuery(ctx, conn, "replication status", func() error {
 		var queryErr error
 		replicationStatus, queryErr = conn.Conn.ShowReplicationStatus()
 		return queryErr
@@ -118,7 +126,7 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	}
 
 	var primaryStatus replication.PrimaryStatus
-	err = runFullStatusQuery(ctx, conn, "primary status", func() error {
+	err = mysqld.runFullStatusQuery(ctx, conn, "primary status", func() error {
 		var queryErr error
 		primaryStatus, queryErr = conn.Conn.ShowPrimaryStatus()
 		return queryErr
@@ -141,7 +149,7 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 		return nil, err
 	}
 
-	err = runFullStatusQuery(ctx, conn, "replication configuration", func() error {
+	err = mysqld.runFullStatusQuery(ctx, conn, "replication configuration", func() error {
 		var queryErr error
 		status.ReplicationConfiguration, queryErr = conn.Conn.ReplicationConfiguration(variables.ReplicaNetTimeout)
 		return queryErr
@@ -154,13 +162,36 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 }
 
 // runFullStatusQuery runs a FullStatus query and retries once after reconnecting
-// when MySQL drops the connection.
-func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
+// when MySQL drops the connection. Cancelling ctx closes the socket so a blocked
+// read cannot outlive the collection, then kills the query in the background.
+func (mysqld *Mysqld) runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryName string, query func() error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	err := query()
+	queryOnce := func() error {
+		// Close this attempt's socket on cancellation. Waiting for MySQL to process
+		// a KILL can leave the shared collection blocked past its deadline.
+		mysqlConn := conn.Conn.Conn
+		connID := mysqlConn.ID()
+		closed := make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			mysqlConn.Close()
+			close(closed)
+			// MySQL keeps running a blocked statement after its client goes away,
+			// so kill it too.
+			go mysqld.killFullStatusQuery(queryName, connID)
+		})
+		defer func() {
+			// Finish closing before reconnecting or returning the connection to its pool.
+			if !stop() {
+				<-closed
+			}
+		}()
+		return query()
+	}
+
+	err := queryOnce()
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -185,16 +216,31 @@ func runFullStatusQuery(ctx context.Context, conn *dbconnpool.PooledDBConnection
 		return err
 	}
 
-	err = query()
+	err = queryOnce()
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
 	return err
 }
 
+// killFullStatusQuery kills the server thread of a cancelled FullStatus query.
+func (mysqld *Mysqld) killFullStatusQuery(queryName string, connID int64) {
+	log.Info("Killing cancelled FullStatus query",
+		slog.String("workflow", "full_status"),
+		slog.String("query", queryName),
+		slog.Int64("connection_id", connID))
+	if err := mysqld.killConnection(connID); err != nil {
+		log.Warn("Failed to kill cancelled FullStatus query",
+			slog.String("workflow", "full_status"),
+			slog.String("query", queryName),
+			slog.Int64("connection_id", connID),
+			slog.Any("error", err))
+	}
+}
+
 // fetchFullStatusVariables reads and parses the mandatory FullStatus variables.
-func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
-	qr, err := mysqld.executeFetchContext(ctx, conn, conn.Conn.FullStatusVariablesQuery(), 1, true)
+func (mysqld *Mysqld) fetchFullStatusVariables(conn *dbconnpool.PooledDBConnection) (*mysql.FullStatusVariables, error) {
+	qr, err := conn.Conn.ExecuteFetch(conn.Conn.FullStatusVariablesQuery(), 1, true)
 	if err != nil {
 		return nil, err
 	}
@@ -209,9 +255,9 @@ func (mysqld *Mysqld) fetchFullStatusVariables(ctx context.Context, conn *dbconn
 // mandatory queries do.
 func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbconnpool.PooledDBConnection, status *replicationdatapb.FullStatus) error {
 	var variables map[string]string
-	err := runFullStatusQuery(ctx, conn, "semi-sync variables", func() error {
+	err := mysqld.runFullStatusQuery(ctx, conn, "semi-sync variables", func() error {
 		var queryErr error
-		variables, queryErr = mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
+		variables, queryErr = mysqld.fetchFullStatusValues(conn, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)
 		return queryErr
 	})
 	if err != nil {
@@ -225,9 +271,9 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 	}
 
 	var statuses map[string]string
-	err = runFullStatusQuery(ctx, conn, "semi-sync status", func() error {
+	err = mysqld.runFullStatusQuery(ctx, conn, "semi-sync status", func() error {
 		var queryErr error
-		statuses, queryErr = mysqld.fetchFullStatusValues(ctx, conn, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
+		statuses, queryErr = mysqld.fetchFullStatusValues(conn, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)
 		return queryErr
 	})
 	if err != nil {
@@ -241,7 +287,7 @@ func (mysqld *Mysqld) collectFullStatusSemiSync(ctx context.Context, conn *dbcon
 
 // fetchFullStatusValues reads the requested variables or status values from
 // performance_schema.
-func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
+func (mysqld *Mysqld) fetchFullStatusValues(conn *dbconnpool.PooledDBConnection, queryTemplate string, names []string) (map[string]string, error) {
 	bv, err := sqltypes.BuildBindVariable(names)
 	if err != nil {
 		return nil, err
@@ -250,7 +296,7 @@ func (mysqld *Mysqld) fetchFullStatusValues(ctx context.Context, conn *dbconnpoo
 	if err != nil {
 		return nil, err
 	}
-	qr, err := mysqld.executeFetchContext(ctx, conn, query, len(names), false)
+	qr, err := conn.Conn.ExecuteFetch(query, len(names), false)
 	if err != nil {
 		return nil, err
 	}
