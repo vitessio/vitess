@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -487,7 +488,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	reader, err := vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	require.NoError(t, err)
 	var numRowEvents atomic.Int64
-	var sentinelSeen atomic.Bool
+	var copyCompleted, sentinelSeen atomic.Bool
 	// second goroutine that continuously receives events via VStream API and should be resilient to the two PRS events
 	go func() {
 		for {
@@ -496,11 +497,14 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			switch err {
 			case nil:
 				for _, ev := range evs {
-					if ev.Type == binlogdatapb.VEventType_ROW {
+					switch ev.Type {
+					case binlogdatapb.VEventType_ROW:
 						numRowEvents.Add(1)
 						if isSentinelRow(ev.RowEvent) {
 							sentinelSeen.Store(true)
 						}
+					case binlogdatapb.VEventType_COPY_COMPLETED:
+						copyCompleted.Store(true)
 					}
 				}
 			case io.EOF:
@@ -543,6 +547,12 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 			time.Sleep(100 * time.Millisecond)
 			stopInserting.Store(true)
 			inserts.Wait()
+			// The stream starts with a copy phase, which a reparent can
+			// interrupt and resume. While a table is being copied, its binlog
+			// events, the sentinel's among them, can arrive before the rest of
+			// its rows, so the sentinel only shows the stream caught up once
+			// the copy phase is done.
+			require.Eventually(t, copyCompleted.Load, 30*time.Second, 10*time.Millisecond, "the vstream did not complete its copy phase")
 			waitForSentinelRow(t, vtgateConn, defaultSourceKs, &sentinelSeen)
 			done.Store(true)
 		}
@@ -1495,7 +1505,8 @@ const (
 
 // doVStream streams the customer and, if flags ask for them, heartbeat events
 // until ctx ends. It calls onHeartbeat, if set, with the number of heartbeats
-// received so far. It returns an error only if the stream could not start.
+// received so far. It returns an error if the stream could not start or ended
+// before ctx did.
 func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtgatepb.VStreamFlags, onHeartbeat func(int)) (numRowEvents map[string]int, numFieldEvents map[string]int, err error) {
 	numRowEvents = make(map[string]int)
 	numFieldEvents = make(map[string]int)
@@ -1558,11 +1569,13 @@ func doVStream(t *testing.T, ctx context.Context, vc *VitessCluster, flags *vtga
 				default:
 				}
 			}
-		case io.EOF:
-			log.Info("Stream Ended")
-			done = true
 		default:
-			log.Info(fmt.Sprintf("stream ended: %v", err))
+			// The stream must run until ctx ends. Any other end, io.EOF
+			// included, would let a stream that stopped early pass as one
+			// that received no heartbeats.
+			if ctx.Err() == nil {
+				return nil, nil, vterrors.Wrapf(err, "the vstream ended before its context")
+			}
 			done = true
 		}
 	}
@@ -1768,12 +1781,14 @@ func TestVStreamPushdownFilters(t *testing.T) {
 }
 
 // runVStreamAndGetNumOfRowEvents runs VStream with the specified filter until
-// it receives the sentinel row, and returns number of copy phase and running
-// phase row events.
+// it has received the sentinel row and completed the copy phase, and returns
+// number of copy phase and running phase row events. The sentinel can arrive
+// during the copy phase, before the rest of the copied rows.
 func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamConn *vtgateconn.VTGateConn,
 	vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter,
 ) (copyPhaseRowEvents int, runningPhaseRowEvents int) {
 	copyPhase := true
+	sentinelSeen := false
 	func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
@@ -1786,7 +1801,6 @@ func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamCo
 
 			switch err {
 			case nil:
-				sentinelSeen := false
 				for _, ev := range evs {
 					switch ev.Type {
 					case binlogdatapb.VEventType_COPY_COMPLETED:
@@ -1800,7 +1814,7 @@ func runVStreamAndGetNumOfRowEvents(t *testing.T, ctx context.Context, vstreamCo
 						sentinelSeen = sentinelSeen || isSentinelRow(ev.RowEvent)
 					}
 				}
-				if sentinelSeen {
+				if sentinelSeen && !copyPhase {
 					return
 				}
 			default:
