@@ -413,8 +413,17 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
+	// The throttleEvents goroutine must not outlive parseEvents: derive a
+	// context that is cancelled when parseEvents returns, so the goroutine
+	// exits instead of leaking (holding a binlog event) until the caller's
+	// context ends.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
-	defer close(throttlerErrs)
+	// throttlerErrs is deliberately not closed: it has a buffer of 1 and at
+	// most one send, and closing it would race with a goroutine that is about
+	// to report a fully-throttled timeout just as parseEvents returns,
+	// panicking on the closed channel and crashing vttablet.
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
 		throttledTime := atomic.Int64{}
 		for {
