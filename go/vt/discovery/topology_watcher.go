@@ -213,7 +213,9 @@ func (tw *TopologyWatcher) storeTabletInfos(tabletInfos []*topo.TabletInfo, part
 
 		if !tw.refreshKnownTablets {
 			// We already have a tabletInfo for this and the flag tells us to not refresh.
-			if val, ok := tw.tablets[aliasStr]; ok {
+			// A known record without a grpc port was never added to the healthcheck
+			// (e.g. it was read while vttablet was shutting down), so take the fresh one.
+			if val, ok := tw.tablets[aliasStr]; ok && hasGRPCPort(val.tablet) {
 				newTablets[aliasStr] = val
 				continue
 			}

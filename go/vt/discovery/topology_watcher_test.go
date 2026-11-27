@@ -138,7 +138,8 @@ func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 		},
 		Hostname: "host1",
 		PortMap: map[string]int32{
-			"vt": 123,
+			"vt":   123,
+			"grpc": 1123,
 		},
 		Keyspace: "keyspace",
 		Shard:    "shard",
@@ -578,7 +579,8 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 		},
 		Hostname: "host1",
 		PortMap: map[string]int32{
-			"vt": 123,
+			"vt":   123,
+			"grpc": 1123,
 		},
 		Keyspace: "ks1",
 		Shard:    "shard",
@@ -662,6 +664,83 @@ func TestFilterByKeyspaceSkipsIgnoredTablets(t *testing.T) {
 	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 0})
 	checkChecksum(t, tw, 0)
 	assert.Empty(t, fhc.GetAllTablets())
+
+	tw.Stop()
+}
+
+// grpcPortCheckingHealthCheck is a FakeHealthCheck that, like HealthCheckImpl,
+// skips tablets without a grpc port in AddTablet and ReplaceTablet.
+type grpcPortCheckingHealthCheck struct {
+	*FakeHealthCheck
+}
+
+func (hc *grpcPortCheckingHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
+	if !hasGRPCPort(tablet) {
+		return
+	}
+	hc.FakeHealthCheck.AddTablet(tablet)
+}
+
+func (hc *grpcPortCheckingHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
+	hc.RemoveTablet(old)
+	hc.AddTablet(new)
+}
+
+// TestNoRefreshKnownRetriesTabletWithoutGRPCPort covers a tablet that is first seen while
+// vttablet is shutting down: TabletManager.Close() clears the hostname and port map in topo,
+// so HealthCheck.AddTablet skips it. With refreshKnownTablets turned off, the TopologyWatcher
+// must not keep reusing that record, otherwise the tablet is never added to the healthcheck
+// after vttablet restarts and re-publishes its record.
+func TestNoRefreshKnownRetriesTabletWithoutGRPCPort(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+
+	ts := memorytopo.NewServer(ctx, "aa")
+	defer ts.Close()
+	fhc := &grpcPortCheckingHealthCheck{FakeHealthCheck: NewFakeHealthCheck(nil)}
+	defer fhc.Close()
+	tw := NewTopologyWatcher(t.Context(), ts, fhc, nil, "aa", 10*time.Minute, false /*refreshKnownTablets*/)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  0,
+		},
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"vt":   123,
+			"grpc": 456,
+		},
+		Keyspace: "ks1",
+		Shard:    "shard",
+	}
+	require.NoError(t, ts.CreateTablet(t.Context(), tablet))
+
+	// Simulate TabletManager.Close() during vttablet shutdown.
+	_, err := ts.UpdateTabletFields(t.Context(), tablet.Alias, func(tb *topodatapb.Tablet) error {
+		tb.Hostname = ""
+		tb.PortMap = nil
+		return nil
+	})
+	require.NoError(t, err)
+
+	tw.loadTablets()
+
+	// Like HealthCheckImpl, the healthcheck skips the tablet because it has no grpc port.
+	assert.Empty(t, fhc.GetAllTablets())
+
+	// Simulate vttablet restarting and re-publishing its tablet record.
+	_, err = ts.UpdateTabletFields(t.Context(), tablet.Alias, func(tb *topodatapb.Tablet) error {
+		tb.Hostname = tablet.Hostname
+		tb.PortMap = tablet.PortMap
+		return nil
+	})
+	require.NoError(t, err)
+
+	tw.loadTablets()
+
+	allTablets := fhc.GetAllTablets()
+	assert.Len(t, allTablets, 1)
+	assert.Contains(t, allTablets, TabletToMapKey(tablet))
 
 	tw.Stop()
 }
