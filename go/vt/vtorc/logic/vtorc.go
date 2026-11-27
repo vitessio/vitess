@@ -152,9 +152,10 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 		"total",
 	})
 	var (
-		instance *inst.Instance
-		found    bool
-		err      error
+		prevInstance *inst.Instance
+		instance     *inst.Instance
+		found        bool
+		err          error
 	)
 	latency.Start("total") // start the total stopwatch (not changed anywhere else)
 	defer func() {
@@ -186,9 +187,10 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 	}
 
 	latency.Start("backend")
-	instance, found, _ = inst.ReadInstance(tabletAlias)
+	prevInstance, found, _ = inst.ReadInstance(tabletAlias)
+	instance = prevInstance
 	latency.Stop("backend")
-	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
+	if !forceDiscovery && found && prevInstance.IsUpToDate && prevInstance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
 	}
@@ -208,14 +210,23 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 	discoveryInstanceTimings.Add("Instance", instanceLatency)
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
-	if err != nil {
+	switch {
+	case err != nil:
 		log.Error("Failed to discover",
 			slog.String("tablet", tabletAliasString),
 			slog.Bool("force_discovery", forceDiscovery),
 			slog.Any("error", err),
 			slog.String("error_code", vterrors.Code(err).String()))
-	} else {
+	case shouldLogDiscoveryInfo(discoveryLogCheck{
+		prev:           prevInstance,
+		curr:           instance,
+		found:          found,
+		forceDiscovery: forceDiscovery,
+		lagThreshold:   config.GetReasonableReplicationLagSeconds(),
+	}):
 		log.Info("Discovered", instance.LogAttrs(slog.String("tablet", tabletAliasString), slog.Bool("force_discovery", forceDiscovery))...)
+	case log.Enabled(slog.LevelDebug):
+		log.Debug("Discovered", instance.LogAttrs(slog.String("tablet", tabletAliasString), slog.Bool("force_discovery", forceDiscovery))...)
 	}
 
 	if instance == nil {

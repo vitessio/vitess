@@ -31,6 +31,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -216,5 +217,164 @@ func TestDiscoverInstanceLogs(t *testing.T) {
 		assert.Equal(t, topoproto.TabletAliasString(tablet.Alias), record["tablet"])
 		assert.NotContains(t, record, "error")
 		assert.NotContains(t, record, "error_code")
+	})
+
+	t.Run("routine poll logs only on state change", func(t *testing.T) {
+		// Save the shard record. WriteInstance skips persisting database_instance
+		// when the shard lookup fails.
+		require.NoError(t, inst.SaveShard(topo.NewShardInfo("ks", "0", &topodatapb.Shard{}, nil)))
+
+		prevFullStatus := discoveryTMC.FullStatusResult
+		t.Cleanup(func() { discoveryTMC.FullStatusResult = prevFullStatus })
+
+		makeStatus := func(pos, filePos string, lag uint32, readOnly bool) *replicationdatapb.FullStatus {
+			return &replicationdatapb.FullStatus{
+				ServerId:      100,
+				ServerUuid:    "11111111-1111-1111-1111-111111111111",
+				TabletType:    topodatapb.TabletType_REPLICA,
+				Version:       "8.0.36",
+				ReadOnly:      readOnly,
+				LogBinEnabled: true,
+				BinlogFormat:  "ROW",
+				GtidMode:      "ON",
+				PrimaryStatus: &replicationdatapb.PrimaryStatus{
+					Position:     pos,
+					FilePosition: filePos,
+				},
+				ReplicationStatus: &replicationdatapb.Status{
+					SourceHost:            "primary-host",
+					SourcePort:            3306,
+					SourceUuid:            "22222222-2222-2222-2222-222222222222",
+					IoState:               3,
+					SqlState:              3,
+					AutoPosition:          true,
+					ReplicationLagSeconds: lag,
+					FilePosition:          filePos,
+					RelayLogFilePosition:  filePos,
+					SourceUser:            "vt_repl",
+				},
+			}
+		}
+
+		// Age the cached row and clear the in-memory throttle. DiscoverInstance
+		// skips polling instances that are still within the poll window.
+		expireInstance := func(t *testing.T, alias *topodatapb.TabletAlias, lastCheckedOffset, lastSeenOffset string) {
+			t.Helper()
+			res, err := db.ExecVTOrc(
+				`UPDATE database_instance SET last_checked = DATETIME('now', ?), last_seen = DATETIME('now', ?) WHERE alias = ?`,
+				lastCheckedOffset,
+				lastSeenOffset,
+				topoproto.TabletAliasString(alias),
+			)
+			require.NoError(t, err)
+			rows, err := res.RowsAffected()
+			require.NoError(t, err)
+			require.Equal(t, int64(1), rows)
+			recentDiscoveryOperationKeys.Flush()
+		}
+
+		// Persist a valid cached baseline for a dedicated tablet and expire it so
+		// the next poll exercises the cached comparison path.
+		seedBaseline := func(t *testing.T, uid uint32, readOnly bool) *topodatapb.Tablet {
+			t.Helper()
+			tablet := saveTablet(uid, false)
+			discoveryTMC.FullStatusResult = makeStatus(
+				"MySQL56/11111111-1111-1111-1111-111111111111:1-10",
+				"FilePos/mysql-bin.000001:100",
+				0,
+				readOnly,
+			)
+			DiscoverInstance(tablet.Alias, false)
+			expireInstance(t, tablet.Alias, "-60 SECOND", "-60 SECOND")
+
+			cached, found, err := inst.ReadInstance(tablet.Alias)
+			require.NoError(t, err)
+			require.True(t, found)
+			require.False(t, cached.IsUpToDate)
+			require.True(t, cached.IsLastCheckValid)
+			return tablet
+		}
+
+		t.Run("first discovery logs at INFO", func(t *testing.T) {
+			tablet := saveTablet(401, false)
+			discoveryTMC.FullStatusResult = makeStatus(
+				"MySQL56/11111111-1111-1111-1111-111111111111:1-10",
+				"FilePos/mysql-bin.000001:100",
+				0,
+				true,
+			)
+			recentDiscoveryOperationKeys.Flush()
+			logs := logtest.Capture(t, slog.LevelInfo)
+			DiscoverInstance(tablet.Alias, false)
+			record := logs.Record(t, "Discovered")
+			assert.Equal(t, "INFO", record["level"])
+			assert.Equal(t, false, record["force_discovery"])
+		})
+
+		t.Run("steady-state routine poll skips INFO", func(t *testing.T) {
+			tablet := seedBaseline(t, 402, true)
+			discoveryTMC.FullStatusResult = makeStatus(
+				"MySQL56/11111111-1111-1111-1111-111111111111:1-25",
+				"FilePos/mysql-bin.000001:500",
+				1,
+				true,
+			)
+			infoLogs := logtest.Capture(t, slog.LevelInfo)
+			DiscoverInstance(tablet.Alias, false)
+			assert.Empty(t, infoLogs.Records(t), "steady-state routine poll should not emit INFO logs")
+		})
+
+		t.Run("steady-state routine poll logs at DEBUG when enabled", func(t *testing.T) {
+			tablet := seedBaseline(t, 403, true)
+			discoveryTMC.FullStatusResult = makeStatus(
+				"MySQL56/11111111-1111-1111-1111-111111111111:1-40",
+				"FilePos/mysql-bin.000001:900",
+				2,
+				true,
+			)
+			debugLogs := logtest.Capture(t, slog.LevelDebug)
+			DiscoverInstance(tablet.Alias, false)
+			debugRecord := debugLogs.Record(t, "Discovered")
+			assert.Equal(t, "DEBUG", debugRecord["level"])
+		})
+
+		t.Run("operational state change logs at INFO", func(t *testing.T) {
+			tablet := seedBaseline(t, 404, true)
+			discoveryTMC.FullStatusResult = makeStatus(
+				"MySQL56/11111111-1111-1111-1111-111111111111:1-45",
+				"FilePos/mysql-bin.000001:1000",
+				0,
+				false,
+			)
+			changeLogs := logtest.Capture(t, slog.LevelInfo)
+			DiscoverInstance(tablet.Alias, false)
+			changeRecord := changeLogs.Record(t, "Discovered")
+			assert.Equal(t, "INFO", changeRecord["level"])
+			assert.Equal(t, false, changeRecord["read_only"])
+		})
+
+		t.Run("forced discovery with unchanged state logs at INFO", func(t *testing.T) {
+			tablet := seedBaseline(t, 405, true)
+			forcedLogs := logtest.Capture(t, slog.LevelInfo)
+			DiscoverInstance(tablet.Alias, true)
+			forcedRecord := forcedLogs.Record(t, "Discovered")
+			assert.Equal(t, "INFO", forcedRecord["level"])
+			assert.Equal(t, true, forcedRecord["force_discovery"])
+		})
+
+		t.Run("recovery from invalid last check logs at INFO", func(t *testing.T) {
+			tablet := seedBaseline(t, 406, true)
+			expireInstance(t, tablet.Alias, "-10 SECOND", "-60 SECOND")
+
+			cached, found, err := inst.ReadInstance(tablet.Alias)
+			require.NoError(t, err)
+			require.True(t, found)
+			require.False(t, cached.IsLastCheckValid)
+
+			recoveryLogs := logtest.Capture(t, slog.LevelInfo)
+			DiscoverInstance(tablet.Alias, false)
+			recoveryRecord := recoveryLogs.Record(t, "Discovered")
+			assert.Equal(t, "INFO", recoveryRecord["level"])
+		})
 	})
 }
