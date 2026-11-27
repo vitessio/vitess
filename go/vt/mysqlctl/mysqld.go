@@ -560,13 +560,18 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		if err != nil {
 			return err
 		}
+		// cmd.Wait closes the pipes, so it must not run until both are drained.
+		var drained sync.WaitGroup
+		drained.Add(2)
 		go func() {
+			defer drained.Done()
 			scanner := bufio.NewScanner(stderr)
 			for scanner.Scan() {
 				log.Info("mysqld stderr", slog.String("start_id", ts), slog.String("stderr", scanner.Text()))
 			}
 		}()
 		go func() {
+			defer drained.Done()
 			scanner := bufio.NewScanner(stdout)
 			for scanner.Scan() {
 				log.Info("mysqld stdout", slog.String("start_id", ts), slog.String("stdout", scanner.Text()))
@@ -580,6 +585,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		mysqld.mutex.Lock()
 		mysqld.cancelWaitCmd = make(chan struct{})
 		go func(cancel <-chan struct{}) {
+			drained.Wait()
 			// Wait regardless of cancel, so we don't generate defunct processes.
 			err := cmd.Wait()
 			attrs := []slog.Attr{slog.String("start_id", ts)}

@@ -675,17 +675,21 @@ func TestMysqlApplyArgsStayBinlogged(t *testing.T) {
 }
 
 // TestStartNoWaitMysqldOutput checks that each line the started mysqld_safe
-// writes to stdout or stderr is logged as an INFO record with its start_id.
+// writes to stdout or stderr is logged as an INFO record with its start_id,
+// before OnTerm reports that the process exited.
 func TestStartNoWaitMysqldOutput(t *testing.T) {
 	const (
 		outLine = "mysqld_safe Logging to '/vt/output-sentinel.err'."
 		errLine = `{ "prio" : 1, "msg" : "Duplicate entry 'output-sentinel' for key 't.PRIMARY'", "label" : "Error" }`
+		// Enough output that the scanners are still reading when the process exits.
+		fillerLines = 2000
 	)
+	filler := strings.Repeat("mysqld_safe filler\n", fillerLines)
 	root := t.TempDir()
 	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
 	outFile, errFile := path.Join(root, "out"), path.Join(root, "err")
-	require.NoError(t, os.WriteFile(outFile, []byte(outLine+"\n"), 0o644))
-	require.NoError(t, os.WriteFile(errFile, []byte(errLine+"\n"), 0o644))
+	require.NoError(t, os.WriteFile(outFile, []byte(outLine+"\n"+filler), 0o644))
+	require.NoError(t, os.WriteFile(errFile, []byte(errLine+"\n"+filler), 0o644))
 	script := "#!/bin/sh\ncat '" + outFile + "'\ncat '" + errFile + "' >&2\n"
 	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte(script), 0o755))
 	t.Setenv("VTROOT", root)
@@ -703,7 +707,17 @@ func TestStartNoWaitMysqldOutput(t *testing.T) {
 		require.FailNow(t, "mysqld_safe did not exit")
 	}
 
-	stdout, stderr := logs.Wait(t, "mysqld stdout"), logs.Wait(t, "mysqld stderr")
+	counts := make(map[any]int)
+	first := make(map[any]map[string]any)
+	for _, record := range logs.Records(t) {
+		if counts[record["msg"]] == 0 {
+			first[record["msg"]] = record
+		}
+		counts[record["msg"]]++
+	}
+	assert.Equal(t, fillerLines+1, counts["mysqld stdout"], "mysqld stdout records")
+	assert.Equal(t, fillerLines+1, counts["mysqld stderr"], "mysqld stderr records")
+	stdout, stderr := first["mysqld stdout"], first["mysqld stderr"]
 	assert.Equal(t, "INFO", stdout["level"])
 	assert.Equal(t, "INFO", stderr["level"])
 	assert.Equal(t, outLine, stdout["stdout"])
