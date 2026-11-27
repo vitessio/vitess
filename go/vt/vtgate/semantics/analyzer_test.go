@@ -974,6 +974,15 @@ func TestInvalidQueries(t *testing.T) {
 		sql:  "select 1 from t1 where (id, id) in (select 1, 2, 3)",
 		serr: "Operand should contain 2 column(s)",
 	}, {
+		sql:  "select 1 from t1 where (select 1, 2) in (1, 2)",
+		serr: "Operand should contain 2 column(s)",
+	}, {
+		sql:  "select 1 from t1 where (select 1) in ((1, 2), (3, 4))",
+		serr: "Operand should contain 1 column(s)",
+	}, {
+		sql:  "select 1 from t1 where (select 1, 2) in ((1, 2), 3)",
+		serr: "Operand should contain 2 column(s)",
+	}, {
 		sql:  "with x as (select 1), x as (select 1) select * from x",
 		serr: "VT03013: not unique table/alias: 'x'",
 	}, {
@@ -997,6 +1006,26 @@ func TestInvalidQueries(t *testing.T) {
 			case tc.notUnshardedErr != "":
 				require.EqualError(t, st.NotUnshardedErr, tc.notUnshardedErr)
 			}
+		})
+	}
+}
+
+// TestSubqueryInValueList checks that a subquery on the left of IN or NOT IN
+// is compared to each value in the list, and not to the list as a whole.
+func TestSubqueryInValueList(t *testing.T) {
+	queries := []string{
+		"select 1 from t1 where (select 1) in (1, 2)",
+		"select 1 from t1 where (select 1) not in (1, 2, 3)",
+		"select 1 from t1 where (select 1, 2) in ((1, 2), (3, 4), (5, 6))",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse, "dbName", fakeSchemaInfo())
+			require.NoError(t, err)
 		})
 	}
 }
