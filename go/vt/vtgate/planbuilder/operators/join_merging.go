@@ -37,7 +37,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	switch {
 	// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
-	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single sharded routing.
+	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single-shard routing.
 	case a == dual:
 		newRouting := rhsRoute.Routing.Clone()
 
@@ -48,8 +48,8 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			}
 		}
 
-		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
-			debugNoRewrite("apply join merge blocked: dual routing with non-inner join type %s and multi-shard routing %s", jm.joinType.ToString(), newRouting.OpCode().String())
+		if !TableID(lhsRoute).Merge(TableID(rhsRoute)).IsOverlapping(ctx.SemTable.DMLTargets) && !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+			debugNoRewrite("apply join merge blocked: %s routing with non-inner join type %s and multi-shard routing %s", a.String(), jm.joinType.ToString(), newRouting.OpCode().String())
 			return nil
 		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
@@ -62,10 +62,23 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 	case a == anyShard && b == anyShard && sameKeyspace:
 		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), jm.predicates, jm.joinType)
 		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
-
-	// an unsharded/reference route can be merged with anything going to that keyspace
+	// A reference route on the left can be joined into the right route. For
+	// outer joins, only do this when the right route is single-shard so the
+	// preserved reference rows are not repeated by every shard.
 	case a == anyShard && sameKeyspace:
-		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
+		newRouting := rhsRoute.Routing.Clone()
+		rhsID := TableID(rhsRoute)
+		for _, predicate := range jm.predicates {
+			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
+				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
+			}
+		}
+		if !TableID(lhsRoute).Merge(TableID(rhsRoute)).IsOverlapping(ctx.SemTable.DMLTargets) && !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+			debugNoRewrite("apply join merge blocked: %s routing with non-inner join type %s and multi-shard routing %s", a.String(), jm.joinType.ToString(), newRouting.OpCode().String())
+			return nil
+		}
+		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
+	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
 
@@ -269,9 +282,39 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		}
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
-		Routing:       r,
-		Conditions:    conditions,
+		unaryOperator:             newUnaryOp(aj),
+		MergedWith:                []*Route{op2},
+		ContainsSpecialUnionInput: containsSpecialInputAfterJoin(jm.joinType, op1, op2, r),
+		Routing:                   r,
+		Conditions:                conditions,
 	}
+}
+
+func containsSpecialInputAfterJoin(joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
+	lhsSpecial := routeContainsSpecialUnionInput(lhs)
+	rhsSpecial := routeContainsSpecialUnionInput(rhs)
+	if !lhsSpecial && !rhsSpecial {
+		return false
+	}
+	if _, sharded := routing.(*ShardedRouting); !sharded {
+		return true
+	}
+
+	lhsSharded := isOrdinaryShardedRoute(lhs)
+	rhsSharded := isOrdinaryShardedRoute(rhs)
+	if joinType.IsInner() && (lhsSharded || rhsSharded) {
+		return false
+	}
+	if !joinType.IsInner() && lhsSharded {
+		return lhsSpecial
+	}
+	return true
+}
+
+func isOrdinaryShardedRoute(route *Route) bool {
+	if route == nil || routeContainsSpecialUnionInput(route) {
+		return false
+	}
+	_, ok := route.Routing.(*ShardedRouting)
+	return ok
 }

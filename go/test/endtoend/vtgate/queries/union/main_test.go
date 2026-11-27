@@ -61,7 +61,9 @@ func TestMain(m *testing.M) {
 			SchemaSQL: schemaSQL,
 			VSchema:   vschema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal"}
+		// Keep the row budget small enough to exercise bounded recursive growth,
+		// while allowing the 1001-row seed regression.
+		clusterInstance.VtGateExtraArgs = []string{"--schema-change-signal", "--max-memory-rows=2000"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false, clusterInstance.Cell)
 		if err != nil {

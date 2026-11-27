@@ -17,14 +17,22 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -145,6 +153,194 @@ func TestConcatenate_NoErrors(t *testing.T) {
 	}
 }
 
+// Hold the first arm open to distinguish sequential execution from parallel
+// execution, including the ordinary-session path that must remain parallel.
+func TestConcatenateSessionConcurrency(t *testing.T) {
+	for _, session := range []string{"ordinary", "reserved", "transaction"} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%t", session, stream), func(t *testing.T) {
+				result := r("id", "int64", "1")
+				sources := []Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{result}},
+					&fakePrimitive{results: []*sqltypes.Result{result}},
+				}
+				var first, second atomic.Bool
+				release, done := make(chan struct{}), make(chan struct{})
+				var once sync.Once
+				cursor := &concatenateConcurrencyVCursor{
+					before: func(p Primitive) {
+						if p == sources[0] {
+							first.Store(true)
+							<-release
+						} else {
+							second.Store(true)
+						}
+					},
+				}
+				cursor.inTx = session == "transaction"
+				cursor.inReserved = session == "reserved"
+				concatenate := NewConcatenate(sources, nil)
+				var execErr error
+				var rows atomic.Int32
+				t.Cleanup(func() { once.Do(func() { close(release) }); <-done })
+				go func() {
+					defer close(done)
+					if stream {
+						execErr = concatenate.TryStreamExecute(t.Context(), cursor, nil, true, func(qr *sqltypes.Result) error {
+							rows.Add(int32(len(qr.Rows)))
+							return nil
+						})
+					} else {
+						qr, err := concatenate.TryExecute(t.Context(), cursor, nil, true)
+						execErr = err
+						if err == nil {
+							rows.Add(int32(len(qr.Rows)))
+						}
+					}
+				}()
+				require.Eventually(t, first.Load, 30*time.Second, time.Millisecond)
+				if session == "ordinary" {
+					assert.Eventually(t, second.Load, 30*time.Second, time.Millisecond, "ordinary sessions retain parallel arms")
+				} else {
+					assert.Never(t, second.Load, 100*time.Millisecond, time.Millisecond, "arms must not share a session connection concurrently")
+				}
+				once.Do(func() { close(release) })
+				<-done
+				require.NoError(t, execErr)
+				require.Equal(t, int32(2), rows.Load())
+			})
+		}
+	}
+}
+
+type concatenateConcurrencyVCursor struct {
+	noopVCursor
+	before func(Primitive)
+}
+
+func (c *concatenateConcurrencyVCursor) ExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool) (*sqltypes.Result, error) {
+	c.before(p)
+	return c.noopVCursor.ExecutePrimitive(ctx, p, vars, fields)
+}
+
+func (c *concatenateConcurrencyVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
+	c.before(p)
+	return c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, callback)
+}
+
+// Serialized streams retain rows until all arm types are known. Their shared
+// buffer must respect the row budget, including concurrent source callbacks.
+func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
+	for _, session := range []string{"reserved", "transaction"} {
+		for _, tc := range []struct {
+			name                                        string
+			limit                                       int
+			ignore, wrapErrors, async, empty, wantError bool
+		}{
+			{name: "boundary", limit: 4},
+			{name: "across-arms", limit: 3, wantError: true},
+			{name: "oversized-chunk", limit: 1, wantError: true},
+			{name: "aggregated-source-error", limit: 3, wrapErrors: true, wantError: true},
+			{name: "concurrent-callbacks", limit: 3, async: true, wantError: true},
+			{name: "empty", limit: 0, empty: true},
+			{name: "explicit-override", limit: 1, ignore: true},
+		} {
+			t.Run(session+"/"+tc.name, func(t *testing.T) {
+				first := r("id", "int32", "1", "2")
+				second := r("id", "int64", "3", "4")
+				if tc.empty {
+					first.Rows, second.Rows = nil, nil
+				}
+				left := &fakePrimitive{results: []*sqltypes.Result{first}, async: tc.async}
+				if tc.async {
+					left.results = append(left.results, first, first)
+				}
+				right := &fakePrimitive{results: []*sqltypes.Result{second}}
+				if tc.wrapErrors {
+					right.results = append(right.results, nil)
+					right.allResultsInOneCall = true
+					right.sendErr = errors.New("source failed after overflow")
+				}
+				concatenate := NewConcatenate([]Primitive{left, right}, nil)
+				cursor := &concatenateMemoryVCursor{limit: tc.limit, ignore: tc.ignore, wrapErrors: tc.wrapErrors}
+				cursor.inTx = session == "transaction"
+				cursor.inReserved = session == "reserved"
+				var rows [][]sqltypes.Value
+				var fields []*querypb.Field
+				err := concatenate.TryStreamExecute(t.Context(), cursor, nil, true, func(qr *sqltypes.Result) error {
+					if qr.Fields != nil {
+						fields = qr.Fields
+					}
+					rows = append(rows, qr.Rows...)
+					return nil
+				})
+				if tc.wantError {
+					require.ErrorContains(t, err, "in-memory row count exceeded allowed limit")
+					require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+					require.Equal(t, sqlerror.ERNetPacketTooLarge, sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError).Number())
+					require.Empty(t, rows, "a failed buffered union must not deliver partial results")
+					require.False(t, cursor.rollback.Load(), "a local row buffer error must not roll back the caller's transaction")
+					require.False(t, cursor.interrupted.Load(), "drain the current arm instead of cancelling its tablet stream")
+					if tc.async {
+						require.EqualValues(t, 6, cursor.drainedRows.Load(), "include a chunk after the one that exceeds the budget")
+					}
+					if tc.wrapErrors {
+						require.Equal(t, 2, right.curResult, "exercise the aggregated source error after overflow")
+					}
+					if tc.limit == 1 || tc.async {
+						require.Zero(t, right.curResult, "stop before starting another arm")
+					}
+					return
+				}
+				require.NoError(t, err)
+				require.Len(t, fields, 1)
+				require.Equal(t, sqltypes.Int64, fields[0].Type)
+				if tc.empty {
+					require.Empty(t, rows)
+				} else {
+					require.Len(t, rows, 4)
+					for _, row := range rows {
+						require.Equal(t, sqltypes.Int64, row[0].Type())
+					}
+				}
+			})
+		}
+	}
+}
+
+type concatenateMemoryVCursor struct {
+	noopVCursor
+	limit              int
+	ignore, wrapErrors bool
+	rollback           atomic.Bool
+	interrupted        atomic.Bool
+	drainedRows        atomic.Int32
+}
+
+func (c *concatenateMemoryVCursor) MaxMemoryRows() int { return c.limit }
+func (c *concatenateMemoryVCursor) ExceedsMaxMemoryRows(rows int) bool {
+	return !c.ignore && rows > c.limit
+}
+
+func (c *concatenateMemoryVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
+	err := c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, func(result *sqltypes.Result) error {
+		c.drainedRows.Add(int32(len(result.Rows)))
+		err := callback(result)
+		if err != nil {
+			c.interrupted.Store(true)
+		}
+		// ScatterConn.endAction marks these shard errors for rollback.
+		if code := vterrors.Code(err); code == vtrpcpb.Code_RESOURCE_EXHAUSTED || code == vtrpcpb.Code_ABORTED {
+			c.rollback.Store(true)
+		}
+		return err
+	})
+	if err != nil && c.wrapErrors {
+		return fmt.Errorf("aggregated stream error: %v", err)
+	}
+	return err
+}
+
 func TestConcatenate_WithErrors(t *testing.T) {
 	strFailed := "failed"
 
@@ -242,4 +438,59 @@ func TestConcatenateTypes(t *testing.T) {
 			require.Equal(t, test.expected, res.Fields)
 		})
 	}
+}
+
+func TestConcatenateCoercesBitValues(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{"BIT16", []byte{1, 2}, "258"},
+		{"BIT64", []byte{1, 2, 3, 4, 5, 6, 7, 8}, "72623859790382856"},
+	} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%v", tc.name, stream), func(t *testing.T) {
+				bitResult := &sqltypes.Result{
+					Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Bit, Charset: collations.CollationBinaryID}},
+					Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Bit, tc.raw)}},
+				}
+				concatenate := NewConcatenate([]Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{bitResult}},
+					&fakePrimitive{results: []*sqltypes.Result{r("id", "int32", "3")}},
+				}, nil)
+				var result *sqltypes.Result
+				var err error
+				if stream {
+					result, err = wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
+				} else {
+					result, err = concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+				}
+				require.NoError(t, err)
+				require.Equal(t, sqltypes.Int64, result.Fields[0].Type)
+				require.Len(t, result.Rows, 2)
+				// Streaming UNION ALL may deliver its arms in either order.
+				require.ElementsMatch(t, []string{tc.want, "3"}, []string{result.Rows[0][0].ToString(), result.Rows[1][0].ToString()})
+			})
+		}
+	}
+}
+
+func TestConcatenatePreservesGeometryValues(t *testing.T) {
+	geometry := []byte{0, 1, 2, 3}
+	geometryResult := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "value", Type: sqltypes.Geometry, Charset: collations.CollationBinaryID}},
+		Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Geometry, geometry)}},
+	}
+	stringResult := r("value", "varchar", "shape")
+	concatenate := NewConcatenate([]Primitive{
+		&fakePrimitive{results: []*sqltypes.Result{geometryResult, geometryResult}},
+		&fakePrimitive{results: []*sqltypes.Result{stringResult, stringResult}},
+	}, nil)
+
+	result, err := concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.VarChar, result.Fields[0].Type)
+	require.Equal(t, geometry, result.Rows[0][0].Raw())
+	require.Equal(t, []byte("shape"), result.Rows[1][0].Raw())
 }

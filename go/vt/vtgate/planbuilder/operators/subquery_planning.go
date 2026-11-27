@@ -688,12 +688,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	if !s.subq.TopLevel {
 		// if the subquery we are merging isn't a top level predicate, we can't use it for routing
 		return &Route{
-			unaryOperator: newUnaryOp(outer.Source),
-			MergedWith:    mergedWith(inner, outer),
-			Routing:       outer.Routing,
-			Ordering:      outer.Ordering,
-			ResultColumns: outer.ResultColumns,
-			Conditions:    allCond,
+			unaryOperator:             newUnaryOp(outer.Source),
+			MergedWith:                mergedWith(inner, outer),
+			ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
+			Routing:                   outer.Routing,
+			Ordering:                  outer.Ordering,
+			ResultColumns:             outer.ResultColumns,
+			Conditions:                allCond,
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -707,12 +708,13 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		src = s.rewriteASTExpression(ctx, inner)
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(src),
-		MergedWith:    mergedWith(inner, outer),
-		Routing:       r,
-		Ordering:      s.outer.Ordering,
-		ResultColumns: s.outer.ResultColumns,
-		Conditions:    allCond,
+		unaryOperator:             newUnaryOp(src),
+		MergedWith:                mergedWith(inner, outer),
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(outer),
+		Routing:                   r,
+		Ordering:                  s.outer.Ordering,
+		ResultColumns:             s.outer.ResultColumns,
+		Conditions:                allCond,
 	}
 }
 
@@ -802,7 +804,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 
 	// we can merge dual-outer subqueries only if the
 	// inner is guaranteed to hit a single shard
-	case inRoute.IsSingleShard() &&
+	case inRoute.IsSingleShard() && !routeUsesSubqueryJoinArgument(inRoute, m.subq) &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
 		return m.merge(ctx, inRoute, outRoute, inRouting)
 
@@ -820,6 +822,41 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	default:
 		return nil
 	}
+}
+
+func routeUsesSubqueryJoinArgument(route *Route, subquery *SubQuery) bool {
+	routing, ok := route.Routing.(*ShardedRouting)
+	if !ok || routing.Selected == nil || subquery == nil {
+		return false
+	}
+
+	joinArguments := make(map[string]struct{})
+	for _, joinColumn := range subquery.JoinColumns {
+		for _, expression := range joinColumn.LHSExprs {
+			joinArguments[expression.Name] = struct{}{}
+		}
+	}
+	if len(joinArguments) == 0 {
+		return false
+	}
+
+	for _, value := range routing.VindexExpressions() {
+		usesJoinArgument := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			argument, ok := node.(*sqlparser.Argument)
+			if ok {
+				if _, found := joinArguments[argument.Name]; found {
+					usesJoinArgument = true
+					return false, io.EOF
+				}
+			}
+			return true, nil
+		}, value)
+		if usesJoinArgument {
+			return true
+		}
+	}
+	return false
 }
 
 func mergedWith(inner *Route, outer *Route) []*Route {

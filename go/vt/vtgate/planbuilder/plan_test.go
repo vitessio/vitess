@@ -124,6 +124,683 @@ func (s *planTestSuite) TestPlan() {
 	s.testFile("cte_cases.json", vw, false)
 }
 
+func (s *planTestSuite) TestReferenceUnionLookupMissUsesFallbackRoute() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select id from ref union all select id from music where id = 1", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	lookup, ok := plan.Instructions.(*engine.VindexLookup)
+	s.Require().True(ok)
+	s.Require().True(lookup.SendTo.NoRoutesSpecialHandling)
+}
+
+func (s *planTestSuite) TestMixedUnionAllAndDistinctLimitWithoutSchemaTracking() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, tableName := range []string{"user", "music"} {
+		vschema.Keyspaces["user"].Tables[tableName].Columns = nil
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	for _, query := range []string{
+		"select id from user union all select id from music union select id from user",
+		"select id from user union all select id from music union select id from user limit 5",
+		"select id from user union all select id from music union select id from user order by id limit 5",
+	} {
+		_, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+	}
+
+	plan, err := TestBuilder("select cast(id as signed) as id from ref union all select cast(id as signed) from user union select cast(id as signed) from music order by id limit 5", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	for _, route := range routes {
+		s.Require().NotContains(route.Query, "dt.c0 as id, id,", "hidden columns must reference the derived UNION output")
+		s.Require().NotContains(route.Query, "weight_string(id)", "weight strings must reference the derived UNION output")
+	}
+}
+
+func routePrimitives(root engine.Primitive) []*engine.Route {
+	if root == nil {
+		return nil
+	}
+	if route, ok := root.(*engine.Route); ok {
+		return []*engine.Route{route}
+	}
+	inputs, _ := root.Inputs()
+	var routes []*engine.Route
+	for _, input := range inputs {
+		routes = append(routes, routePrimitives(input)...)
+	}
+	return routes
+}
+
+func hasUnboundCTEReference(root engine.Primitive, insideRecursiveTerm bool) bool {
+	if root == nil {
+		return false
+	}
+	if recurse, ok := root.(*engine.RecurseCTE); ok {
+		return hasUnboundCTEReference(recurse.Seed, false) || hasUnboundCTEReference(recurse.Term, true)
+	}
+	if route, ok := root.(*engine.Route); ok && !insideRecursiveTerm {
+		for _, value := range route.Values {
+			if sqlparser.String(value) == ":c_id" {
+				return true
+			}
+		}
+	}
+	inputs, _ := root.Inputs()
+	for _, input := range inputs {
+		if hasUnboundCTEReference(input, insideRecursiveTerm) {
+			return true
+		}
+	}
+	return false
+}
+
+// The outer sort needs each arm's helper columns until after concatenation.
+func (s *planTestSuite) TestOrderedUnionLimitKeepsHelperColumns() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["user"].Tables["user"].Columns = append(vschema.Keyspaces["user"].Tables["user"].Columns, vindexes.Column{Name: sqlparser.NewIdentifierCI("textcol"), Type: sqltypes.VarChar, CollationName: "utf8mb4_bin"})
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select textcol as x from user where id = 1 union all select textcol from user where id = 3 order by x limit 3",
+		"select 1 as c from dual union all select count(*) from user order by c limit 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions)
+			s.Require().NotNil(sort)
+			for _, order := range sort.(*engine.MemorySort).OrderBy {
+				for _, route := range routePrimitives(plan.Instructions) {
+					if route.TruncateColumnCount > 0 {
+						s.Require().Greater(route.TruncateColumnCount, order.WeightStringCol, route.Query)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Different arm sort types cannot safely select a local top-N before UNION
+// coercion. A numeric arm could discard 10 even though it sorts before 2 as text.
+func (s *planTestSuite) TestUnionArmOrderingRejectsMixedSortTypes() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select textcol1 from user union all select col41 from unsharded_fk_allow.u_tbl4 order by 1 limit 3",
+		"select intcol from user union all select col4 from unsharded_fk_allow.u_tbl4 order by 1 limit 3",
+		"select col41 from unsharded_fk_allow.u_tbl4 union all select textcol1 from user order by 1 limit 3",
+		"select col4 from unsharded_fk_allow.u_tbl4 union all select intcol from user order by 1 limit 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			routes := routePrimitives(plan.Instructions)
+			s.Require().Len(routes, 2)
+			s.Require().NotNil(engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions))
+			for _, route := range routes {
+				s.Require().NotContains(route.Query, ":__upper_limit", route.Query)
+			}
+		})
+	}
+}
+
+// MySQL resolves a bare ORDER BY column against select aliases first.
+func (s *planTestSuite) TestUnionArmOrderingQualifiesColumns() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{"intcol", "5"} {
+		query := "select col as a, " + second + " as col from user union all select col41, col41 from unsharded_fk_allow.u_tbl4 order by a limit 5"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if strings.Contains(route.Query, "from `user`") {
+				found = true
+				s.Require().Contains(route.Query, "order by `user`.col asc")
+				s.Require().Contains(route.Query, "select col as a, "+second+" as col from `user`")
+				s.Require().Contains(route.Query, "limit :__upper_limit")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// Qualifying a mapped order must preserve unaliased expression field names,
+// including when a later arm refuses the pushdown.
+func (s *planTestSuite) TestUnionArmOrderingPreservesSelectExpressions() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{
+		"select cast(id as signed) from unsharded",
+		"(select cast(id as signed) from unsharded limit 1)",
+		"select cast(id as signed) from ref",
+	} {
+		query := "select cast(id as signed) from user union all " + second + " order by 1 limit 3"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if !strings.Contains(route.Query, "from `user`") {
+				continue
+			}
+			found = true
+			stmt, err := env.Parser().Parse(route.Query)
+			s.Require().NoError(err)
+			selectExpr := stmt.(*sqlparser.Select).GetColumns()[0].(*sqlparser.AliasedExpr)
+			s.Require().Equal("cast(id as signed)", sqlparser.String(selectExpr))
+			if strings.Contains(second, "limit 1") {
+				s.Require().NotContains(route.Query, ":__upper_limit")
+			} else {
+				s.Require().Contains(route.Query, "order by cast(`user`.id as signed) asc")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// A scalar aggregate above a route must not leak a route-local sort helper.
+func (s *planTestSuite) TestDerivedUnionScalarAggregateArmWidth() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{"count(*) from unsharded", "7 from dual"} {
+		query := "select * from (select count(*) c from user union all select " + second + ") t order by c limit 10"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		aggregate := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.ScalarAggregate); return ok }, plan.Instructions)
+		s.Require().NotNil(aggregate)
+		for _, route := range routePrimitives(aggregate) {
+			s.Require().NotContains(route.Query, "weight_string(count(*))")
+			s.Require().Empty(route.OrderBy)
+		}
+	}
+}
+
+// A single-shard arm can retain its LIMIT in an unexpanded Horizon.
+func (s *planTestSuite) TestReferenceUnionArmKeepsLocalLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["user"].Tables["ref"].Columns = []vindexes.Column{{Name: sqlparser.NewIdentifierCI("intcol"), Type: sqltypes.Int16}}
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, suffix := range []string{"order by intcol limit 3", "limit 100"} {
+		plan, err := TestBuilder("(select id, intcol from ref order by intcol desc limit 1) union all (select id, intcol from user) "+suffix, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if strings.Contains(route.Query, "from ref") {
+				found = true
+				s.Require().Regexp(`limit 1(\)|$)`, route.Query, "the local LIMIT must survive outer LIMIT planning")
+				s.Require().NotContains(route.Query, ":__upper_limit")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// A sharded arm must keep its own merge ordering below its local LIMIT.
+func (s *planTestSuite) TestShardedUnionArmKeepsLocalLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	plan, err := TestBuilder("(select intcol from user order by intcol desc limit 2) union all (select col from user) order by intcol limit 3", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	inner := engine.Find(func(p engine.Primitive) bool {
+		limit, ok := p.(*engine.Limit)
+		return ok && sqlparser.String(limit.Count) == "2"
+	}, plan.Instructions)
+	s.Require().NotNil(inner, "test must exercise an arm-local VTGate LIMIT")
+	routes := routePrimitives(inner)
+	s.Require().Len(routes, 1)
+	s.Require().Len(routes[0].OrderBy, 1)
+	s.Require().True(routes[0].OrderBy[0].Desc, "outer ASC must not replace the arm's DESC merge ordering")
+	s.Require().Contains(routes[0].Query, "intcol desc")
+	s.Require().NotContains(routes[0].Query, "intcol asc")
+}
+
+// Generated DISTINCT derived tables must not leak an arm-only sort helper.
+func (s *planTestSuite) TestOrderedDistinctUnionArmWidths() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, ks := range vschema.Keyspaces {
+		for _, table := range ks.Tables {
+			table.Columns = nil
+		}
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		// Untyped id columns force weight strings through a generated DISTINCT derived table.
+		"select cast(id as signed) as x, id from user union select cast(id as signed) as x, id from unsharded order by x limit 3",
+		"select cast(id as signed) as x, id from unsharded union select cast(id as signed) as x, id from user order by x desc limit 1, 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions)
+			s.Require().NotNil(sort)
+			concatenate := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.Concatenate); return ok }, plan.Instructions)
+			s.Require().NotNil(concatenate)
+			width := -1
+			for _, input := range concatenate.(*engine.Concatenate).Sources {
+				route, ok := input.(*engine.Route)
+				s.Require().True(ok, "test must exercise route outputs directly")
+				stmt, err := env.Parser().Parse(route.Query)
+				s.Require().NoError(err)
+				columns := stmt.(sqlparser.SelectStatement).GetColumnCount()
+				if route.TruncateColumnCount > 0 {
+					columns = route.TruncateColumnCount
+				}
+				if width < 0 {
+					width = columns
+				}
+				s.Require().Equal(width, columns, "every Concatenate input must return the same width: %s", route.Query)
+				for _, order := range sort.(*engine.MemorySort).OrderBy {
+					s.Require().Greater(columns, order.Col, route.Query)
+					s.Require().Greater(columns, order.WeightStringCol, route.Query)
+				}
+			}
+		})
+	}
+}
+
+// Integer constants in a select list must not become ordinal ORDER BY keys.
+func (s *planTestSuite) TestUnionArmOrderingSkipsLiteralKeys() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select 0 as ord, id from unsharded union all select 1, id from user order by ord limit 10",
+		"select 100 as ord, id from unsharded union all select 1, id from user order by ord limit 10",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			for _, route := range routePrimitives(plan.Instructions) {
+				s.Require().Contains(route.Query, "limit :__upper_limit")
+				s.Require().NotContains(route.Query, "order by 0")
+				s.Require().NotContains(route.Query, "order by 100")
+			}
+		})
+	}
+}
+
+// Aggregation and UNION helper normalization must plan without a panic.
+func (s *planTestSuite) TestUnionAggregateHelperOffsetDoesNotPanic() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.Require().NotPanics(func() {
+		_, err = TestBuilder("select count(*) as c, name from user group by name union all select 1, 'a' from dual order by c limit 3", vw, vw.CurrentDb())
+	})
+	s.Require().NoError(err)
+}
+
+func (s *planTestSuite) TestDistinctUnionLimitIsPushedIntoLocalRoute() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, tableName := range []string{"user", "music"} {
+		vschema.Keyspaces["user"].Tables[tableName].Columns = nil
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	for _, query := range []string{
+		"select id from user union select id from music limit 10",
+		"select id from user union select 3 limit 10",
+		"select col from user union select col from unsharded limit 5",
+		"select col % 2 from (select col from user union select col from unsharded) dt limit 2",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().Contains(strings.ToLower(route.Query), "limit", query)
+		}
+	}
+}
+
+// Plain column projections preserve the UNION's distinct rows, even before
+// the derived projection has populated its requested columns.
+func (s *planTestSuite) TestOuterDistinctPassThroughUnionKeepsArmLimits() {
+	for _, tracked := range []bool{false, true} {
+		env := vtenv.NewTestEnv()
+		vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+		if !tracked {
+			vschema.Keyspaces["user"].Tables["user"].Columns = nil
+		}
+		vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+		s.Require().NoError(err)
+		s.addPKs(vschema, "user", []string{"user"})
+		for _, query := range []string{
+			"select distinct col from (select col from user union select col from unsharded) dt limit 2",
+			"select distinct col from (select col from user union select col from unsharded) dt where col > 5 limit 2",
+			"select distinct x from (select col as x from user union select col from unsharded) dt limit 2",
+			"select distinct col as x from (select col from user union select col from unsharded) dt limit 2",
+			"select distinct col, id from (select id, col from user union select id, col from unsharded) dt limit 2",
+			"select distinct x from (select col as x from (select col from user union select col from unsharded) dt) nested limit 2",
+		} {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err, "tracking=%t query=%s", tracked, query)
+			routes := routePrimitives(plan.Instructions)
+			s.Require().NotEmpty(routes, query)
+			for _, route := range routes {
+				s.Require().Contains(strings.ToLower(route.Query), "limit :__upper_limit", "tracking=%t query=%s route=%s", tracked, query, route.Query)
+			}
+		}
+	}
+}
+
+func (s *planTestSuite) TestOuterDistinctOverUnionAllDoesNotPushLimitIntoArms() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+
+	plan, err := TestBuilder("select distinct id from (select id from user union all select id from unsharded) t limit 5", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	for _, route := range routes {
+		s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit")
+	}
+
+	ordered, err := TestBuilder("select distinct id from (select id from user union all select id from unsharded) t order by id limit 5", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	orderedRoutes := routePrimitives(ordered.Instructions)
+	s.Require().NotEmpty(orderedRoutes)
+	for _, route := range orderedRoutes {
+		s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit")
+	}
+}
+
+// A projection can make route-local distinct rows equal again. The outer
+// DISTINCT must see later rows before its LIMIT, including with ORDER BY.
+func (s *planTestSuite) TestOuterDistinctProjectionOverUnionDoesNotPushLimitIntoArms() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"select distinct col % 2 from (select col from user union select col from unsharded) dt limit 2",
+		"select distinct col % 2 as parity from (select col from user union select col from unsharded) dt order by parity limit 2",
+		"select distinct id from (select id, col from user union select id, col from unsharded) dt limit 2",
+		"select distinct id, id from (select id, col from user union select id, col from unsharded) dt limit 2",
+		"select distinct x from (select col % 2 as x from (select col from user union select col from unsharded) dt) nested limit 2",
+		"select distinct x % 2 from (select col as x from (select col from user union select col from unsharded) dt) nested limit 2",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit", query)
+		}
+	}
+}
+
+func (s *planTestSuite) TestMixedUnionOrderingAcrossKeyspaces() {
+	for _, tracked := range []bool{false, true} {
+		env := vtenv.NewTestEnv()
+		vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+		if !tracked {
+			for _, name := range []string{"user", "music"} {
+				vschema.Keyspaces["user"].Tables[name].Columns = nil
+			}
+		}
+		vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+		s.Require().NoError(err)
+		s.addPKs(vschema, "user", []string{"user", "music"})
+		for _, query := range []string{
+			"select id from ref union all select id from user union select id from unsharded order by id",
+			"select id from user union all select id from unsharded union select id from user order by id",
+			"select id from user union all select id from unsharded union select id from user order by id limit 5",
+			"select col from user union all select col from unsharded union select col from user order by col limit 5",
+			"select cast(col as signed) as c from user union all select cast(col as signed) from unsharded union select cast(col as signed) from user order by c limit 5",
+			"select cast(col as signed) as c from user union select cast(col as signed) from unsharded order by c limit 5",
+			"select col from user union select col from music order by col limit 5",
+		} {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err, "tracking=%t query=%s", tracked, query)
+			for _, route := range routePrimitives(plan.Instructions) {
+				if strings.Contains(strings.ToLower(route.Query), "limit :__upper_limit") {
+					s.Require().Contains(strings.ToLower(route.Query), "order by", query)
+					s.Require().Contains(strings.ToLower(route.Query), "select distinct", query)
+				}
+			}
+		}
+	}
+}
+
+func (s *planTestSuite) TestUnknownCollationDistinctUnionKeepsWeightStringForSort() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, tableName := range []string{"user", "music"} {
+		vschema.Keyspaces["user"].Tables[tableName].Columns = nil
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select name from user union select name from music order by name", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	sort, ok := plan.Instructions.(*engine.MemorySort)
+	s.Require().True(ok)
+	s.Require().NotEmpty(sort.OrderBy)
+	s.Require().GreaterOrEqual(sort.OrderBy[0].WeightStringCol, 0,
+		"unknown field collation must still compare using the route's weight string")
+}
+
+func (s *planTestSuite) TestReferenceLeftJoinUnionKeepsReferenceInputSeparate() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select id from (select r.id from ref r left join user u on u.id = r.id union all select id from music) as t", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	concatenate, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "reference-preserving LEFT JOIN must remain a separate UNION ALL input")
+	s.Require().Len(concatenate.Sources, 2)
+	_, ok = concatenate.Sources[0].(*engine.Join)
+	s.Require().True(ok, "LEFT JOIN input must not be merged into the scatter route")
+}
+
+func (s *planTestSuite) TestMergedDualLeftJoinUnionInputStaysSingleShard() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select t.title from (select 'x' as title from dual) as t left join user u on u.id = 1 union all select 'y' from music", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	concatenate, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "merged dual LEFT JOIN input must not widen a later UNION ALL to scatter")
+	s.Require().Len(concatenate.Sources, 2)
+	first, ok := concatenate.Sources[0].(*engine.Route)
+	s.Require().True(ok)
+	s.Require().Equal(engine.EqualUnique, first.Opcode)
+}
+
+func (s *planTestSuite) TestSpecialUnionProvenanceSurvivesEveryMergeSite() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	queries := []string{
+		"select id from user where id = 1 union all select id from ref union all select id from user where id = null union all select id from user",
+		"select id from user where id = 1 union all select id from ref union all select id from user",
+		"select id from ref union all select id from user where id = 1 union all select id from user where id = 1 union all select id from user",
+		"select (select id from user where id = 1) from dual union all select id from user",
+		"select t.id from (select id from user where id = 1 union all select id from ref) t where t.id in (select u2.id from user u2 where u2.id = 1) or t.id = 5 union all select id from user",
+	}
+	for _, query := range queries {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			s.Require().IsType(&engine.Concatenate{}, plan.Instructions,
+				"special UNION ALL inputs must stay outside the later scatter route")
+		})
+	}
+}
+
+func (s *planTestSuite) TestReferenceLeftJoinCanMergeIntoRightRoute() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	for _, query := range []string{
+		"select r.col from ref r join (select id from user) u on u.id = r.col",
+		"with c as (select id from user where id = 1) select r.col from ref r join c on c.id = r.col",
+		"select ref.col from ref straight_join user on user.id = ref.col",
+		"select r.col from ref r left join (select id from user where id = 1) u on u.id = r.col",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			s.Require().IsType(&engine.Route{}, plan.Instructions,
+				"the reference-left join should route through the right side without a per-reference nested loop")
+		})
+	}
+}
+
+func (s *planTestSuite) TestReferenceOuterJoinDMLKeepsSingleRoutePlans() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	for _, query := range []string{
+		"update ref r left join user_metadata m on m.user_id = r.id set m.email = 'x'",
+		"update ref_with_source r left join user u on u.id = r.id set r.col = 1",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			update, ok := plan.Instructions.(*engine.Update)
+			s.Require().True(ok)
+			s.Require().Equal(engine.Scatter, update.Opcode)
+		})
+	}
+}
+
+func (s *planTestSuite) TestReferenceOuterJoinHonorsCrossKeyspaceReadPolicy() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["main"].PreventCrossKeyspaceReads = true
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+
+	plan, err := TestBuilder("select r.id from source_of_ref r left join user u on u.id = r.id", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	for _, route := range routes {
+		s.Require().Equal("user", route.Keyspace.Name)
+	}
+}
+
+// A bare reference copy cannot replace a derived input with a row limit.
+func (s *planTestSuite) TestReferenceCopyPreservesDerivedLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	plan, err := TestBuilder("select u.id from (select id from source_of_ref limit 1) dt left join user u on u.col = 5", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().Len(routes, 2, "reference-preserving join must remain split")
+	found := false
+	for _, route := range routes {
+		if strings.Contains(route.Query, "source_of_ref") {
+			found = true
+			s.Require().Contains(route.Query, "limit 1", "copy selection must preserve the derived limit")
+		}
+	}
+	s.Require().True(found)
+}
+
+// If a derived wrapper prevents copy selection, check the keyspaces actually read.
+func (s *planTestSuite) TestDerivedReferenceCopyHonorsCrossKeyspacePolicy() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["main"].PreventCrossKeyspaceReads = true
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	query := "select u.id from (select id from source_of_ref limit 1) dt left join user u on u.col = 5"
+	_, err = TestBuilder(query, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace JOIN")
+	plan, err := TestBuilder(strings.Replace(query, "select u.id", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ u.id", 1), vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	found := false
+	for _, route := range routePrimitives(plan.Instructions) {
+		if strings.Contains(route.Query, "source_of_ref") {
+			found = true
+			s.Require().Contains(route.Query, "limit 1")
+		}
+	}
+	s.Require().True(found)
+}
+
+func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select id from cte union all select id from music", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	_, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "merged recursive CTE with reference provenance must remain separate from a later scatter UNION ALL")
+}
+
+func (s *planTestSuite) TestRecursiveReferenceUnionDoesNotLeaveUnboundCTEBind() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+
+	plan, err := TestBuilder("with recursive c as (select id from ref union all select u.id from user u join c on u.id = c.id) select id from c union all select id from user", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	s.Require().False(hasUnboundCTEReference(plan.Instructions, false), "recursive CTE bind must be owned by the recursive term")
+	recurse := engine.Find(func(primitive engine.Primitive) bool {
+		_, ok := primitive.(*engine.RecurseCTE)
+		return ok
+	}, plan.Instructions)
+	s.Require().NotNil(recurse, "replicated seed must be evaluated once by VTGate")
+	s.Require().False(recurse.(*engine.RecurseCTE).Distinct)
+	s.Require().True(recurse.(*engine.RecurseCTE).ScaleWorkLimitBySeed)
+}
+
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
 func (s *planTestSuite) TestForeignKeyPlanning() {
 	env := vtenv.NewTestEnv()
@@ -888,4 +1565,184 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 			}
 		}
 	}
+}
+
+// DML joins can merge, but read-only subqueries inside the same statement must
+// still preserve reference and dual rows on the left of an outer join.
+func (s *planTestSuite) TestDMLSubqueryOuterJoinsPreserveRows() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+	for _, query := range []string{
+		"update user set col = (select count(*) from (select 1 as x from dual) d left join music m on m.col = 5) where id = 1",
+		"update user set col = (select count(*) from ref r left join music m on m.col = r.col) where id = 1",
+		"update user set col = (select count(*) from ref r left join music m on m.id = r.col) where id = 1",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		s.Require().NotNil(engine.Find(func(p engine.Primitive) bool {
+			join, ok := p.(*engine.Join)
+			return ok && join.Opcode == engine.LeftJoin
+		}, plan.Instructions), query)
+	}
+}
+
+// A refused merge of a replicated seed cannot fall back to VTGate DISTINCT
+// recursion, which does not deduplicate across levels and shards.
+func (s *planTestSuite) TestRecursiveDistinctRequiresSingleShard() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, seed := range []string{"select id from ref", "select 1 as id from dual"} {
+		query := "with recursive c as (" + seed + " union select u.id from user u join c on u.id = c.id) select id from c"
+		_, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().ErrorContains(err, "VT12001", query)
+		s.Require().ErrorContains(err, "recursive UNION DISTINCT", query)
+	}
+	for _, seed := range []string{"select id from ref", "select 1 as id from dual"} {
+		query := "with recursive c as (" + seed + " union select u.id from user u join c on u.id = 5) select id from c"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().Len(routes, 1, query)
+		s.Require().Equal(engine.EqualUnique, routes[0].Opcode, query)
+		widened, err := TestBuilder(query+" union all select id from user", vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		s.Require().IsType(&engine.Concatenate{}, widened.Instructions, "a merged reference-seeded DISTINCT CTE must not widen under a later UNION ALL")
+	}
+}
+
+// Rejecting unsafe replicated-seed merges must not reject existing recursive
+// DISTINCT plans over sharded tables or an unsharded seed in another keyspace.
+func (s *planTestSuite) TestRecursiveDistinctPreservesExistingPlans() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"with recursive c as (select id, manager_id from user where id = 5 union select u.id, u.manager_id from user u join c on u.id = c.manager_id) select * from c",
+		"with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+		"with recursive c as (select id from unsharded union select u.id from user u join c on u.id = c.id) select id from c",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		recurse := engine.Find(func(p engine.Primitive) bool {
+			_, ok := p.(*engine.RecurseCTE)
+			return ok
+		}, plan.Instructions)
+		s.Require().NotNil(recurse, query)
+		s.Require().True(recurse.(*engine.RecurseCTE).Distinct, query)
+		description := engine.PrimitiveToPlanDescription(recurse, nil)
+		s.Require().Equal(true, description.Other["Distinct"], query)
+		s.Require().Equal(false, description.Other["ScaleWorkLimitBySeed"], query)
+	}
+}
+
+// Recursive WHERE predicates must bind the current CTE row just like ON
+// predicates, without changing ordinary predicates on the recursive term table.
+func (s *planTestSuite) TestRecursiveWherePredicatesAreBound() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, seed := range []string{"select id as n, 1 as lvl from ref", "select 1 as n, 1 as lvl from dual", "select id as n, 1 as lvl from user"} {
+		query := "with recursive c as (" + seed + " union all select u.id, c.lvl + 1 from c join user u on u.col = c.n where c.lvl < 5 and u.id > 0) select n from c"
+		s.Run(seed, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			primitive := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.RecurseCTE); return ok }, plan.Instructions)
+			s.Require().NotNil(primitive)
+			recurse := primitive.(*engine.RecurseCTE)
+			s.Require().Contains(recurse.Vars, "c_lvl")
+			routes := routePrimitives(recurse.Term)
+			s.Require().NotEmpty(routes)
+			for _, route := range routes {
+				s.Require().Contains(route.Query, ":c_lvl < 5")
+				s.Require().Contains(route.Query, "u.id > 0")
+				stmt, err := env.Parser().Parse(route.Query)
+				s.Require().NoError(err)
+				s.Require().NoError(sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+					if col, ok := node.(*sqlparser.ColName); ok {
+						s.Require().NotEqual("c", col.Qualifier.Name.String(), route.Query)
+					}
+					return true, nil
+				}, stmt))
+			}
+		})
+	}
+}
+
+// Existing VTGate recursive plans keep a fixed work bound; newly split
+// reference and dual seeds get an allowance per seed row.
+func (s *planTestSuite) TestRecursiveWorkLimitPolicy() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, tc := range []struct {
+		seed  string
+		scale bool
+	}{
+		{"select id from ref", true},
+		{"select 1 as id from dual", true},
+		{"select id from unsharded", false},
+		{"select id from user", false},
+	} {
+		query := "with recursive c as (" + tc.seed + " union all select u.id from user u join c on u.col = c.id) select id from c"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		recurse := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.RecurseCTE); return ok }, plan.Instructions)
+		s.Require().NotNil(recurse, query)
+		s.Require().Equal(tc.scale, recurse.(*engine.RecurseCTE).ScaleWorkLimitBySeed, query)
+		description := engine.PrimitiveToPlanDescription(recurse, nil)
+		s.Require().Equal(false, description.Other["Distinct"], query)
+		s.Require().Equal(tc.scale, description.Other["ScaleWorkLimitBySeed"], query)
+	}
+}
+
+// Choose reference copies before seed projection planning and enforce the
+// policy on actual remaining keyspaces if recursion stays in VTGate.
+func (s *planTestSuite) TestRecursiveCTEReferenceCopiesAndReadPolicy() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["main"].PreventCrossKeyspaceReads = true
+	vschema.Keyspaces["user"].PreventCrossKeyspaceReads = true
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"with recursive c as (select id from source_of_ref union all select u.id from user u join c on u.col = c.id) select id from c",
+		"with recursive c as (select r.id as x from source_of_ref r union all select u.id from user u join c on u.col = c.x) select x from c",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().Equal("user", route.Keyspace.Name, query)
+		}
+		s.Require().Contains(routes[0].Query, "ref_with_source", query)
+	}
+	// An already-projected seed cannot be replaced by a bare alternate. Keep
+	// the projection and require an override for the actual cross-keyspace read.
+	derived := "with recursive c as (select x from (select id as x from source_of_ref where id = 42) t union all select u.id from user u join c on u.col = c.x) select x from c"
+	_, err = TestBuilder(derived, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace", derived)
+	derivedOverride := strings.Replace(derived, "select x from c", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ x from c", 1)
+	plan, err := TestBuilder(derivedOverride, vw, vw.CurrentDb())
+	s.Require().NoError(err, derivedOverride)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	s.Require().Contains(routes[0].Query, "= 42")
+	s.Require().Contains(routes[0].Query, " as x")
+	query := "with recursive c as (select id from unsharded union all select u.id from user u join c on u.col = c.id) select id from c"
+	_, err = TestBuilder(query, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace", query)
+	override := strings.Replace(query, "select id from c", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ id from c", 1)
+	_, err = TestBuilder(override, vw, vw.CurrentDb())
+	s.Require().NoError(err, override)
 }

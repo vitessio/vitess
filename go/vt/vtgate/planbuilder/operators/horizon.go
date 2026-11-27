@@ -119,6 +119,9 @@ func (h *Horizon) AddColumn(ctx *plancontext.PlanningContext, reuse bool, _ bool
 }
 
 func (h *Horizon) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
+	if _, isUnion := h.Query.(*sqlparser.Union); isUnion {
+		return h.Source.AddWSColumn(ctx, offset, underRoute)
+	}
 	cols := h.GetColumns(ctx)
 	if offset >= len(cols) {
 		panic(errNoNewColumns)

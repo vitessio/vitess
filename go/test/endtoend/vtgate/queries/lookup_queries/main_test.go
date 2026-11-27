@@ -107,9 +107,14 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"user", "lookup"}
+		tables := []string{"user", "lookup", "lookup_unique"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		utils.Exec(t, mcmp.MySQLConn, "delete from ref")
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("delete from ref", shardedKs, true)
+			require.NoError(t, err)
 		}
 	}
 
@@ -144,6 +149,28 @@ func TestLookupQueries(t *testing.T) {
 			mcmp.AssertMatches("select id from user where lookup_unique = 'not there'", "[]")
 			mcmp.AssertMatchesNoOrder("select id from user where lookup_unique in ('apa', 'bandar')", "[[INT64(1)] [INT64(2)]]")
 			mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
+		})
+	}
+}
+
+// The non-planable lookup resolves IN itself. A miss must still bind the list
+// for any-shard execution and return reference rows in either workload mode.
+func TestReferenceUnionLookupMissINValues(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", shardedKs, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			mcmp.AssertMatches("select id from ref union all select id from user where lookup_non_planable in ('not there', 'also missing')", "[[INT64(100)]]")
+			mcmp.AssertMatches("select id from ref union select id from user where lookup_non_planable in ('not there', 'also missing')", "[[INT64(100)]]")
+			mcmp.AssertMatches("select id from ref where id in (select id from (select id from ref union all select id from user where lookup_non_planable in ('not there', 'also missing')) x)", "[[INT64(100)]]")
+			mcmp.AssertMatches("select id from ref where id in (select id from (select id from ref union all select id from user where lookup_unique = 'not there') x)", "[[INT64(100)]]")
+			mcmp.AssertMatches("select id from user where lookup_non_planable in ('not there', 'also missing')", "[]")
 		})
 	}
 }
