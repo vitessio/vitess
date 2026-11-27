@@ -29,11 +29,13 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const rawCharsetQuery = "select * from test_table limit 1000"
@@ -284,4 +286,60 @@ func TestRawResultCharsetSessionSetup(t *testing.T) {
 	// no other connection
 	assert.Equal(t, rawAtStart+2, db.GetQueryCalledNum(rawSetup))
 	assert.Equal(t, plainAtStart, db.GetQueryCalledNum(plainSetup))
+}
+
+// TestRawResultCharsetUnimplementedCharset checks that a tablet that reads with
+// character_set_results = NULL refuses a result with a column in a character
+// set that Vitess does not implement: MySQL sends a gbk VARCHAR(10) with
+// 'Müller' as 4D A8 B9 6C 6C 65 72 with the collation 28, which neither the
+// tablet nor a caller could convert. A tablet without the flag gets the text
+// converted by MySQL and returns it, and so does a connection on which the
+// client set character_set_results itself.
+func TestRawResultCharsetUnimplementedCharset(t *testing.T) {
+	const query = "select g from gbk_table limit 1000"
+	gbkResult := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "g", Type: sqltypes.VarChar, Charset: 28, ColumnLength: 20}},
+		Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xA8\xB9ller"))}},
+	}
+	stream := func(tsv *TabletServer, ctx context.Context, reservedID int64) error {
+		return tsv.StreamExecute(ctx, nil, rawCharsetTarget, query, nil, 0, reservedID, allFields(), func(*sqltypes.Result) error {
+			return nil
+		})
+	}
+
+	t.Run("flag on", func(t *testing.T) {
+		db, tsv := setupRawCharsetTest(t, true)
+		db.AddQuery(query, gbkResult)
+		for _, ctx := range []context.Context{t.Context(), queryservice.ContextWithRawResultCharset(t.Context())} {
+			_, err := tsv.Execute(ctx, nil, rawCharsetTarget, query, nil, 0, 0, allFields())
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+			require.ErrorContains(t, err, "cannot convert the text of column 'g': Vitess does not implement the character set gbk")
+
+			err = stream(tsv, ctx, 0)
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+			require.ErrorContains(t, err, "Vitess does not implement the character set gbk")
+		}
+
+		db.AddQuery("set names 'latin1'", &sqltypes.Result{})
+		state, _, err := tsv.ReserveExecute(t.Context(), nil, rawCharsetTarget, nil, "set names latin1", nil, 0, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, tsv.Release(t.Context(), rawCharsetTarget, 0, state.ReservedID))
+		})
+		got, err := tsv.Execute(t.Context(), nil, rawCharsetTarget, query, nil, 0, state.ReservedID, allFields())
+		require.NoError(t, err)
+		assert.Equal(t, gbkResult, got)
+		assert.NoError(t, stream(tsv, t.Context(), state.ReservedID))
+	})
+
+	t.Run("flag off", func(t *testing.T) {
+		db, tsv := setupRawCharsetTest(t, false)
+		db.AddQuery(query, gbkResult)
+		got, err := tsv.Execute(t.Context(), nil, rawCharsetTarget, query, nil, 0, 0, allFields())
+		require.NoError(t, err)
+		assert.Equal(t, gbkResult, got)
+		assert.NoError(t, stream(tsv, t.Context(), 0))
+	})
 }

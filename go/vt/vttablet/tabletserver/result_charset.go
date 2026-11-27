@@ -47,6 +47,11 @@ import (
 // The conversion happens per caller, after the consolidator has handed out a
 // result that it shares, and never changes the result it is given.
 //
+// A result with a column whose text Vitess cannot convert, because it does
+// not implement the character set of the column, fails with an UNIMPLEMENTED
+// error (see resultcharset.CheckFields): a gbk column arrives in gbk, and no
+// caller could return it in the character set that its client asked for.
+//
 // A reserved connection on which the client changed character_set_results
 // with SET (see StatefulConnection.resultCharsetSet) sends results the way the
 // client asked for them, and its results are returned as MySQL sent them.
@@ -90,16 +95,19 @@ func (tsv *TabletServer) initConnectionCollation() {
 // convertResult returns the result that a query of a request with ctx and
 // options read from MySQL, for its caller. asSent is true for a connection
 // that sends results the way its client asked for them.
-func (tsv *TabletServer) convertResult(ctx context.Context, options *querypb.ExecuteOptions, asSent bool, qr *sqltypes.Result) *sqltypes.Result {
+func (tsv *TabletServer) convertResult(ctx context.Context, options *querypb.ExecuteOptions, asSent bool, qr *sqltypes.Result) (*sqltypes.Result, error) {
 	if !tsv.config.RawResultCharset || asSent || qr == nil {
-		return qr
+		return qr, nil
+	}
+	if err := resultcharset.CheckFields(qr.Fields); err != nil {
+		return nil, err
 	}
 	conn := tsv.connectionCollation()
 	qr = resultcharset.ConnectionLengths(qr.Fields, conn).Result(qr)
 	if tsv.convertsResult(ctx, options) {
 		qr = resultcharset.ToConnection(qr.Fields, conn, true).Result(qr)
 	}
-	return qr
+	return qr, nil
 }
 
 // convertStream returns the callback for the packets of a streamed result
@@ -108,9 +116,20 @@ func (tsv *TabletServer) convertResult(ctx context.Context, options *querypb.Exe
 // tablet that reads with character_set_results = NULL, since the conversion
 // needs the collations (see QueryExecutor.streamIncludedFields). asSent is
 // called when the fields arrive.
-func (tsv *TabletServer) convertStream(ctx context.Context, options *querypb.ExecuteOptions, asSent func() bool, callback func(*sqltypes.Result) error) func(*sqltypes.Result) error {
+//
+// The callback fails a result that convertResult refuses. The connection
+// wraps the error of a callback into one without its code, and refused
+// returns the error of the stream with that error in its place.
+func (tsv *TabletServer) convertStream(ctx context.Context, options *querypb.ExecuteOptions, asSent func() bool, callback func(*sqltypes.Result) error) (converted func(*sqltypes.Result) error, refused func(error) error) {
+	var refusal error
+	refused = func(err error) error {
+		if err != nil && refusal != nil {
+			return refusal
+		}
+		return err
+	}
 	if !tsv.config.RawResultCharset {
-		return callback
+		return callback, refused
 	}
 	conn := tsv.connectionCollation()
 	convert := tsv.convertsResult(ctx, options)
@@ -133,6 +152,11 @@ func (tsv *TabletServer) convertStream(ctx context.Context, options *querypb.Exe
 		if qr == nil {
 			return callback(qr)
 		}
+		if len(qr.Fields) > 0 && !asSent() {
+			if refusal = resultcharset.CheckFields(qr.Fields); refusal != nil {
+				return refusal
+			}
+		}
 		return callback(text.Result(lengths.Result(qr)).StripMetadata(included))
-	}
+	}, refused
 }

@@ -1069,7 +1069,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			} else {
 				// before the fields are stripped of the collations that
 				// the conversion needs
-				result = tsv.convertResult(ctx, options, qre.resultCharsetSet, result)
+				if result, err = tsv.convertResult(ctx, options, qre.resultCharsetSet, result); err != nil {
+					return err
+				}
 				result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 			}
 
@@ -1167,8 +1169,9 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				targetTabletType: target.GetTabletType(),
 				setting:          connSetting,
 			}
-			callback = tsv.convertStream(ctx, options, func() bool { return qre.resultCharsetSet }, callback)
-			return qre.Stream(callback)
+			var refused func(error) error
+			callback, refused = tsv.convertStream(ctx, options, func() bool { return qre.resultCharsetSet }, callback)
+			return refused(qre.Stream(callback))
 		},
 	)
 }
@@ -1354,7 +1357,7 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 			// connections of its own in the connection character set: the
 			// conversion leaves them as they are, and is here so that every
 			// method that returns rows goes through it.
-			callback = tsv.convertStream(ctx, nil, func() bool { return true }, callback)
+			callback, _ = tsv.convertStream(ctx, nil, func() bool { return true }, callback)
 			return qre.MessageStream(callback)
 		},
 	)
