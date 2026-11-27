@@ -135,7 +135,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 			}
 			return bit
 		}
-		f, _ := fastparse.ParseFloat64(e.string())
+		f, _ := fastparse.ParseFloat64(e.numericText())
 		return &evalFloat{f: f}
 	case *evalJSON:
 		switch e.Type() {
@@ -201,7 +201,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 			}
 			return f, true
 		}
-		val, err := fastparse.ParseFloat64(e.string())
+		val, err := fastparse.ParseFloat64(e.numericText())
 		return &evalFloat{f: val}, err == nil
 	case *evalJSON:
 		switch e.Type() {
@@ -251,7 +251,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 			}
 			return bit.toDecimal(m, d)
 		}
-		dec, _ := decimal.NewFromString(e.string())
+		dec, _ := decimal.NewFromString(e.numericText())
 		return newEvalDecimal(dec, m, d)
 	case *evalJSON:
 		switch e.Type() {
@@ -321,7 +321,7 @@ func evalToInt64(e eval) *evalInt64 {
 			}
 			return bit
 		}
-		i, _ := fastparse.ParseInt64(e.string(), 10)
+		i, _ := fastparse.ParseInt64(e.numericText(), 10)
 		return newEvalInt64(i)
 	case *evalJSON:
 		switch e.Type() {
