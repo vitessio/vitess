@@ -17,6 +17,8 @@ limitations under the License.
 package colldata
 
 import (
+	"unicode/utf8"
+
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
@@ -42,6 +44,35 @@ func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 		return unicaseChar.Sort
 	}
 	return codepoint
+}
+
+// ChangeCaseUTF8mb4 appends the utf8mb4 text in src to dst with its case
+// changed through MySQL's default Unicode case table, which MySQL's
+// utf8mb4_bin uses. Code points outside the table are unchanged, and the
+// text ends at the first invalid sequence.
+func ChangeCaseUTF8mb4(dst, src []byte, upcase bool) []byte {
+	info := unicaseInfo_default
+	var cs charset.Charset_utf8mb4
+
+	for len(src) > 0 {
+		r, width, ok := cs.DecodeRune(src)
+		if !ok {
+			break
+		}
+		src = src[width:]
+
+		if r <= info.MaxChar {
+			if page := info.Page[int(r)>>8]; page != nil {
+				if upcase {
+					r = (*page)[int(r)&0xFF].ToUpper
+				} else {
+					r = (*page)[int(r)&0xFF].ToLower
+				}
+			}
+		}
+		dst = utf8.AppendRune(dst, r)
+	}
+	return dst
 }
 
 var plane00 = []UnicaseChar{
