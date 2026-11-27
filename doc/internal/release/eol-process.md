@@ -11,5 +11,7 @@ To properly deprecate a major of Vitess follow the following steps:
   > - Delete the corresponding label for the EOL version, we do not want to motivate anymore backport to the EOL release branch.
 - **Update the Golang Upgrade GitHub Action Workflow**
   > - The `Update Golang Version` workflow must be updated to stop upgrading the version we are EOLing.
+- **Update the Dependabot configuration**
+  > - The entries for the EOL release branch (`target-branch`) must be removed from `.github/dependabot.yml` on `main`.
 - **Make proper announcement on Slack**
   > - Notify the community of this deprecation. 

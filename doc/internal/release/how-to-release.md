@@ -93,6 +93,10 @@ That includes:
   > - After doing Code Freeze, we can create a new GitHub Milestone that matches the next development cycle.
   >  - **If we release a major version (v18.0.0-rc1):** we must create a `v19.0.0` Milestone.
   >  - **If we release a patch release (v17.0.3):** we must create a `v17.0.4` Milestone.
+- **Keep the new release branch up to date**
+  > - Only applies when we release an RC1 and create a new release branch.
+  > - On `main`, add the new release branch to the matrix of the `Update Golang Version` workflow (`.github/workflows/update_golang_version.yml`).
+  > - On `main`, add entries for the new release branch (`target-branch`) to `.github/dependabot.yml`, following the existing release branch entries.
 
 -----
 
