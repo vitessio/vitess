@@ -124,6 +124,11 @@ type Options[T any] struct {
 	// more fine-grained control over value retrieval and unmarshalling, callers
 	// should provide their own function.
 	//
+	// If Dynamic is set, GetFunc runs under a read lock shared by every
+	// dynamic Value, so it must not call another dynamic Value's Get() or
+	// anything else that reads the dynamic registry. If a writer is waiting,
+	// that second read lock blocks forever, and so do all dynamic reads.
+	//
 	// See GetFuncForType for further details.
 	GetFunc func(v *viper.Viper) func(key string) T
 }
