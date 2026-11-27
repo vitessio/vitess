@@ -182,6 +182,14 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 	case *AssignmentExpr:
 		nz.err = vterrors.VT12001("Assignment expression")
 		return false
+	case *SelectInto:
+		// INTO assigns the variables, so they must not be rewritten to bind variables.
+		// VarList also holds the bare names of local variables, which only exist in
+		// the body of a stored routine, such as INTO val.
+		if len(node.VarList) > 0 {
+			nz.err = vterrors.VT12001("INTO variables")
+			return false
+		}
 	case *DerivedTable:
 		nz.inDerived++
 	case *Union:
