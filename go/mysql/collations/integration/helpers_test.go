@@ -114,8 +114,17 @@ func verifyTranscoding(t *testing.T, local colldata.Collation, remote *remote.Co
 	return transLocal
 }
 
+// sqlWeightString returns the weight string of text as WEIGHT_STRING() in
+// VTGate returns it, see colldata.MySQLWeightStringCollation.
+func sqlWeightString(local colldata.Collation, text []byte) []byte {
+	if mysqlColl, ok := local.(colldata.MySQLWeightStringCollation); ok {
+		return mysqlColl.MySQLWeightString(nil, text, 0)
+	}
+	return local.WeightString(nil, text, 0)
+}
+
 func verifyWeightString(t *testing.T, local colldata.Collation, remote *remote.Collation, text []byte) {
-	localResult := local.WeightString(nil, text, 0)
+	localResult := sqlWeightString(local, text)
 	remoteResult := remote.WeightString(nil, text, 0)
 
 	if err := remote.LastError(); err != nil {

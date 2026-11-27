@@ -3937,12 +3937,13 @@ var contractor_utf8mb4_zh_0900_as_cs_weights = [...]uint16{0xbe27, 0x0020, 0x000
 
 var collationsById = [...]Collation{
 	0x1: &Collation_chinese_ci{
-		id:      0x1,
-		name:    "big5_chinese_ci",
-		sort:    &sortorder_big5_chinese_ci,
-		charset: charset.Charset_big5{},
-		charLen: charLenBig5,
-		order:   big5Code,
+		id:          0x1,
+		name:        "big5_chinese_ci",
+		sort:        &sortorder_big5_chinese_ci,
+		charset:     charset.Charset_big5{},
+		charLen:     charLenBig5,
+		order:       big5Code,
+		mysqlWeight: big5StrokeWeight,
 	},
 	0x2: &Collation_latin2_czech_cs{
 		id:   0x2,

@@ -662,7 +662,7 @@ VTGate sorts, groups and deduplicates the rows of `utf8mb3_tolower_ci` and `utf8
 
 Where these collations differ from MySQL:
 
-- `big5_chinese_ci` orders two-byte characters by their bytes, as MySQL does in comparisons, `GROUP BY`, `DISTINCT`, unique keys and an `ORDER BY` that reads an index. MySQL's `WEIGHT_STRING()` and an `ORDER BY` without an index sort them by their number of strokes instead ([MySQL bug #65899](https://bugs.mysql.com/bug.php?id=65899)), so a `WEIGHT_STRING()` that VTGate evaluates differs from MySQL's.
+- `big5_chinese_ci` orders two-byte characters by their bytes, as MySQL does in comparisons, `GROUP BY`, `DISTINCT`, unique keys and an `ORDER BY` that reads an index. MySQL's `WEIGHT_STRING()` and an `ORDER BY` without an index sort them by their number of strokes instead ([MySQL bug #65899](https://bugs.mysql.com/bug.php?id=65899)). A `WEIGHT_STRING()` that VTGate evaluates returns what MySQL returns.
 - `big5_chinese_ci` and `gb18030_chinese_ci` columns sorted across shards: VTGate merges the rows of the shards by MySQL's weight strings, which in these two collations do not follow MySQL's comparison: in `gb18030_chinese_ci`, `'z' < 'ı'` is true, but the weight string of `'z'` is the greater one. An `ORDER BY` that a shard answers by reading an index can therefore come back out of order.
 - In `gb18030_chinese_ci`, where a two-byte and a four-byte character with the same weight are followed by more text, VTGate follows the order of `WEIGHT_STRING()`, because MySQL's comparison has no consistent order there.
 - VTGate does not evaluate `UPPER()` and `LOWER()` for text in `gbk`, `big5` or `gb18030`, as for the other multi-byte character sets such as `sjis`.

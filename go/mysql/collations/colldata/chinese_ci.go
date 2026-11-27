@@ -40,7 +40,8 @@ import (
 // strokes as a bug (https://bugs.mysql.com/bug.php?id=65899), and a weight
 // string that does not follow the comparison would give rows that are not
 // equal the same hash, so Vitess sorts big5_chinese_ci by the bytes of its
-// characters everywhere.
+// characters. Only the SQL function WEIGHT_STRING() returns the weight string
+// of MySQL, see MySQLWeightString.
 type Collation_chinese_ci struct {
 	id      collations.ID
 	name    string
@@ -55,6 +56,11 @@ type Collation_chinese_ci struct {
 	// order returns the order value of a two-byte character, which
 	// Collate compares and WeightString and Hash write.
 	order func(code uint16) uint16
+
+	// mysqlWeight returns the weight of a two-byte character in the
+	// WEIGHT_STRING() of MySQL where that is not its order value, and is
+	// nil where it is, see MySQLWeightString.
+	mysqlWeight func(code uint16) uint16
 }
 
 func (c *Collation_chinese_ci) ID() collations.ID {
@@ -103,8 +109,13 @@ func (c *Collation_chinese_ci) Collate(left, right []byte, isPrefix bool) int {
 // next returns the weight of the first character of src and its length in
 // bytes.
 func (c *Collation_chinese_ci) next(src []byte) (weight uint16, width int) {
+	return c.nextBy(src, c.order)
+}
+
+// nextBy is next with the weight of a two-byte character from order.
+func (c *Collation_chinese_ci) nextBy(src []byte, order func(code uint16) uint16) (weight uint16, width int) {
 	if c.charLen(src) == 2 {
-		return c.order(uint16(src[0])<<8 | uint16(src[1])), 2
+		return order(uint16(src[0])<<8 | uint16(src[1])), 2
 	}
 	return uint16(c.sort[src[0]]), 1
 }
@@ -112,12 +123,26 @@ func (c *Collation_chinese_ci) next(src []byte) (weight uint16, width int) {
 // WeightString appends one byte for a single byte and two bytes for a
 // two-byte character: in gbk_chinese_ci, WEIGHT_STRING('a中') is 41 D3 21.
 func (c *Collation_chinese_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
+	return c.weightString(dst, src, numCodepoints, c.order)
+}
+
+// MySQLWeightString appends the weight string that MySQL's WEIGHT_STRING()
+// returns. It is WeightString, except in big5_chinese_ci, where MySQL writes
+// the stroke weight of a two-byte character, see big5StrokeWeight.
+func (c *Collation_chinese_ci) MySQLWeightString(dst, src []byte, numCodepoints int) []byte {
+	if c.mysqlWeight == nil {
+		return c.WeightString(dst, src, numCodepoints)
+	}
+	return c.weightString(dst, src, numCodepoints, c.mysqlWeight)
+}
+
+func (c *Collation_chinese_ci) weightString(dst, src []byte, numCodepoints int, order func(code uint16) uint16) []byte {
 	left := numCodepoints
 	if numCodepoints == 0 || numCodepoints == PadToMax {
 		left = math.MaxInt32
 	}
 	for len(src) > 0 && left > 0 {
-		weight, width := c.next(src)
+		weight, width := c.nextBy(src, order)
 		if width == 2 {
 			dst = append(dst, byte(weight>>8))
 		}

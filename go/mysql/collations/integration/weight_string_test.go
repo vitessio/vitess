@@ -46,14 +46,6 @@ func TestFastIterators(t *testing.T) {
 	})
 }
 
-// weightStringDiffersFromMySQL has the collations whose weight strings
-// follow their comparison where MySQL's WEIGHT_STRING() does not. MySQL sorts
-// the two-byte characters of big5_chinese_ci by strokes in a weight string
-// and by their bytes in a comparison, see colldata.Collation_chinese_ci.
-var weightStringDiffersFromMySQL = map[string]struct{}{
-	"big5_chinese_ci": {},
-}
-
 func TestWeightStringsComprehensive(t *testing.T) {
 	type collationsForCharset struct {
 		charset charset.Charset
@@ -99,9 +91,6 @@ func TestWeightStringsComprehensive(t *testing.T) {
 			text := []byte(string([]rune(string(goldencase.Text))[:64]))
 			if trans := verifyTranscoding(t, c4cs.locals[0], c4cs.remotes[0], text); trans != nil {
 				for i := range c4cs.locals {
-					if _, differs := weightStringDiffersFromMySQL[c4cs.locals[i].Name()]; differs {
-						continue
-					}
 					verifyWeightString(t, c4cs.locals[i], c4cs.remotes[i], trans)
 					tested++
 				}

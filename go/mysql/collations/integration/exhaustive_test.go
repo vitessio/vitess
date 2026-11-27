@@ -40,9 +40,9 @@ const exhaustiveBatch = 1000
 // MySQL, for every character the tables have: every valid two-byte character
 // of gbk, of big5 and of the two-byte range of gb18030, a sample of the
 // four-byte characters of gb18030, and every string of one and of two bytes
-// of the 8-bit collations. big5_chinese_ci is not here: its weight strings
-// follow its comparison and not WEIGHT_STRING(), see
-// TestBig5ChineseCIIndexOrder.
+// of the 8-bit collations. The weight strings are those of the SQL function,
+// see sqlWeightString: in big5_chinese_ci, the ones that VTGate sorts by
+// follow its comparison instead, see TestBig5ChineseCIIndexOrder.
 func TestExhaustiveWeightStrings(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
@@ -52,6 +52,7 @@ func TestExhaustiveWeightStrings(t *testing.T) {
 		inputs    func(coll colldata.Collation) [][]byte
 	}{
 		{"gbk_chinese_ci", gbkCharacters},
+		{"big5_chinese_ci", big5Characters},
 		{"gbk_bin", gbkCharacters},
 		{"big5_bin", big5Characters},
 		{"gb18030_chinese_ci", gb18030Characters},
@@ -68,7 +69,7 @@ func TestExhaustiveWeightStrings(t *testing.T) {
 			for batch := range slices.Chunk(inputs, exhaustiveBatch) {
 				remote := remoteWeightStrings(t, conn, coll, batch)
 				for i, input := range batch {
-					local := strings.ToUpper(hex.EncodeToString(coll.WeightString(nil, input, 0)))
+					local := strings.ToUpper(hex.EncodeToString(sqlWeightString(coll, input)))
 					require.Equal(t, remote[i], local, "WEIGHT_STRING(x'%X' COLLATE %s)", input, tc.collation)
 				}
 			}

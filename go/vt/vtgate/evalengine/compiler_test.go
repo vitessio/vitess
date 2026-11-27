@@ -607,6 +607,18 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `VARBINARY("\x1c\xe5\x1d\xdd\x1d\xdd")`,
 		},
 		{
+			// MySQL 8.4.13 gives "乙" (A4 41) the weight of the first
+			// character with one stroke, "一" (A4 40), in big5_chinese_ci,
+			// although Vitess sorts big5_chinese_ci by the bytes of a
+			// character.
+			expression: `WEIGHT_STRING(CONVERT('乙' USING big5) COLLATE big5_chinese_ci)`,
+			result:     `VARBINARY("\xa4@")`,
+		},
+		{
+			expression: `WEIGHT_STRING(CONVERT('乙' USING big5) COLLATE big5_bin)`,
+			result:     `VARBINARY("\xa4A")`,
+		},
+		{
 			expression: `CAST(time '5 10:34:58' AS DATETIME)`,
 			result:     `DATETIME("2023-10-29 10:34:58")`,
 		},

@@ -150,6 +150,15 @@ type WildcardPattern interface {
 const PadToMax = math.MaxInt32
 
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
+// MySQLWeightStringCollation is a collation whose weight string in MySQL's
+// WEIGHT_STRING() does not follow its comparison. WeightString follows the
+// comparison, as sorting and hashing need, and MySQLWeightString returns what
+// MySQL returns, for the SQL function WEIGHT_STRING().
+type MySQLWeightStringCollation interface {
+	Collation
+	MySQLWeightString(dst, src []byte, numCodepoints int) []byte
+}
+
 type CaseAwareCollation interface {
 	Collation
 	ToUpper(dst []byte, src []byte) []byte

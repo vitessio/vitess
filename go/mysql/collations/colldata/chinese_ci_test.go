@@ -19,6 +19,7 @@ package colldata
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -183,5 +184,45 @@ func TestBig5ChineseCIFollowsComparison(t *testing.T) {
 		assert.Equal(t, tc.cmp, sign(coll.Collate(left, right, false)), "Collate(%q, %q)", tc.left, tc.right)
 		assert.Equal(t, tc.cmp, sign(bytes.Compare(coll.WeightString(nil, left, 0), coll.WeightString(nil, right, 0))), "WeightString(%q) vs WeightString(%q)", tc.left, tc.right)
 		assert.Equal(t, tc.cmp == 0, hash(left) == hash(right), "Hash(%q) == Hash(%q)", tc.left, tc.right)
+	}
+}
+
+// TestBig5ChineseCIMySQLWeightString checks MySQLWeightString against
+// WEIGHT_STRING() on MySQL 8.4.13 and 8.0.46, which writes the first big5
+// character with the same number of strokes for a two-byte character in
+// big5_chinese_ci, and the bytes in gbk_chinese_ci's order otherwise.
+func TestBig5ChineseCIMySQLWeightString(t *testing.T) {
+	testcases := []struct {
+		collation string
+		weights   map[string]string
+	}{
+		{
+			collation: "big5_chinese_ci",
+			weights: map[string]string{
+				// "一" and "乙" have one stroke.
+				"一":      "A440",
+				"乙":      "A440",
+				"a中":     "41A4A1",
+				"aBc ａＡ": "41424320A140A140",
+			},
+		},
+		{
+			collation: "gbk_chinese_ci",
+			weights: map[string]string{
+				"a中": "41D321",
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.collation, func(t *testing.T) {
+			coll := testcollation(t, tc.collation)
+			mysqlColl, ok := coll.(MySQLWeightStringCollation)
+			require.True(t, ok)
+			for input, weights := range tc.weights {
+				converted, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(input))
+				require.NoError(t, err)
+				assert.Equal(t, weights, fmt.Sprintf("%X", mysqlColl.MySQLWeightString(nil, converted, 0)), "MySQLWeightString(%q)", input)
+			}
+		})
 	}
 }

@@ -427,6 +427,7 @@ func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
 	case "big5":
 		g.P("charLen: charLenBig5,")
 		g.P("order: big5Code,")
+		g.P("mysqlWeight: big5StrokeWeight,")
 	default:
 		g.Fail("no order for " + meta.Charset)
 	}

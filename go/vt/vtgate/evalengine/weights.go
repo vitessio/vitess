@@ -173,6 +173,9 @@ func evalWeightString(dst []byte, e eval, length, precision int) ([]byte, bool, 
 		if length != 0 {
 			b = charset.Slice(coll.Charset(), b, 0, length)
 		}
+		if mysqlColl, ok := coll.(colldata.MySQLWeightStringCollation); ok {
+			return mysqlColl.MySQLWeightString(dst, b, length), false, nil
+		}
 		return coll.WeightString(dst, b, length), false, nil
 	case *evalTemporal:
 		return e.dt.WeightString(dst), true, nil
