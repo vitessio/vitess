@@ -1639,7 +1639,12 @@ func (asm *assembler) Fn_COS() {
 func (asm *assembler) Fn_COT() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = 1.0 / math.Tan(f.f)
+		r := 1.0 / math.Tan(f.f)
+		if !isFinite(r) {
+			env.vm.err = doubleOutOfRangeError("cot", f.f)
+			return 1
+		}
+		f.f = r
 		return 1
 	}, "FN COT FLOAT64(SP-1)")
 }
@@ -1663,7 +1668,12 @@ func (asm *assembler) Fn_TAN() {
 func (asm *assembler) Fn_DEGREES() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = f.f * (180 / math.Pi)
+		r := f.f * (180 / math.Pi)
+		if !isFinite(r) {
+			env.vm.err = doubleOutOfRangeError("degrees", f.f)
+			return 1
+		}
+		f.f = r
 		return 1
 	}, "FN DEGREES FLOAT64(SP-1)")
 }
@@ -1679,10 +1689,12 @@ func (asm *assembler) Fn_RADIANS() {
 func (asm *assembler) Fn_EXP() {
 	asm.emit(func(env *ExpressionEnv) int {
 		f := env.vm.stack[env.vm.sp-1].(*evalFloat)
-		f.f = math.Exp(f.f)
-		if !isFinite(f.f) {
-			env.vm.stack[env.vm.sp-1] = nil
+		r := math.Exp(f.f)
+		if !isFinite(r) {
+			env.vm.err = doubleOutOfRangeError("exp", f.f)
+			return 1
 		}
+		f.f = r
 		return 1
 	}, "FN EXP FLOAT64(SP-1)")
 }
@@ -1744,10 +1756,12 @@ func (asm *assembler) Fn_POW() {
 		f1 := env.vm.stack[env.vm.sp-2].(*evalFloat)
 		f2 := env.vm.stack[env.vm.sp-1].(*evalFloat)
 
-		f1.f = math.Pow(f1.f, f2.f)
-		if !isFinite(f1.f) {
-			env.vm.stack[env.vm.sp-2] = nil
+		r := math.Pow(f1.f, f2.f)
+		if !isFinite(r) {
+			env.vm.err = doubleOutOfRangeError("pow", f1.f, f2.f)
+			return 1
 		}
+		f1.f = r
 		env.vm.sp--
 		return 1
 	}, "FN POW FLOAT64(SP-1)")
