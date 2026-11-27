@@ -23,6 +23,13 @@ if [[ -n "$JUNIT_OUTPUT" ]]; then
 	GOTESTSUM_ARGS+=("--junitfile" "$JUNIT_OUTPUT")
 fi
 
+# The raw go test output keeps what gotestsum doesn't print: when a package
+# fails before any test runs (in TestMain) and its rerun then passes, the
+# console output and the JUnit report have nothing from that package.
+if [[ -n "$JSON_OUTPUT" ]]; then
+	GOTESTSUM_ARGS+=("--jsonfile" "$JSON_OUTPUT")
+fi
+
 # Compile the tests with the same CGO_ENABLED=0 and -trimpath that "make build"
 # uses for the binaries. Both are part of Go's build cache key, so the tests
 # then reuse the packages "make build" already compiled instead of compiling

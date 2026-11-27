@@ -217,6 +217,17 @@ jobs:
         source build.env
         go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
+    # When a package fails in TestMain and its rerun passes, the CI log has
+    # nothing from that package; the raw go test output keeps it.
+    - name: Upload the raw test output
+      if: failure()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: test-output-${{ strategy.job-index }}
+        path: _test/json/
+        if-no-files-found: ignore
+        retention-days: 14
+
   # The required status check is the name the single job had, so this job
   # keeps it. It passes only when every version mix passed, or when they were
   # skipped because nothing relevant changed.
