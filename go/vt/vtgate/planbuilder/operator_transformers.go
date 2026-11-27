@@ -575,7 +575,6 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, h
 	}
 	if hints != nil {
 		e.ScatterErrorsAsWarnings = hints.scatterErrorsAsWarnings
-		e.QueryTimeout = hints.queryTimeout
 	}
 	return e, nil
 }
@@ -596,7 +595,6 @@ func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *e
 type queryHints struct {
 	scatterErrorsAsWarnings,
 	multiShardAutocommit bool
-	queryTimeout int
 }
 
 func getHints(cmt *sqlparser.ParsedComments) *queryHints {
@@ -605,12 +603,10 @@ func getHints(cmt *sqlparser.ParsedComments) *queryHints {
 	}
 	directives := cmt.Directives()
 	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-	timeout := queryTimeout(directives)
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 	return &queryHints{
 		scatterErrorsAsWarnings: scatterAsWarns,
 		multiShardAutocommit:    multiShardAutoCommit,
-		queryTimeout:            timeout,
 	}
 }
 
@@ -694,7 +690,6 @@ func buildInsertPrimitive(
 	}
 	if hints != nil {
 		ic.MultiShardAutocommit = hints.multiShardAutocommit
-		ic.QueryTimeout = hints.queryTimeout
 	}
 
 	eins := &engine.Insert{
@@ -850,7 +845,6 @@ func createDMLPrimitive(ctx *plancontext.PlanningContext, rb *operators.Route, h
 
 	if hints != nil {
 		edml.MultiShardAutocommit = hints.multiShardAutocommit
-		edml.QueryTimeout = hints.queryTimeout
 	}
 	return edml
 }

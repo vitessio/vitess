@@ -96,7 +96,7 @@
     "skip_e2e": true
   },
   {
-    "comment": "select with timeout directive sets QueryTimeout in the route",
+    "comment": "select with timeout directive does not put the timeout in the plan",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
     "plan": {
       "Type": "Scatter",
@@ -110,8 +110,7 @@
           "Sharded": true
         },
         "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`",
-        "QueryTimeout": 1000
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`"
       },
       "TablesUsed": [
         "user.user"
@@ -119,7 +118,7 @@
     }
   },
   {
-    "comment": "select aggregation with timeout directive sets QueryTimeout in the route",
+    "comment": "select aggregation with timeout directive does not put the timeout in the plan",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
     "plan": {
       "Type": "Complex",
@@ -138,8 +137,7 @@
               "Sharded": true
             },
             "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user` where 1 != 1",
-            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
-            "QueryTimeout": 1000
+            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`"
           }
         ]
       },
@@ -149,7 +147,7 @@
     }
   },
   {
-    "comment": "select limit with timeout directive sets QueryTimeout in the route",
+    "comment": "select limit with timeout directive does not put the timeout in the plan",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10",
     "plan": {
       "Type": "Scatter",
@@ -167,8 +165,7 @@
               "Sharded": true
             },
             "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` where 1 != 1",
-            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit 10",
-            "QueryTimeout": 1000
+            "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit 10"
           }
         ]
       },
@@ -178,7 +175,7 @@
     }
   },
   {
-    "comment": "select limit with timeout directive sets QueryTimeout in the route",
+    "comment": "select limit with timeout directive does not put the timeout in the plan",
     "query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from main.unsharded limit 10",
     "plan": {
       "Type": "Passthrough",
@@ -192,8 +189,7 @@
           "Sharded": false
         },
         "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10",
-        "QueryTimeout": 1000
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded limit 10"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -2060,8 +2056,7 @@
           "Sharded": false
         },
         "FieldQuery": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2 where 1 != 1",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
-        "QueryTimeout": 1000
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2"
       },
       "TablesUsed": [
         "main.unsharded"

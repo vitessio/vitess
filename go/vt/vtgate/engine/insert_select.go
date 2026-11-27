@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -101,12 +100,6 @@ func (ins *InsertSelect) TryStreamExecute(ctx context.Context, vcursor VCursor, 
 		}
 		return callback(res)
 	}
-	if ins.QueryTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
-
 	sharded := ins.Keyspace.Sharded
 	output := &sqltypes.Result{}
 	err := ins.execSelectStreaming(ctx, vcursor, bindVars, func(irr insertRowsResult) error {
@@ -348,7 +341,6 @@ func (ins *InsertSelect) description() PrimitiveDescription {
 func (ic *InsertCommon) commonDesc() map[string]any {
 	other := map[string]any{
 		"MultiShardAutocommit": ic.MultiShardAutocommit,
-		"QueryTimeout":         ic.QueryTimeout,
 		"InsertIgnore":         ic.Ignore,
 		"InputAsNonStreaming":  ic.ForceNonStreaming,
 		"NoAutoCommit":         ic.PreventAutoCommit,
