@@ -54,6 +54,7 @@ type sizegen struct {
 	sizes      types.Sizes
 	codegen    map[string]*codeFile
 	known      map[*types.Named]*typeState
+	shared     map[string]bool
 }
 
 type codeFlag uint32
@@ -80,8 +81,13 @@ type typeState struct {
 	pod       bool // struct with only primitives
 }
 
-func newSizegen(mod *packages.Module, sizes types.Sizes) *sizegen {
+func newSizegen(mod *packages.Module, sizes types.Sizes, shared []string) *sizegen {
+	sharedTypes := make(map[string]bool, len(shared))
+	for _, name := range shared {
+		sharedTypes[name] = true
+	}
 	return &sizegen{
+		shared:     sharedTypes,
 		DebugTypes: true,
 		mod:        mod,
 		sizes:      sizes,
@@ -507,6 +513,12 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 		}), codeWithUnsafe | keyFlag | valFlag
 
 	case *types.Pointer:
+		if named, ok := node.Elem().(*types.Named); ok && sizegen.shared[named.String()] {
+			// The pointee is shared by every holder of the pointer, so it is not
+			// owned by the object being sized. Only the pointer itself, which is
+			// already part of the size of the enclosing struct, is counted.
+			return nil, 0
+		}
 		if basic, ok := node.Elem().(*types.Basic); ok {
 			stmts := []jen.Code{
 				jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(basic)))),
@@ -591,18 +603,28 @@ var defaultGenTypes = []string{
 	"vitess.io/vitess/go/sqltypes.Result",
 }
 
+// defaultSharedTypes are process-wide objects that are referenced, but not owned,
+// by the types we generate size info for. Following pointers to them would charge
+// the full size of the shared object to every holder.
+var defaultSharedTypes = []string{
+	"vitess.io/vitess/go/mysql/collations.Environment",
+	"vitess.io/vitess/go/vt/sqlparser.Parser",
+	"vitess.io/vitess/go/vt/vtenv.Environment",
+}
+
 func main() {
 	var (
-		patterns, generate []string
-		verify             bool
+		patterns, generate, shared []string
+		verify                     bool
 	)
 
 	pflag.StringSliceVar(&patterns, "in", []string{`./go/...`}, "Go packages to load the generator")
 	pflag.StringSliceVar(&generate, "gen", defaultGenTypes, "Typename of the Go struct to generate size info for")
+	pflag.StringSliceVar(&shared, "shared", defaultSharedTypes, "Typename of shared types that are referenced by pointer but not owned, so their size is not counted")
 	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
 	pflag.Parse()
 
-	result, err := GenerateSizeHelpers(patterns, generate)
+	result, err := GenerateSizeHelpers(patterns, generate, shared)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -648,8 +670,8 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 }
 
 // GenerateSizeHelpers generates the auxiliary code that implements CachedSize helper methods
-// for all the types listed in typePatterns
-func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[string]*jen.File, error) {
+// for all the types listed in typePatterns. Pointers to any of the sharedTypes are not followed.
+func GenerateSizeHelpers(packagePatterns []string, typePatterns []string, sharedTypes []string) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 	}, packagePatterns...)
@@ -661,7 +683,7 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 		return nil, err
 	}
 
-	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)
+	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes, sharedTypes)
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {
