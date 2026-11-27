@@ -13,7 +13,7 @@ Most of the vdiff2 code is a reorganization of vdiff, with a few changes which a
 
 ### What stays the same
 
-The rest of the code mostly a cut/paste with minor refactoring. Instead of the entire code residing in a single vdiff.go file we split it in terms of modules in the tabletmanager/vdiff directory
+The rest of the code is mostly a cut/paste with minor refactoring. Instead of the entire code residing in a single vdiff.go file we split it in terms of modules in the tabletmanager/vdiff directory
 
 * The data comparison algo is identical
 
