@@ -298,18 +298,34 @@ func (c *Collation_gb18030_chinese_ci) Hash(hasher *vthash.Hasher, src []byte, n
 	for len(src) > 0 && left > 0 {
 		weight, width, multibyte := c.next(src)
 		if multibyte {
-			hasher.Write32(weight)
+			gb18030HashMultibyte(hasher, weight)
 		} else {
-			hasher.Write8(byte(weight))
+			gb18030HashSingle(hasher, byte(weight))
 		}
 		src = src[width:]
 		left--
 	}
 	if numCodepoints > 0 {
 		for ; left > 0; left-- {
-			hasher.Write8(' ')
+			gb18030HashSingle(hasher, ' ')
 		}
 	}
+}
+
+// gb18030HashSingle and gb18030HashMultibyte hash the weight of a single
+// byte and of a multi-byte character with a byte before it that tells them
+// apart. Collate orders a multi-byte character after a single byte with the
+// same weight, so 'ıa' (81 30 90 33 61) and 'I\0\0\0a' are not equal,
+// although the weight of "ı" is 0x49, the one of "I". Without the byte, the
+// 32 bits of 0x49 would hash as the four single bytes 49 00 00 00.
+func gb18030HashSingle(hasher *vthash.Hasher, weight byte) {
+	hasher.Write8(1)
+	hasher.Write8(weight)
+}
+
+func gb18030HashMultibyte(hasher *vthash.Hasher, weight uint32) {
+	hasher.Write8(4)
+	hasher.Write32(weight)
 }
 
 // WeightStringLen returns four bytes for each character, the length of the

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // TestGB18030ChineseCI checks gb18030_chinese_ci against values measured on
@@ -91,4 +92,37 @@ func TestGB18030ChineseCI(t *testing.T) {
 			assert.Equal(t, tc.match, pattern.Match(gb18030(tc.input)), "%q LIKE %q", tc.input, tc.pattern)
 		}
 	})
+}
+
+// TestGB18030ChineseCIHash checks that strings that Collate tells apart have
+// different hashes, also where a multi-byte character has the weight of a
+// single byte: the weight of "ı" (81 30 90 33) is 0x49, the one of "I".
+func TestGB18030ChineseCIHash(t *testing.T) {
+	coll := testcollation(t, "gb18030_chinese_ci")
+	encode := func(s string) []byte {
+		converted, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(s))
+		require.NoError(t, err)
+		return converted
+	}
+	hash := func(b []byte, numCodepoints int) vthash.Hash {
+		hasher := vthash.New()
+		coll.Hash(&hasher, b, numCodepoints)
+		return hasher.Sum128()
+	}
+
+	testcases := []struct {
+		left, right []byte
+		equal       bool
+	}{
+		{encode("ıa"), []byte("I\x00\x00\x00a"), false},
+		{encode("ı"), []byte("I"), false},
+		{encode("aａ阿"), encode("AＡ阿"), true},
+	}
+	for _, tc := range testcases {
+		assert.Equal(t, tc.equal, coll.Collate(tc.left, tc.right, false) == 0, "Collate(%x, %x)", tc.left, tc.right)
+		assert.Equal(t, tc.equal, hash(tc.left, 0) == hash(tc.right, 0), "Hash(%x) == Hash(%x)", tc.left, tc.right)
+	}
+
+	// The spaces that pad a CHAR(3) hash as the spaces of the string.
+	assert.Equal(t, hash([]byte("a  "), 3), hash([]byte("a"), 3))
 }
