@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Declared column lists must match their select list](#vtgate-column-list-length)
         - [Log messages are becoming constant, with values in attributes](#log-constant-messages)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
@@ -308,6 +309,16 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="vtgate-column-list-length"/>Declared column lists must match their select list</a>
+
+MySQL rejects a derived table or common table expression whose declared column list does not have one name for each column of its select list (error 1353). VTGate now rejects these itself with `VT03033`, except for a statement that it passes to an unsharded keyspace as written, which MySQL still rejects. Most previously failed inside VTGate with a panic or an internal error, or in MySQL with error 1353.
+
+**Impact**: A derived table, or a CTE in a `WITH` clause without `RECURSIVE`, whose list is longer than its select list was accepted with the extra names ignored, and the statement ran wherever VTGate planned it without sending the list to MySQL, as in `select a from (select count(*) from user) as x(a, b)`. Such statements now fail.
+
+**Migration**: remove the extra names from the column list, since the corrected statement runs before and after the upgrade.
+
+See [#20633](https://github.com/vitessio/vitess/pull/20633) for details.
 
 #### <a id="log-constant-messages"/>Log messages are becoming constant, with values in attributes</a>
 
