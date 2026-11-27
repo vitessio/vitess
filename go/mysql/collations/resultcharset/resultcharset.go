@@ -33,14 +33,18 @@ limitations under the License.
 package resultcharset
 
 import (
+	"fmt"
 	"math"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Conversion converts the results of one query. It is built from the fields of
@@ -69,17 +73,85 @@ func isText(t querypb.Type) bool {
 	return sqltypes.IsText(t) || t == sqltypes.Enum || t == sqltypes.Set
 }
 
-// lookupCharset returns the character set of a collation, and nil for a
-// collation that Vitess does not have and for the binary collation.
+// lookupCharset returns the character set of a collation, and nil for the
+// binary collation and for a collation whose character set Vitess does not
+// implement.
+//
+// Converting text needs the character set of a collation only, so a collation
+// that Vitess does not implement, such as latin1_german2_ci (31) or
+// gb18030_chinese_ci (248), has the character set of the collations that
+// Vitess implements for it: latin1 and gb18030. The exception is
+// latin2_czech_cs (2), whose text MySQL converts with tables of its own:
+// CONVERT((CONVERT(0x80 USING latin2) COLLATE latin2_czech_cs) USING utf8mb4)
+// is "?", and with latin2_general_ci it is U+0080.
 func lookupCharset(id collations.ID) charset.Charset {
 	if id == collations.Unknown || id == collations.CollationBinaryID {
 		return nil
 	}
-	coll := colldata.Lookup(id)
-	if coll == nil {
+	if coll := colldata.Lookup(id); coll != nil {
+		return coll.Charset()
+	}
+	if id == latin2CzechCS {
 		return nil
 	}
-	return coll.Charset()
+	return implementedCharsets()[charsetName(id)]
+}
+
+// latin2CzechCS is the collation ID of latin2_czech_cs.
+const latin2CzechCS = collations.ID(2)
+
+// charsetName returns the name of the character set of a collation that MySQL
+// defines, whether or not Vitess implements it, as MySQL 8.0 names it, and ""
+// for an ID that MySQL does not define.
+func charsetName(id collations.ID) string {
+	env := collations.MySQL8()
+	name, _ := env.ConnectionCharset(id)
+	if alias, ok := env.CharsetAlias(name); ok {
+		return alias
+	}
+	return name
+}
+
+// implementedCharsets maps the name of every character set that Vitess
+// implements a collation for to that character set.
+var implementedCharsets = sync.OnceValue(func() map[string]charset.Charset {
+	env := collations.MySQL8()
+	byName := make(map[string]charset.Charset)
+	for _, id := range env.AllCollationIDs() {
+		name := env.LookupCharsetName(id)
+		if _, ok := byName[name]; ok {
+			continue
+		}
+		if coll := colldata.Lookup(id); coll != nil {
+			byName[name] = coll.Charset()
+		}
+	}
+	return byName
+})
+
+// CheckFields returns an error for the first field of a result whose text
+// cannot be converted because Vitess does not implement the character set of
+// its collation, and nil when there is none. MySQL sends such a column in its
+// own character set with character_set_results = NULL: a gbk column with
+// 'Müller' arrives as 4D A8 B9 6C 6C 65 72 with the collation 28. Vitess does
+// not implement gbk, big5, tis620 or the tables of latin2_czech_cs, and
+// returning such text unconverted would give a client bytes in a character
+// set that it did not ask for.
+func CheckFields(fields []*querypb.Field) error {
+	for _, field := range fields {
+		id := collations.ID(field.Charset)
+		if id == collations.Unknown || id == collations.CollationBinaryID || lookupCharset(id) != nil {
+			continue
+		}
+		name := charsetName(id)
+		if id == latin2CzechCS {
+			name = "latin2 with the collation latin2_czech_cs"
+		} else if name == "" {
+			name = fmt.Sprintf("of the collation %d", id)
+		}
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert the text of column '%s': Vitess does not implement the character set %s", field.Name, name)
+	}
+	return nil
 }
 
 // isASCIICompatible reports whether ASCII text has the same bytes in cs as in

@@ -24,8 +24,10 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // The collation IDs of MySQL that the tests use.
@@ -279,4 +281,61 @@ func TestStream(t *testing.T) {
 	second := stream.Result(&sqltypes.Result{Rows: []sqltypes.Row{row("M\xFCller")}})
 	assert.Nil(t, second.Fields)
 	assert.Equal(t, "Müller", second.Rows[0][0].ToString())
+}
+
+// TestToConnectionUnimplementedCollation converts the text of columns whose
+// collation Vitess does not implement, in the character set of the
+// collations that Vitess implements for it. MySQL 8.4.13 sends a
+// latin1_german2_ci VARCHAR(10) and a gb18030_chinese_ci VARCHAR(10) with
+// 'Müller' and '中' as 4D FC 6C 6C 65 72 (collation 31, length 10) and D6 D0
+// (collation 248, length 40) with character_set_results = NULL, and as
+// 4D C3 BC 6C 6C 65 72 and E4 B8 AD (collation 255, length 40) with
+// character_set_results = utf8mb4.
+func TestToConnectionUnimplementedCollation(t *testing.T) {
+	raw := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			field("l", sqltypes.VarChar, collations.ID(31), 10),
+			field("g", sqltypes.VarChar, collations.ID(248), 40),
+		},
+		Rows: []sqltypes.Row{{
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller")),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xD6\xD0")),
+		}},
+	}
+	got := ToConnection(raw.Fields, utf8mb40900AICI, true).Result(raw)
+	assert.Equal(t, field("l", sqltypes.VarChar, utf8mb40900AICI, 40), got.Fields[0])
+	assert.Equal(t, field("g", sqltypes.VarChar, utf8mb40900AICI, 40), got.Fields[1])
+	require.Len(t, got.Rows, 1)
+	assert.Equal(t, "Müller", got.Rows[0][0].ToString())
+	assert.Equal(t, "中", got.Rows[0][1].ToString())
+}
+
+// TestCheckFields checks which collations CheckFields refuses: those of the
+// character sets that Vitess does not implement, gbk (28), big5 (1) and
+// tis620 (18), and latin2_czech_cs (2). It accepts every other collation,
+// whether or not Vitess implements it: latin1_german2_ci (31),
+// gb18030_chinese_ci (248), utf8mb3_tolower_ci (76),
+// utf8mb3_general_mysql500_ci (223) and cp1250_czech_cs (34) have the
+// character set of other collations.
+func TestCheckFields(t *testing.T) {
+	for _, id := range []collations.ID{collations.Unknown, binaryCollation, latin1SwedishCI, utf8mb40900AICI, 31, 248, 76, 223, 34} {
+		require.NoError(t, CheckFields([]*querypb.Field{field("c", sqltypes.VarChar, id, 10)}), "collation %d", id)
+	}
+	for _, tc := range []struct {
+		id      collations.ID
+		charset string
+	}{
+		{28, "gbk"},
+		{1, "big5"},
+		{18, "tis620"},
+		{2, "latin2 with the collation latin2_czech_cs"},
+	} {
+		err := CheckFields([]*querypb.Field{
+			field("ok", sqltypes.VarChar, utf8mb40900AICI, 40),
+			field("c", sqltypes.VarChar, tc.id, 10),
+		})
+		require.Error(t, err, "collation %d", tc.id)
+		assert.Equal(t, vtrpcpb.Code_UNIMPLEMENTED, vterrors.Code(err))
+		assert.EqualError(t, err, "cannot convert the text of column 'c': Vitess does not implement the character set "+tc.charset)
+	}
 }
