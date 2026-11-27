@@ -72,7 +72,11 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 		tuple := make([]eval, 0, len(bvar.Values))
 		for _, value := range bvar.Values {
-			e, err := valueToEval(sqltypes.MakeTrusted(value.Type, value.Value), typedCoercionCollation(value.Type, collations.CollationForType(value.Type, bv.Collation)), nil)
+			valType := value.Type
+			if valType == sqltypes.TypeJSON {
+				valType = sqltypes.VarChar
+			}
+			e, err := valueToEval(sqltypes.MakeTrusted(valType, value.Value), typedCoercionCollation(valType, collations.CollationForType(valType, bv.Collation)), nil)
 			if err != nil {
 				return nil, err
 			}
@@ -85,6 +89,9 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
 		}
 		typ := bvar.Type
+		if typ == sqltypes.TypeJSON {
+			typ = sqltypes.VarChar
+		}
 		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), typedCoercionCollation(typ, collations.CollationForType(typ, bv.Collation)), nil)
 	}
 }
@@ -108,6 +115,8 @@ func (bv *BindVariable) typeof(env *ExpressionEnv) (ctype, error) {
 		return ctype{Type: sqltypes.VarBinary, Flag: flagHex | flagNullable, Col: collationNumeric}, nil
 	case sqltypes.BitNum:
 		return ctype{Type: sqltypes.VarBinary, Flag: flagBit | flagNullable, Col: collationNumeric}, nil
+	case sqltypes.TypeJSON:
+		return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: typedCoercionCollation(sqltypes.VarChar, collations.CollationForType(sqltypes.VarChar, bv.Collation))}, nil
 	default:
 		return ctype{Type: tt, Flag: flagNullable, Col: typedCoercionCollation(tt, collations.CollationForType(tt, bv.Collation))}, nil
 	}
@@ -118,7 +127,10 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 
 	if bvar.typed() {
 		typ.Type = bvar.Type
-		typ.Col = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
+		if typ.Type == sqltypes.TypeJSON {
+			typ.Type = sqltypes.VarChar
+		}
+		typ.Col = typedCoercionCollation(typ.Type, collations.CollationForType(typ.Type, bvar.Collation))
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[bvar.dynamicTypeOffset]
 	} else {
@@ -161,7 +173,8 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
-		c.asm.PushBVar_json(bvar.Key)
+		typ.Type = sqltypes.VarChar
+		c.asm.PushBVar_text(bvar.Key, typ.Col)
 	case tt == sqltypes.Datetime:
 		c.asm.PushBVar_datetime(bvar.Key)
 	case tt == sqltypes.Timestamp:
