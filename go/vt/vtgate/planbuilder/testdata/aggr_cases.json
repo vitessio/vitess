@@ -5058,7 +5058,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS min(textcol1), max(1|4) AS max(textcol2), sum_distinct(2 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(3 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(0 COLLATE latin1_swedish_ci) AS min(textcol1), max(1|4 COLLATE big5_bin) AS max(textcol2), sum_distinct(2 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(3 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
         "ResultColumns": 4,
         "Inputs": [
           {
@@ -5089,7 +5089,7 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS min(textcol1), max(2|5) AS max(textcol2), sum_distinct(3 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(4 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
+        "Aggregates": "min(1 COLLATE latin1_swedish_ci) AS min(textcol1), max(2|5 COLLATE big5_bin) AS max(textcol2), sum_distinct(3 COLLATE latin1_swedish_ci) AS sum(distinct textcol1), count_distinct(4 COLLATE latin1_swedish_ci) AS count(distinct textcol1)",
         "GroupBy": "0",
         "ResultColumns": 5,
         "Inputs": [

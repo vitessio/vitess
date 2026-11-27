@@ -268,7 +268,11 @@ func (ctx *PlanningContext) NeedsWeightString(e sqlparser.Expr) bool {
 			return false
 		}
 
-		return !ctx.VSchema.Environment().CollationEnv().IsSupported(typ.Collation())
+		// See evalengine.NeedsServerWeightString for the collations that
+		// VTGate implements and still orders by the weight strings of
+		// MySQL.
+		return !ctx.VSchema.Environment().CollationEnv().IsSupported(typ.Collation()) ||
+			evalengine.NeedsServerWeightString(typ.Collation())
 	}
 }
 

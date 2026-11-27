@@ -57,7 +57,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 				return bytes.Compare(v1.Raw(), v2.Raw()), nil
 			}
 			coll := colldata.Lookup(collationID)
-			if coll == nil {
+			if coll == nil || NeedsServerWeightString(collationID) {
 				return 0, UnsupportedCollationError{ID: collationID}
 			}
 			result := coll.Collate(v1.Raw(), v2.Raw(), false)

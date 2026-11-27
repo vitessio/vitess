@@ -265,6 +265,9 @@ func TinyWeighter(f *querypb.Field, collation collations.ID) func(v *sqltypes.Va
 		}
 
 	case sqltypes.IsText(f.Type):
+		if NeedsServerWeightString(collation) {
+			return nil
+		}
 		if coll := colldata.Lookup(collation); coll != nil {
 			if twcoll, ok := coll.(colldata.TinyWeightCollation); ok {
 				return func(v *sqltypes.Value) {

@@ -46,7 +46,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	h := vthash.New()
 	switch e := e.(type) {
 	case *evalBytes:
-		if collation == collations.Unknown {
+		if collation == collations.Unknown || (!e.isBinary() && NeedsServerWeightString(collation)) {
 			return 0, UnsupportedCollationHashError
 		}
 		e.col.Collation = collation
@@ -198,7 +198,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 
 	case sqltypes.IsText(coerceTo):
 		coll := colldata.Lookup(collation)
-		if coll == nil {
+		if coll == nil || NeedsServerWeightString(collation) {
 			return UnsupportedCollationHashError
 		}
 		hash.Write16(hashPrefixBytes)

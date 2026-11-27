@@ -2138,7 +2138,7 @@
                 "OperatorType": "Aggregate",
                 "Variant": "Ordered",
                 "Aggregates": "sum(0) AS avg_col, sum_count(3) AS count(intcol)",
-                "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4)",
+                "GroupBy": "1 COLLATE latin1_swedish_ci, (2|4) COLLATE big5_bin",
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -2148,7 +2148,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` where 1 != 1 group by textcol1, textcol2, weight_string(textcol2)",
-                    "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|4) ASC",
+                    "OrderBy": "1 ASC COLLATE latin1_swedish_ci, (2|4) ASC COLLATE big5_bin",
                     "Query": "select sum(intcol) as avg_col, textcol1, textcol2, count(intcol), weight_string(textcol2) from `user` group by textcol1, textcol2, weight_string(textcol2) order by textcol1 asc, textcol2 asc"
                   }
                 ]
