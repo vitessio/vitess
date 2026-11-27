@@ -369,15 +369,22 @@ func (sm *stateManager) checkMySQL() {
 		}
 		defer sm.transitioning.Release(1)
 
+		// Remember the requested state. Holding the transitioning semaphore
+		// ensures that SetServingType cannot change it meanwhile.
+		sm.mu.Lock()
+		wantState := sm.wantState
+		sm.mu.Unlock()
+
 		// This is required to prevent new queries from running in StartRequest
 		// unless they are part of a running transaction.
 		sm.setWantState(StateNotConnected)
 		sm.closeAll()
 
-		// Now that we reached the NotConnected state, we want to go back to the
-		// Serving state. The retry will only succeed once MySQL is reachable again
-		// Until then EnsureConnectionAndDB will error out.
-		sm.setWantState(StateServing)
+		// Now that we reached the NotConnected state, restore the requested
+		// state, which is not always Serving. For Serving and NotServing, the
+		// retry will only succeed once MySQL is reachable again. Until then
+		// EnsureConnectionAndDB will error out.
+		sm.setWantState(wantState)
 		sm.retryTransition(func() {
 			log.Error("Cannot connect to MySQL, shutting down query service", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		})
