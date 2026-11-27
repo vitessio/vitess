@@ -342,6 +342,19 @@ func TestCompilerSingle(t *testing.T) {
 			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
 		},
 		{
+			expression: "UPPER(column0)",
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARCHAR("1")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: "LOWER(column0)",
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`["A"]`))},
+			result:     `VARCHAR("[\"a\"]")`,
+			collation:  collations.CollationUtf8mb4BinID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4BinID, true, 0, 0, nil),
+		},
+		{
 			expression: "1.0e0 < column0",
 			values:     []sqltypes.Value{sqltypes.NewFloat64(2)},
 			result:     "INT64(1)",
@@ -947,6 +960,16 @@ func TestCompilerSingle(t *testing.T) {
 		{
 			expression: `GREATEST(JSON_OBJECT(), JSON_ARRAY())`,
 			result:     `VARCHAR("{}")`,
+		},
+		{
+			expression: `LOWER(UPPER(JSON_ARRAY('a')))`,
+			result:     `VARCHAR("[\"a\"]")`,
+			collation:  collations.CollationUtf8mb4BinID,
+		},
+		{
+			expression: `UPPER(LOWER(JSON_ARRAY('A')))`,
+			result:     `VARCHAR("[\"A\"]")`,
+			collation:  collations.CollationUtf8mb4BinID,
 		},
 		{
 			// TRIM with a remstr removes every repeated occurrence, not only one.
