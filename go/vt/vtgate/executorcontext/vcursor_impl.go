@@ -577,21 +577,22 @@ func (vc *VCursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ba
 	return table, vindex, destKeyspace, destTabletType, dest, nil
 }
 
-// FindViewTarget finds the specified view's target keyspace.
-func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error) {
-	destKeyspace, _, _, err := vc.parseDestinationTarget(name.Qualifier.String())
+// FindViewTarget finds the specified view's target destination and keyspace.
+func (vc *VCursorImpl) FindViewTarget(name sqlparser.TableName) (key.ShardDestination, *vindexes.Keyspace, error) {
+	destKeyspace, _, dest, err := vc.parseDestinationTarget(name.Qualifier.String())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if destKeyspace != "" {
-		return vc.FindKeyspace(destKeyspace)
+		ks, err := vc.FindKeyspace(destKeyspace)
+		return dest, ks, err
 	}
 
 	tbl, err := vc.vschema.FindRoutedTable("", name.Name.String(), vc.tabletType)
 	if err != nil || tbl == nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return tbl.Keyspace, nil
+	return dest, tbl.Keyspace, nil
 }
 
 func (vc *VCursorImpl) parseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.ShardDestination, error) {

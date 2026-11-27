@@ -296,6 +296,31 @@ func (s *planTestSuite) TestViews() {
 	vw.EnableViews = true
 
 	s.testFile("view_cases.json", vw, false)
+
+	// Verify buildDropView returns the expected destinations
+	stmtShard, err := sqlparser.NewTestParser().Parse("drop view `user:-80`.a")
+	s.Require().NoError(err)
+	destShard, _, err := buildDropView(vw, stmtShard.(sqlparser.DDLStatement))
+	s.Require().NoError(err)
+	s.Require().Equal(key.DestinationShard("-80"), destShard)
+
+	stmtKR, err := sqlparser.NewTestParser().Parse("drop view `user[-80]`.a")
+	s.Require().NoError(err)
+	destKR, _, err := buildDropView(vw, stmtKR.(sqlparser.DDLStatement))
+	s.Require().NoError(err)
+	s.Require().Equal("DestinationExactKeyRange(-80)", destKR.String())
+
+	stmtKSID, err := sqlparser.NewTestParser().Parse("drop view `user[80]`.a")
+	s.Require().NoError(err)
+	destKSID, _, err := buildDropView(vw, stmtKSID.(sqlparser.DDLStatement))
+	s.Require().NoError(err)
+	s.Require().Equal(key.DestinationKeyspaceID([]byte{0x80}), destKSID)
+
+	stmtAll, err := sqlparser.NewTestParser().Parse("drop view main.a")
+	s.Require().NoError(err)
+	destAll, _, err := buildDropView(vw, stmtAll.(sqlparser.DDLStatement))
+	s.Require().NoError(err)
+	s.Require().Equal(key.DestinationAllShards{}, destAll)
 }
 
 func (s *planTestSuite) TestOne() {

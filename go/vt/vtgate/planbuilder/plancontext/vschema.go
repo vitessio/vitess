@@ -42,8 +42,8 @@ type PlannerVersion = querypb.ExecuteOptions_PlannerVersion
 type VSchema interface {
 	FindTable(tablename sqlparser.TableName) (*vindexes.BaseTable, string, topodatapb.TabletType, key.ShardDestination, error)
 	FindView(name sqlparser.TableName) (sqlparser.TableStatement, *sqlparser.TableName)
-	// FindViewTarget finds the target keyspace for the view table provided.
-	FindViewTarget(name sqlparser.TableName) (*vindexes.Keyspace, error)
+	// FindViewTarget finds the target destination and keyspace for the view table provided.
+	FindViewTarget(name sqlparser.TableName) (key.ShardDestination, *vindexes.Keyspace, error)
 	FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.BaseTable, vindexes.Vindex, string, topodatapb.TabletType, key.ShardDestination, error)
 
 	// SelectedKeyspace returns the current keyspace if set, otherwise returns an error
