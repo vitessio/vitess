@@ -1435,7 +1435,12 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Info("Restoring incremental backup to position", slog.String("position", replication.EncodePosition(bm.Position)))
 	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
-	defer os.RemoveAll(createdDir)
+	if createdDir != "" {
+		defer os.RemoveAll(createdDir)
+	}
+	if err != nil {
+		return vterrors.Wrap(err, "failed to restore files")
+	}
 	mysqld, ok := params.Mysqld.(*Mysqld)
 	if !ok {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expected: Mysqld")
@@ -1458,10 +1463,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 		}
 		defer os.Remove(binlogFile)
 		params.Logger.Info("Applied binlog file", slog.String("path", binlogFile))
-	}
-	if err != nil {
-		// don't delete the file here because that is how we detect an interrupted restore
-		return vterrors.Wrap(err, "failed to restore files")
 	}
 	params.Logger.Info("Restored incremental backup files", slog.String("dir", createdDir))
 
@@ -1561,23 +1562,23 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
 	// This is done to prevent them from being truncated when retries happen.
 	if err := createChunkedDestinations(ctx, fes, params.Cnf, createdDir, restoreWithDirectIO(bm), params.Logger); err != nil {
-		return "", err
+		return createdDir, err
 	}
 
 	restoreErr := be.restoreFileEntries(ctx, fes, bh, bm, params, createdDir)
 	if errors.Is(restoreErr, errRestoreFatal) {
-		return "", restoreErr
+		return createdDir, restoreErr
 	}
 	files := bh.GetFailedFiles()
 	if restoreErr != nil && len(files) == 0 {
-		return "", restoreErr
+		return createdDir, restoreErr
 	}
 	if len(files) > 0 {
 		newFEs := make([]FileEntry, len(fes))
 		for _, file := range files {
 			feIdx, chunkIdx, parseErr := parseBackupName(file)
 			if parseErr != nil {
-				return "", parseErr
+				return createdDir, parseErr
 			}
 			oldFe := fes[feIdx]
 			if newFEs[feIdx].Name == "" {
@@ -1596,12 +1597,12 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 		err = be.restoreFileEntries(ctx, newFEs, bh, bm, params, createdDir)
 		if err != nil {
-			return "", err
+			return createdDir, err
 		}
 	}
 	if len(bm.BinlogFileEntries) > 0 {
 		if err := finishBinlogRestore(params.Cnf, fes[len(bm.FileEntries):]); err != nil {
-			return "", err
+			return createdDir, err
 		}
 	}
 	return createdDir, nil
