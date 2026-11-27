@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -304,6 +305,57 @@ func TestInitDBConnectionLockWaitTimeout(t *testing.T) {
 
 	deferFunc()
 	assert.Contains(t, db.QueryLog(), "set @@session.lock_wait_timeout=@lock_wait_timeout")
+}
+
+// TestInitConnectionSessionTimeoutRestore verifies that the restore function
+// returned by initConnectionSessionTimeout restores the session variable on an
+// open connection, and skips the restore on a closed one. The latter matters
+// for the rename connection of a failed cut-over: it has been killed, and a
+// restore would otherwise reconnect and run on a fresh session.
+func TestInitConnectionSessionTimeoutRestore(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	params := db.ConnParams()
+	connector := dbconfigs.NewTestDBConfigs(*params, *params, params.DbName).DbaWithDB()
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), nil, "TestInitConnectionSessionTimeoutRestore")
+
+	const restoreQuery = "set @@session.wait_timeout=@wait_timeout"
+	db.AddQuery("set @wait_timeout=@@session.wait_timeout", &sqltypes.Result{})
+	db.AddQuery("set @@session.wait_timeout=5", &sqltypes.Result{})
+	db.AddQuery(restoreQuery, &sqltypes.Result{})
+
+	executor := &Executor{}
+
+	t.Run("open connection is restored", func(t *testing.T) {
+		db.ResetQueryLog()
+		conn, err := connpool.NewConn(t.Context(), connector, nil, nil, env)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		restore, err := executor.initConnectionSessionTimeout(t.Context(), conn, "wait_timeout", 5*time.Second)
+		require.NoError(t, err)
+		assert.Contains(t, db.QueryLog(), "set @@session.wait_timeout=5")
+		assert.NotContains(t, db.QueryLog(), restoreQuery)
+
+		restore()
+		assert.Contains(t, db.QueryLog(), restoreQuery)
+	})
+
+	t.Run("closed connection is not restored", func(t *testing.T) {
+		db.ResetQueryLog()
+		conn, err := connpool.NewConn(t.Context(), connector, nil, nil, env)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		restore, err := executor.initConnectionSessionTimeout(t.Context(), conn, "wait_timeout", 5*time.Second)
+		require.NoError(t, err)
+		assert.Contains(t, db.QueryLog(), "set @@session.wait_timeout=5")
+
+		conn.Close()
+		require.True(t, conn.IsClosed())
+		restore()
+		assert.NotContains(t, db.QueryLog(), restoreQuery)
+	})
 }
 
 // TestInitMigrationSessionVariables verifies requested values are applied in
