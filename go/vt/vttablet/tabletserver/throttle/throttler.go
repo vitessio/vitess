@@ -150,10 +150,38 @@ var ErrThrottlerNotOpen = errors.New("throttler not open")
 // throttlerTopoService represents the functionality we expect from a TopoServer, abstracted so that
 // it can be mocked in unit tests
 type throttlerTopoService interface {
+	// GetTablet reads a tablet record. The throttler reads its own record with it, once, and keeps it.
 	GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error)
+	// GetTabletStaleTolerant reads a tablet record that only decides which tablet the throttler probes or
+	// stimulates, so it may come from a cell's old topo server for up to --topo-cell-info-cache-ttl.
+	GetTabletStaleTolerant(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error)
 	GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error)
+	// FindAllTabletAliasesInShard lists the tablets the throttler probes, like GetTabletStaleTolerant.
 	FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error)
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
+}
+
+// throttlerTopoServer is the throttlerTopoService of a topo.Server. The inventory refresh's and the primary
+// stimulation's reads of tablet records go through the server's StaleTolerantView, since the tablets they list
+// only decide which tablets the throttler probes or, on a replica, which tablet it stimulates as the primary;
+// --topo-cell-info-cache-ttl then saves a global CellInfo read per cell and per tablet on each inventory
+// refresh and one per stimulation. Every other read, including the throttler's one-time read of its own tablet
+// record, is the Server's.
+type throttlerTopoServer struct {
+	*topo.Server
+	view *topo.StaleTolerantView
+}
+
+func newThrottlerTopoServer(ts *topo.Server) throttlerTopoServer {
+	return throttlerTopoServer{Server: ts, view: ts.StaleTolerantView()}
+}
+
+func (s throttlerTopoServer) GetTabletStaleTolerant(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	return s.view.GetTablet(ctx, alias)
+}
+
+func (s throttlerTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	return s.view.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 }
 
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
@@ -276,7 +304,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
-		ts:              ts,
+		ts:              newThrottlerTopoServer(ts),
 		heartbeatWriter: heartbeatWriter,
 		pool: connpool.NewPool(env, poolName, tabletenv.ConnPoolConfig{
 			Size:        2,
@@ -830,7 +858,7 @@ func (throttler *Throttler) primaryTablet(ctx context.Context) (*topodatapb.Tabl
 	if !si.HasPrimary() {
 		return nil, nil
 	}
-	tablet, err := throttler.ts.GetTablet(ctx, si.PrimaryAlias)
+	tablet, err := throttler.ts.GetTabletStaleTolerant(ctx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -1304,7 +1332,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 			return err
 		}
 		for _, tabletAlias := range tabletAliases {
-			tablet, err := throttler.ts.GetTablet(ctx, tabletAlias)
+			tablet, err := throttler.ts.GetTabletStaleTolerant(ctx, tabletAlias)
 			if err != nil {
 				return err
 			}

@@ -23,26 +23,33 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/throttler"
 )
 
 /*
-1. In steady state check the numbers of tablets through 'ListAllTablets'.
-2. Now delete 'zone2' and 'ListAllTablets' should return only primary tablets
-3. Add the cell back with same name but at different location in topo.
-4. 'ListAllTablets' should return all the new tablets.
+ 1. In steady state check the numbers of tablets through 'ListAllTablets'.
+ 2. Now delete 'zone2' and 'ListAllTablets' should return only primary tablets
+ 3. Add the cell back with same name but at different location in topo.
+ 4. 'ListAllTablets' should return all the new tablets.
+ 5. The tablet throttler on shard1's primary, enabled before the cell was deleted so that its topo reads
+    cached the cell's old location for --topo-cell-info-cache-ttl, finds the replica in the re-added
+    'zone2' and sees its lag.
 */
 func TestVtctldListAllTablets(t *testing.T) {
 	testURL(t, vtctldHealthCheckURL(), "vtctld health check url")
 
 	testListAllTablets(t)
 	testFailedRepoint(t)
+	enableThrottler(t)
 	deleteCell(t)
 	addCellback(t)
+	testThrottlerFollowsReAddedCell(t)
 }
 
 func vtctldHealthCheckURL() string {
@@ -176,6 +183,7 @@ func addCellback(t *testing.T) {
 			clusterInstance.DefaultCharset,
 		)
 		tablet.VttabletProcess.SupportsBackup = true
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, cellInfoCacheTTLArgs(tablet)...)
 		proc, err := tablet.MysqlctlProcess.StartProcess()
 		require.NoError(t, err)
 		mysqlProcs = append(mysqlProcs, proc)
@@ -204,7 +212,7 @@ func addCellback(t *testing.T) {
 	shard1.Vttablets = append(shard1.Vttablets, shard1Replica)
 	shard1.Vttablets = append(shard1.Vttablets, shard1Rdonly)
 	shard2.Vttablets = append(shard2.Vttablets, shard2Replica)
-	shard2.Vttablets = append(shard2.Vttablets, shard1Rdonly)
+	shard2.Vttablets = append(shard2.Vttablets, shard2Rdonly)
 
 	result, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetTablets")
 	require.NoError(t, err)
@@ -231,4 +239,83 @@ func getAllTablets() []string {
 		}
 	}
 	return tablets
+}
+
+// enableThrottler enables the tablet throttler while zone2 is at its original root, and makes sure shard1's
+// primary probes the shard's replica there, by stopping the replica's replication until the primary sees its
+// lag, so that the primary's CellInfo cache holds zone2's old location when the cell is deleted and added back.
+// VTOrc's recoveries stay disabled for the rest of the test, so that it doesn't start replication again.
+func enableThrottler(t *testing.T) {
+	vtctld := &clusterInstance.VtctldClientProcess
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+
+	vtorc := clusterInstance.VTOrcProcesses[0]
+	vtorc.DisableGlobalRecoveries(t)
+	t.Cleanup(func() { vtorc.EnableGlobalRecoveries(t) })
+	require.NoError(t, vtctld.ExecuteCommand("StopReplication", shard1Replica.Alias))
+	waitForShardLag(t, shard1Primary, true, 30*time.Second, "shard1's primary did not see the lag of its replica in zone2")
+	require.NoError(t, vtctld.ExecuteCommand("StartReplication", shard1Replica.Alias))
+}
+
+// testThrottlerFollowsReAddedCell stops replication on shard1's replica in the re-added zone2. Shard1's
+// primary reads tablet records through the CellInfo cache, which holds zone2's old root from before the cell
+// was deleted, so until the TTL passes it looks for the shard's tablets there, where there are none; within
+// the TTL and an inventory refresh it must find the replica at the new root and see its lag. Meanwhile it reads
+// CellInfo from the global topo less often than shard2's primary, which reads it on every call.
+func testThrottlerFollowsReAddedCell(t *testing.T) {
+	vtctld := &clusterInstance.VtctldClientProcess
+	// The tablets in the re-added cell start with the throttler enabled too.
+	throttler.EnableLagThrottlerAndWaitForStatus(t, clusterInstance)
+	// The lag the primary saw before the cell was deleted is gone with that replica.
+	waitForShardLag(t, shard1Primary, false, 30*time.Second, "shard1's primary still reports the lag of the deleted replica")
+
+	cachedBefore := globalTopoGets(t, shard1Primary)
+	uncachedBefore := globalTopoGets(t, shard2Primary)
+	countFrom := time.Now()
+
+	require.NoError(t, vtctld.ExecuteCommand("StopReplication", shard1Replica.Alias))
+	t.Cleanup(func() {
+		_ = vtctld.ExecuteCommand("StartReplication", shard1Replica.Alias)
+	})
+	// The TTL, an inventory refresh, the replica's lag growing past the threshold, and time for the probes.
+	timeout := cellInfoCacheTTL + 10*time.Second + 5*time.Second + 20*time.Second
+	stopped := time.Now()
+	waitForShardLag(t, shard1Primary, true, timeout, "shard1's primary did not see the lag of the replica in the re-added cell")
+	t.Logf("shard1's primary saw the replica's lag %s after replication stopped", time.Since(stopped).Round(time.Second))
+
+	// Compare the primaries' global topo reads over a few inventory refreshes.
+	time.Sleep(time.Until(countFrom.Add(35 * time.Second)))
+	cached := globalTopoGets(t, shard1Primary) - cachedBefore
+	uncached := globalTopoGets(t, shard2Primary) - uncachedBefore
+	t.Logf("global topo Gets with the throttler on: %d with the CellInfo cache, %d without", cached, uncached)
+	assert.Less(t, cached, uncached, "the primary with the CellInfo cache did not read the global topo less than the one without")
+}
+
+// waitForShardLag waits until the tablet's throttler reports the shard's lag above its threshold, or below it
+// if lagging is false. On a primary, whose own lag is 0, lag above the threshold can only come from a replica
+// it probes.
+func waitForShardLag(t *testing.T, tablet *cluster.Vttablet, lagging bool, timeout time.Duration, msg string) {
+	require.Eventually(t, func() bool {
+		status, err := throttler.GetThrottlerStatus(&clusterInstance.VtctldClientProcess, tablet)
+		if err != nil {
+			return false
+		}
+		lag, ok := status.AggregatedMetrics["shard/lag"]
+		if !ok || lag.Error != "" {
+			return false
+		}
+		return (lag.Value > status.DefaultThreshold) == lagging
+	}, timeout, time.Second, msg)
+}
+
+// globalTopoGets returns how many Get calls the tablet has made to the global topo.
+func globalTopoGets(t *testing.T, tablet *cluster.Vttablet) int64 {
+	vars := tablet.VttabletProcess.GetVars()
+	require.NotNil(t, vars, "no /debug/vars from %s", tablet.Alias)
+	ops, _ := vars["TopologyConnOperations"].(map[string]any)
+	histograms, _ := ops["Histograms"].(map[string]any)
+	require.Contains(t, histograms, "Get.global", "%s reports no global topo Gets", tablet.Alias)
+	get, _ := histograms["Get.global"].(map[string]any)
+	count, _ := get["Count"].(float64)
+	return int64(count)
 }
