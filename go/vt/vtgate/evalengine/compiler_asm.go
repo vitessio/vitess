@@ -2011,7 +2011,13 @@ func (asm *assembler) Fn_CONV_hu(offset int, baseOffset int) {
 			return 1
 		}
 
-		env.vm.stack[env.vm.sp-offset], _ = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericHex()
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		if len(arg.bytes) == 0 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
+		}
+
+		env.vm.stack[env.vm.sp-offset], _ = arg.toNumericHex()
 		return 1
 	}, "FN CONV VARBINARY(SP-%d), HEX", offset)
 }
@@ -2027,6 +2033,11 @@ func (asm *assembler) Fn_CONV_bu(offset int, baseOffset int) {
 		}
 		if base.i < 0 {
 			base.i = -base.i
+		}
+
+		if len(arg.bytes) == 0 {
+			env.vm.stack[env.vm.sp-offset] = nil
+			return 1
 		}
 
 		var u uint64
