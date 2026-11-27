@@ -191,6 +191,111 @@ func TestDestinationKeyspace(t *testing.T) {
 	}
 }
 
+func TestFindViewTarget(t *testing.T) {
+	ks1 := &vindexes.Keyspace{
+		Name:    "ks1",
+		Sharded: false,
+	}
+	ks1Schema := &vindexes.KeyspaceSchema{
+		Keyspace: ks1,
+		Tables:   nil,
+		Vindexes: nil,
+		Error:    nil,
+	}
+	vschemaWith1KS := &vindexes.VSchema{
+		Keyspaces: map[string]*vindexes.KeyspaceSchema{
+			ks1.Name: ks1Schema,
+		},
+	}
+
+	tests := []struct {
+		name             string
+		tableName        sqlparser.TableName
+		expectedDest     key.ShardDestination
+		expectedKeyspace string
+		expectedNilKS    bool
+		expectedError    string
+	}{
+		{
+			name: "shard destination",
+			tableName: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS("ks1:-80"),
+				Name:      sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedDest:     key.DestinationShard("-80"),
+			expectedKeyspace: "ks1",
+		},
+		{
+			name: "key range destination",
+			tableName: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS("ks1[-80]"),
+				Name:      sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedDest:     key.DestinationExactKeyRange{KeyRange: &topodatapb.KeyRange{End: []byte{0x80}}},
+			expectedKeyspace: "ks1",
+		},
+		{
+			name: "keyspace id destination",
+			tableName: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS("ks1[80]"),
+				Name:      sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedDest:     key.DestinationKeyspaceID([]byte{0x80}),
+			expectedKeyspace: "ks1",
+		},
+		{
+			name: "keyspace only",
+			tableName: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS("ks1"),
+				Name:      sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedDest:     nil,
+			expectedKeyspace: "ks1",
+		},
+		{
+			name: "unqualified name",
+			tableName: sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedDest:     nil,
+			expectedKeyspace: "ks1",
+		},
+		{
+			name: "unknown keyspace",
+			tableName: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS("unknown_ks"),
+				Name:      sqlparser.NewIdentifierCS("v1"),
+			},
+			expectedNilKS: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{})
+			impl, _ := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil,
+				&fakeVSchemaOperator{vschema: vschemaWith1KS}, vschemaWith1KS, nil, nil,
+				fakeObserver{}, VCursorConfig{
+					DefaultTabletType: topodatapb.TabletType_PRIMARY,
+				}, nil)
+			impl.vschema = vschemaWith1KS
+			dest, ks, err := impl.FindViewTarget(tc.tableName)
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedDest, dest)
+			if tc.expectedNilKS {
+				require.Nil(t, ks)
+			} else {
+				require.NotNil(t, ks)
+				require.Equal(t, tc.expectedKeyspace, ks.Name)
+			}
+		})
+	}
+}
+
 var (
 	ks1       = &vindexes.Keyspace{Name: "ks1"}
 	ks1Schema = &vindexes.KeyspaceSchema{Keyspace: ks1}
