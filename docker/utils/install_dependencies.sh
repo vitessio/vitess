@@ -63,6 +63,15 @@ install_mysql_tarball() {
 	tar -xJf "${source}" -C /usr/local --strip-components=1
 }
 
+install_mysql_shell_tarball() {
+	local version="$1"
+	local archive="mysql-shell-${version}-linux-glibc2.28-arm-64bit.tar.gz"
+	local source="/tmp/${archive}"
+
+	do_fetch "https://cdn.mysql.com/Downloads/MySQL-Shell/${archive}" "${source}"
+	tar -xzf "${source}" -C /usr/local --strip-components=1
+}
+
 percona_mysql_shell_package() {
 	local version="$1"
 	printf 'percona-mysql-shell=%s-1-1.%s\n' "${version}" "${DEBIAN_CODENAME}"
@@ -71,7 +80,9 @@ percona_mysql_shell_package() {
 # Oracle's Debian repo does not publish arm64 .deb packages for the MySQL
 # flavors we use here, so on arm64 we install `mysql80` and `mysql84` from
 # Oracle's generic aarch64 tarballs and pair them with Percona's arm64
-# `percona-mysql-shell` and xtrabackup packages.
+# xtrabackup packages. MySQL Shell comes from Percona's arm64
+# `percona-mysql-shell` package for `mysql80`, and from Oracle's generic arm64
+# MySQL Shell tarball for `mysql84`.
 #
 # Those Oracle tarballs still link against libaio.so.1, but trixie's t64
 # transition renamed the packaged soname to libaio.so.1t64. Create a
@@ -166,12 +177,16 @@ mysql80)
 	;;
 mysql84)
 	if [ -z "$VERSION" ]; then
-		VERSION=8.4.8
+		VERSION=8.4.13.1
 	fi
+	# MySQL Shell has its own version: as of 26.7, it has one release series
+	# for all supported MySQL Server versions, and its 8.4 series is
+	# discontinued.
+	MYSQL_SHELL_VERSION=26.10.0.1
 	if [[ "${ARCH}" == "arm64" ]]; then
 		install_mysql_tarball "8.4" "${VERSION}"
+		install_mysql_shell_tarball "${MYSQL_SHELL_VERSION}"
 		PACKAGES=(
-			"$(percona_mysql_shell_package "${VERSION}")"
 			percona-xtrabackup-84
 		)
 	else
@@ -184,7 +199,7 @@ mysql84)
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-community/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-8.4-lts/m/mysql-shell/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+		do_fetch "https://repo.mysql.com/apt/debian/pool/mysql-innovation/m/mysql-shell/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb" "/tmp/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 		PACKAGES=(
 			"/tmp/mysql-common_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/libmysqlclient24_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
@@ -195,7 +210,7 @@ mysql84)
 			"/tmp/mysql-community-server-core_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/mysql-community-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			"/tmp/mysql-server_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
-			"/tmp/mysql-shell_${VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
+			"/tmp/mysql-shell_${MYSQL_SHELL_VERSION}-1debian${DEBIAN_VERSION}_amd64.deb"
 			percona-xtrabackup-84
 		)
 	fi
@@ -251,7 +266,6 @@ mysql80)
 mysql84)
 	if [[ "${ARCH}" == "arm64" ]]; then
 		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/pxb-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona.list
-		echo "deb [signed-by=/etc/apt/keyrings/percona.gpg] http://repo.percona.com/ps-84-lts/apt ${DEBIAN_CODENAME} main" > /etc/apt/sources.list.d/percona-shell.list
 	else
 		echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ ${DEBIAN_CODENAME} mysql-8.4-lts" > /etc/apt/sources.list.d/mysql.list
 	fi
@@ -312,4 +326,5 @@ rm -rf /var/lib/apt/lists/*
 rm -rf /var/lib/mysql/
 rm -rf /tmp/*.deb
 rm -rf /tmp/*.tar.xz
+rm -rf /tmp/*.tar.gz
 rm -rf /etc/apt/sources.list.d/mysql.list /etc/apt/sources.list.d/percona*.list /etc/apt/keyrings/mysql.gpg /etc/apt/keyrings/percona.gpg
