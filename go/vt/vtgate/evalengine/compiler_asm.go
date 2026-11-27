@@ -1836,7 +1836,7 @@ func (asm *assembler) Fn_ROUND2_i() {
 		i := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
-		i.i = roundSigned(i.i, r.i)
+		i.i, env.vm.err = roundSigned(i.i, r.i)
 		env.vm.sp--
 		return 1
 	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
@@ -1848,7 +1848,7 @@ func (asm *assembler) Fn_ROUND2_u() {
 		u := env.vm.stack[env.vm.sp-2].(*evalUint64)
 		r := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
-		u.u = roundUnsigned(u.u, r.i)
+		u.u, env.vm.err = roundUnsigned(u.u, r.i)
 		env.vm.sp--
 		return 1
 	}, "FN ROUND INT64(SP-2) INT64(SP-1)")
