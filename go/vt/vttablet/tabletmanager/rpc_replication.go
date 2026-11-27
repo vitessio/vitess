@@ -42,7 +42,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // mysqlVersionCacheTTL bounds how long a cached MySQL version string is served
@@ -1225,6 +1227,27 @@ type StopReplicationAndGetStatusResponse struct {
 	Status *replicationdatapb.StopReplicationStatus
 }
 
+func reparentPhaseTimeout(timeout *vttimepb.Duration) (time.Duration, error) {
+	duration, set, err := protoutil.DurationFromProto(timeout)
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid timeout: %s", err)
+	}
+	if !set || duration == 0 {
+		return topo.RemoteOperationTimeout, nil
+	}
+	if duration < 0 {
+		return 0, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "timeout must not be negative")
+	}
+	return duration, nil
+}
+
+func reparentPhaseError(err error) *vtrpc.RPCError {
+	if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); ok {
+		err = vterrors.New(sqlErr.VtRpcErrorCode(), err.Error())
+	}
+	return vterrors.ToVTRPC(err)
+}
+
 // PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (string, error) {
 	log.Info("PromoteReplica")
@@ -1236,6 +1259,10 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
+	return tm.promoteReplicaLocked(ctx, semiSync)
+}
+
+func (tm *TabletManager) promoteReplicaLocked(ctx context.Context, semiSync bool) (string, error) {
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return "", err
@@ -1249,16 +1276,87 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	if err != nil {
 		return "", err
 	}
+	position := replication.EncodePosition(pos)
 
 	// If using semi-sync, we need to enable it before going read-write.
 	if err := tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, semiSyncAction); err != nil {
-		return "", err
+		return position, err
 	}
 
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
-		return "", err
+		return position, err
 	}
-	return replication.EncodePosition(pos), nil
+	return position, nil
+}
+
+// PromoteReplicaAndJournal promotes the tablet and then writes its reparent
+// journal row, so a reparent needs one round trip instead of two. Like
+// PromoteReplica, promotion is bounded by the caller's deadline and stops when
+// the caller gives up, but once the tablet is writable the journal write runs
+// to completion or to populate_reparent_journal_timeout.
+func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if request == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
+	}
+	journalTimeout, err := reparentPhaseTimeout(request.PopulateReparentJournalTimeout)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "invalid populate_reparent_journal_timeout")
+	}
+	if request.TimeCreated == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created is required")
+	}
+	timeCreated := protoutil.TimeFromProto(request.TimeCreated)
+	if request.TimeCreated.Nanoseconds < 0 || request.TimeCreated.Nanoseconds >= int32(time.Second) || !time.Unix(0, timeCreated.UnixNano()).Equal(timeCreated) {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created is out of range")
+	}
+	if timeCreated.UnixNano() <= 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created must be positive")
+	}
+	if request.ActionName == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name is required")
+	}
+	if len(request.ActionName) > 255 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name must not exceed 255 bytes")
+	}
+	tabletAlias := slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias))
+	log.Info("PromoteReplicaAndJournal", tabletAlias)
+	response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}
+
+	err = tm.waitForGrantsToHaveApplied(ctx)
+	if err == nil {
+		err = tm.lock(ctx)
+	}
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		log.Warn("PromoteReplicaAndJournal failed before promoting the replica", tabletAlias, slog.Any("error", err))
+		response.PromoteReplicaError = reparentPhaseError(err)
+		return response, nil
+	}
+	// Promotion honours the caller's context, so a caller that gives up (and may
+	// release the shard lock) never leaves this tablet going read-write later.
+	response.Position, err = func() (string, error) {
+		defer tm.unlock()
+		return tm.promoteReplicaLocked(ctx, request.SemiSync)
+	}()
+	if err != nil {
+		log.Warn("PromoteReplicaAndJournal failed to promote the replica", tabletAlias, slog.String("position", response.Position), slog.Any("error", err))
+		response.PromoteReplicaError = reparentPhaseError(err)
+		return response, nil
+	}
+
+	// Once the tablet is writable, a missing journal row is the torn state we want
+	// to avoid, so the journal write outlives the caller's cancellation, bounded by
+	// the timeout the caller asked for.
+	journalCtx, journalCancel := context.WithTimeout(context.WithoutCancel(ctx), journalTimeout)
+	err = tm.PopulateReparentJournal(journalCtx, timeCreated.UnixNano(), request.ActionName, tm.tabletAlias, response.Position)
+	journalCancel()
+	if err != nil {
+		log.Warn("PromoteReplicaAndJournal failed to populate the reparent journal", tabletAlias, slog.Any("error", err))
+		response.PopulateReparentJournalError = reparentPhaseError(err)
+	}
+	return response, nil
 }
 
 func isPrimaryEligible(tabletType topodatapb.TabletType) bool {

@@ -328,6 +328,11 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	PromoteReplicaAndJournalResults map[string]struct {
+		Response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		Error    error
+	}
+	// keyed by tablet alias.
 	RefreshStateResults map[string]error
 	// keyed by `<tablet_alias>/<wait_pos>`.
 	ReloadSchemaDelays map[string]time.Duration
@@ -1069,6 +1074,19 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+func (fake *TabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	if fake.PromoteReplicaAndJournalResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.PromoteReplicaAndJournalResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 // RefreshState is part of the tmclient.TabletManagerClient interface.

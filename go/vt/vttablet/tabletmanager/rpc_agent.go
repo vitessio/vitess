@@ -164,6 +164,8 @@ type RPCTM interface {
 
 	PromoteReplica(ctx context.Context, semiSync bool) (string, error)
 
+	PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error)
+
 	// Backup / restore related methods
 
 	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error

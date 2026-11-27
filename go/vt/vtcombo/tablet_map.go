@@ -1061,6 +1061,10 @@ func (itmc *internalTabletManagerClient) PromoteReplica(context.Context, *topoda
 	return "", errors.New("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) PromoteReplicaAndJournal(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	return nil, errors.New("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (logutil.EventStream, error) {
 	return nil, errors.New("not implemented in vtcombo")
 }

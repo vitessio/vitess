@@ -205,6 +205,9 @@ service TabletManager {
   // PromoteReplica makes the replica the new primary
   rpc PromoteReplica(tabletmanagerdata.PromoteReplicaRequest) returns (tabletmanagerdata.PromoteReplicaResponse) {};
 
+  // PromoteReplicaAndJournal promotes the replica and writes the reparent journal
+  rpc PromoteReplicaAndJournal(tabletmanagerdata.PromoteReplicaAndJournalRequest) returns (tabletmanagerdata.PromoteReplicaAndJournalResponse) {};
+
   //
   // Backup related methods
   //
