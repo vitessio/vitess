@@ -70,7 +70,7 @@ const TEST_PROCESS_ENV = {
 describe('Advanced', () => {
     beforeAll(() => {
         Object.assign(import.meta.env, TEST_PROCESS_ENV);
-        vi.spyOn(global, 'fetch');
+        vi.spyOn(globalThis, 'fetch');
     });
 
     beforeEach(() => {
@@ -101,10 +101,10 @@ describe('Advanced', () => {
                 fireEvent.click(button);
 
                 await waitFor(() => {
-                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith(
+                expect(globalThis.fetch).toHaveBeenCalledWith(
                     `/api/tablet/${alias}/start_replication?cluster=some-cluster-id`,
                     {
                         credentials: undefined,
@@ -147,10 +147,10 @@ describe('Advanced', () => {
                 fireEvent.click(button);
 
                 await waitFor(() => {
-                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith(
+                expect(globalThis.fetch).toHaveBeenCalledWith(
                     `/api/tablet/${alias}/stop_replication?cluster=some-cluster-id`,
                     {
                         credentials: undefined,
@@ -193,10 +193,10 @@ describe('Advanced', () => {
                 fireEvent.click(button);
 
                 await waitFor(() => {
-                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith(`/api/tablet/${alias}/refresh_replication_source`, {
+                expect(globalThis.fetch).toHaveBeenCalledWith(`/api/tablet/${alias}/refresh_replication_source`, {
                     credentials: undefined,
                     method: 'put',
                 });
@@ -241,10 +241,10 @@ describe('Advanced', () => {
                 fireEvent.click(button);
 
                 await waitFor(() => {
-                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
+                expect(globalThis.fetch).toHaveBeenCalledWith('/api/tablet/zone1-101?cluster=some-cluster-id', {
                     credentials: undefined,
                     method: 'delete',
                 });
@@ -272,10 +272,10 @@ describe('Advanced', () => {
                 fireEvent.click(button);
 
                 await waitFor(() => {
-                    expect(global.fetch).toHaveBeenCalledTimes(1);
+                    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
                 });
 
-                expect(global.fetch).toHaveBeenCalledWith(
+                expect(globalThis.fetch).toHaveBeenCalledWith(
                     '/api/tablet/zone1-101?cluster=some-cluster-id&allow_primary=true',
                     {
                         credentials: undefined,
