@@ -157,6 +157,13 @@ func introducerCast(e eval, col collations.ID) (*evalBytes, error) {
 				bytes = append(make([]byte, 4-mod), bytes...)
 			}
 		}
+		// Like MySQL, only a hex or bit literal is checked: the bytes of a
+		// quoted string are taken as they are.
+		if b.isHexOrBitLiteral() {
+			if err := validateIntroducedBytes(cs, bytes); err != nil {
+				return nil, err
+			}
+		}
 	}
 	typedcol := collations.TypedCollation{
 		Collation:    col,

@@ -33,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1176,6 +1177,317 @@ func TestBindVarLiteralMalformed(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestInvalidIntroducedLiteral checks that a hex or bit literal whose bytes are
+// not well-formed in the character set of its introducer fails with MySQL's
+// ER_INVALID_CHARACTER_STRING, both when the literal is folded during
+// translation and when it arrives as a bind variable and is evaluated by the
+// interpreter and by the compiler.
+func TestInvalidIntroducedLiteral(t *testing.T) {
+	testCases := []struct {
+		expression string
+		err        string
+	}{
+		{
+			expression: `CAST(_utf16 X'D800' AS DECIMAL(20,6))`,
+			err:        "Invalid utf16 character string: 'D800'",
+		},
+		{
+			expression: `CAST(_utf8mb4 X'C2' AS DECIMAL(20,6))`,
+			err:        "Invalid utf8mb4 character string: 'C2'",
+		},
+		{
+			// The error shows at most three bytes.
+			expression: `CAST(_utf32 X'00110000' AS DECIMAL(20,6))`,
+			err:        "Invalid utf32 character string: '001100'",
+		},
+		{
+			expression: `CONVERT(_utf16 X'D800' USING latin1)`,
+			err:        "Invalid utf16 character string: 'D800'",
+		},
+		{
+			// The error starts at the first character that is not well-formed.
+			expression: `_utf8mb4 X'41424344454647C2'`,
+			err:        "Invalid utf8mb4 character string: 'C2'",
+		},
+		{
+			expression: `_utf8mb4 0xC2`,
+			err:        "Invalid utf8mb4 character string: 'C2'",
+		},
+		{
+			expression: `_utf8mb4 b'11000010'`,
+			err:        "Invalid utf8mb4 character string: 'C2'",
+		},
+		{
+			expression: `_utf8mb3 X'F09F9880'`,
+			err:        "Invalid utf8mb3 character string: 'F09F98'",
+		},
+		{
+			expression: `_sjis X'81'`,
+			err:        "Invalid sjis character string: '81'",
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			_, err = evalengine.Translate(expr, &evalengine.Config{
+				Collation:   collations.CollationUtf8mb4ID,
+				Environment: venv,
+			})
+			requireInvalidCharacterString(t, err, tc.err)
+		})
+	}
+
+	bindVarCases := []struct {
+		expression string
+		bindVar    *querypb.BindVariable
+		err        string
+	}{
+		{
+			expression: `_utf16 :vtg1`,
+			bindVar:    sqltypes.HexValBindVariable([]byte("X'D800'")),
+			err:        "Invalid utf16 character string: 'D800'",
+		},
+		{
+			expression: `_utf8mb4 :vtg1`,
+			bindVar:    sqltypes.HexNumBindVariable([]byte("0xC2")),
+			err:        "Invalid utf8mb4 character string: 'C2'",
+		},
+	}
+
+	for _, tc := range bindVarCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			expr.(*sqlparser.IntroducerExpr).Expr.(*sqlparser.Argument).Type = tc.bindVar.Type
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:   collations.CollationUtf8mb4ID,
+				Environment: venv,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = map[string]*querypb.BindVariable{"vtg1": tc.bindVar}
+
+			_, err = env.EvaluateAST(converted)
+			requireInvalidCharacterString(t, err, tc.err)
+
+			_, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+			requireInvalidCharacterString(t, err, tc.err)
+		})
+	}
+}
+
+// TestValidIntroducedLiteral checks literals that MySQL accepts, although a
+// decoder could reject their bytes.
+func TestValidIntroducedLiteral(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{
+			// MySQL does not check the bytes of a quoted string.
+			expression: `HEX(_utf32 'abcd')`,
+			result:     `VARCHAR("61626364")`,
+		},
+		{
+			// MySQL accepts a lone surrogate in ucs2.
+			expression: `HEX(_ucs2 X'D800')`,
+			result:     `VARCHAR("D800")`,
+		},
+		{
+			// MySQL accepts every byte in a single-byte character set.
+			expression: `HEX(_ascii X'80')`,
+			result:     `VARCHAR("80")`,
+		},
+		{
+			// MySQL checks only the byte ranges in sjis, so an unmapped
+			// double-byte character is accepted.
+			expression: `HEX(_sjis X'8540')`,
+			result:     `VARCHAR("8540")`,
+		},
+		{
+			// MySQL checks only the byte ranges in ujis, so an unmapped
+			// double-byte character is accepted.
+			expression: `HEX(_ujis X'A9A1')`,
+			result:     `VARCHAR("A9A1")`,
+		},
+		{
+			// MySQL checks only the byte ranges in gb2312, so an unmapped
+			// double-byte character is accepted.
+			expression: `HEX(_gb2312 X'AAA1')`,
+			result:     `VARCHAR("AAA1")`,
+		},
+		{
+			// MySQL accepts a string that ends in the middle of a character in
+			// eucjpms.
+			expression: `HEX(_eucjpms X'8E')`,
+			result:     `VARCHAR("8E")`,
+		},
+		{
+			// The literal is padded to a whole character first.
+			expression: `HEX(_utf16 X'D8')`,
+			result:     `VARCHAR("00D8")`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			res, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+
+			res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
+// TestIntroducedLiteralByteRanges pins the byte ranges that introducer.go
+// ports from MySQL for the multi-byte East Asian character sets. Each range is
+// checked on both sides of its edges, so a range that is widened or narrowed by
+// one byte fails this test without a MySQL server.
+func TestIntroducedLiteralByteRanges(t *testing.T) {
+	testCases := []struct {
+		charset string
+		hex     string
+		valid   bool
+	}{
+		// sjis and cp932: a single byte is [00-7F] or [A1-DF]; a double-byte
+		// character is [81-9F E0-FC][40-7E 80-FC].
+		{"sjis", "7F", true},
+		{"sjis", "80", false},
+		{"sjis", "A0", false},
+		{"sjis", "A1", true},
+		{"sjis", "DF", true},
+		{"sjis", "E0", false},
+		{"sjis", "8040", false},
+		{"sjis", "8140", true},
+		{"sjis", "9F40", true},
+		{"sjis", "A040", false},
+		{"sjis", "E040", true},
+		{"sjis", "FC40", true},
+		{"sjis", "FD40", false},
+		{"sjis", "813F", false},
+		{"sjis", "817E", true},
+		{"sjis", "817F", false},
+		{"sjis", "8180", true},
+		{"sjis", "81FC", true},
+		{"sjis", "81FD", false},
+		{"cp932", "80", false},
+		{"cp932", "8140", true},
+		{"cp932", "817F", false},
+		{"cp932", "FCFC", true},
+
+		// euckr: a single byte is [00-7F]; a double-byte character is
+		// [81-FE][41-5A 61-7A 81-FE].
+		{"euckr", "7F", true},
+		{"euckr", "80", false},
+		{"euckr", "8041", false},
+		{"euckr", "8141", true},
+		{"euckr", "FE41", true},
+		{"euckr", "FF41", false},
+		{"euckr", "8140", false},
+		{"euckr", "815A", true},
+		{"euckr", "815B", false},
+		{"euckr", "8160", false},
+		{"euckr", "8161", true},
+		{"euckr", "817A", true},
+		{"euckr", "817B", false},
+		{"euckr", "8180", false},
+		{"euckr", "8181", true},
+		{"euckr", "81FE", true},
+		{"euckr", "81FF", false},
+
+		// gb2312: a single byte is [00-7F]; a double-byte character is
+		// [A1-F7][A1-FE].
+		{"gb2312", "7F", true},
+		{"gb2312", "80", false},
+		{"gb2312", "A0A1", false},
+		{"gb2312", "A1A1", true},
+		{"gb2312", "F7A1", true},
+		{"gb2312", "F8A1", false},
+		{"gb2312", "A1A0", false},
+		{"gb2312", "A1FE", true},
+		{"gb2312", "A1FF", false},
+		{"gb2312", "AAA1", true},
+
+		// ujis and eucjpms: a single byte is [00-7F]; a multi-byte character
+		// is [8E][A0-DF], [8F][A1-FE][A1-FE] or [A1-FE][A1-FE].
+		{"ujis", "7F", true},
+		{"ujis", "80", false},
+		{"ujis", "8D", false},
+		{"ujis", "8E9F", false},
+		{"ujis", "8EA0", true},
+		{"ujis", "8EDF", true},
+		{"ujis", "8EE0", false},
+		{"ujis", "8FA0A1", false},
+		{"ujis", "8FA1A0", false},
+		{"ujis", "8FA1A1", true},
+		{"ujis", "8FFEFE", true},
+		{"ujis", "8FA1FF", false},
+		{"ujis", "A0A1", false},
+		{"ujis", "A1A0", false},
+		{"ujis", "A1A1", true},
+		{"ujis", "A9A1", true},
+		{"ujis", "FEFE", true},
+		{"ujis", "A1FF", false},
+		{"eucjpms", "8EE0", false},
+		{"eucjpms", "8FA1A0", false},
+		{"eucjpms", "A1A1", true},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		expression := fmt.Sprintf("HEX(_%s X'%s')", tc.charset, tc.hex)
+		t.Run(expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(expression)
+			require.NoError(t, err)
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:   collations.CollationUtf8mb4ID,
+				Environment: venv,
+			})
+			if !tc.valid {
+				requireInvalidCharacterString(t, err, fmt.Sprintf("Invalid %s character string: '%s'", tc.charset, tc.hex))
+				return
+			}
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			res, err := env.Evaluate(converted)
+			require.NoError(t, err)
+			assert.Equal(t, fmt.Sprintf("VARCHAR(%q)", tc.hex), res.String())
+		})
+	}
+}
+
+func requireInvalidCharacterString(t *testing.T, err error, message string) {
+	t.Helper()
+	require.EqualError(t, err, message)
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, sqlerror.NewSQLErrorFromError(err), &sqlErr)
+	assert.Equal(t, sqlerror.ERInvalidCharacterString, sqlErr.Number())
+	assert.Equal(t, sqlerror.SSUnknownSQLState, sqlErr.SQLState())
 }
 
 type testVcursor struct {
