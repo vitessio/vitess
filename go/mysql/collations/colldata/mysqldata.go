@@ -3943,7 +3943,6 @@ var collationsById = [...]Collation{
 		charset: charset.Charset_big5{},
 		charLen: charLenBig5,
 		order:   big5Code,
-		weight:  big5StrokeWeight,
 	},
 	0x2: &Collation_latin2_czech_cs{
 		id:   0x2,
@@ -4274,7 +4273,6 @@ var collationsById = [...]Collation{
 		charset: charset.Charset_gbk{},
 		charLen: charLenGBK,
 		order:   gbkSortOrder,
-		weight:  gbkSortOrder,
 	},
 	0x1d: &Collation_8bit_simple_ci{
 		id:   0x1d,

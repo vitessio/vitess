@@ -17,6 +17,7 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type chineseCICase struct {
@@ -44,7 +46,8 @@ type chineseCICase struct {
 
 // TestChineseCI checks gbk_chinese_ci and big5_chinese_ci against values
 // measured on MySQL 8.4.13 and 8.0.46 with a column of the collation:
-// WEIGHT_STRING('a中') is 41 D3 21 in gbk_chinese_ci.
+// WEIGHT_STRING('a中') is 41 D3 21 in gbk_chinese_ci. The weight strings of
+// big5_chinese_ci are the exception, see TestBig5ChineseCIFollowsComparison.
 func TestChineseCI(t *testing.T) {
 	testcases := []chineseCICase{
 		{
@@ -78,12 +81,16 @@ func TestChineseCI(t *testing.T) {
 		},
 		{
 			collation: "big5_chinese_ci",
+			// The weight of a two-byte character is its bytes, as
+			// in a comparison. MySQL writes the first character with
+			// the same number of strokes instead, A440 for "一" and
+			// "乙", A4A1 for "中" and A140 for "ａ" and "Ａ", see
+			// Collation_chinese_ci.
 			weights: map[string]string{
-				// "一" and "乙" have one stroke.
 				"一":      "A440",
-				"乙":      "A440",
-				"a中":     "41A4A1",
-				"aBc ａＡ": "41424320A140A140",
+				"乙":      "A441",
+				"a中":     "41A4A4",
+				"aBc ａＡ": "41424320A2E9A2CF",
 			},
 			comparisons: []struct {
 				left, right string
@@ -129,5 +136,52 @@ func TestChineseCI(t *testing.T) {
 				assert.Equal(t, like.match, pattern.Match(encode(like.input)), "%q LIKE %q", like.input, like.pattern)
 			}
 		})
+	}
+}
+
+// TestBig5ChineseCIFollowsComparison checks that the weight string and the
+// hash of big5_chinese_ci follow its comparison, which orders two-byte
+// characters by their bytes. MySQL's WEIGHT_STRING() orders them by strokes
+// (https://bugs.mysql.com/bug.php?id=65899): "一" (A4 40) and "乙" (A4 41)
+// both have the weight A4 40 there, and "乂" (C9 40) has A4 42 and sorts
+// before "中" (A4 A4). With such weights, DISTINCT would take "一" and "乙"
+// for one value, and a sort by weight would not be the order of the
+// comparison.
+func TestBig5ChineseCIFollowsComparison(t *testing.T) {
+	coll := testcollation(t, "big5_chinese_ci")
+	encode := func(s string) []byte {
+		converted, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(s))
+		require.NoError(t, err)
+		return converted
+	}
+	hash := func(b []byte) vthash.Hash {
+		hasher := vthash.New()
+		coll.Hash(&hasher, b, 0)
+		return hasher.Sum128()
+	}
+	sign := func(n int) int {
+		switch {
+		case n < 0:
+			return -1
+		case n > 0:
+			return 1
+		}
+		return 0
+	}
+
+	testcases := []struct {
+		left, right string
+		cmp         int
+	}{
+		{"一", "乙", -1},
+		{"中", "乂", -1},
+		{"a一", "A一", 0},
+		{"上午好", "下午好", 1},
+	}
+	for _, tc := range testcases {
+		left, right := encode(tc.left), encode(tc.right)
+		assert.Equal(t, tc.cmp, sign(coll.Collate(left, right, false)), "Collate(%q, %q)", tc.left, tc.right)
+		assert.Equal(t, tc.cmp, sign(bytes.Compare(coll.WeightString(nil, left, 0), coll.WeightString(nil, right, 0))), "WeightString(%q) vs WeightString(%q)", tc.left, tc.right)
+		assert.Equal(t, tc.cmp == 0, hash(left) == hash(right), "Hash(%q) == Hash(%q)", tc.left, tc.right)
 	}
 }

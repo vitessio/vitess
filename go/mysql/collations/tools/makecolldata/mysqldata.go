@@ -403,7 +403,7 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 
 // printCollationChineseCI prints gbk_chinese_ci and big5_chinese_ci. The dump
 // has their sort tables for single bytes. The order of two-byte characters
-// is in colldata/gbk_order.go and colldata/chinese_ci.go.
+// is in colldata/gbk_order.go for gbk, and their bytes for big5.
 func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
 	tableSortOrder := g.Tables.printSlice("sortorder", meta.Name, codegen.Array8(meta.SortOrder))
 
@@ -416,11 +416,9 @@ func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
 	case "gbk":
 		g.P("charLen: charLenGBK,")
 		g.P("order: gbkSortOrder,")
-		g.P("weight: gbkSortOrder,")
 	case "big5":
 		g.P("charLen: charLenBig5,")
 		g.P("order: big5Code,")
-		g.P("weight: big5StrokeWeight,")
 	default:
 		g.Fail("no order for " + meta.Charset)
 	}
