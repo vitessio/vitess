@@ -31,6 +31,8 @@ type SuspendableTicker struct {
 
 	suspended atomic.Bool
 	cancel    context.CancelFunc
+	// stopped is closed by Stop, so that a TickNow whose tick nothing reads returns
+	stopped <-chan struct{}
 }
 
 // NewSuspendableTicker creates a new suspendable ticker, indicating whether the ticker should start
@@ -38,9 +40,10 @@ type SuspendableTicker struct {
 func NewSuspendableTicker(d time.Duration, initiallySuspended bool) *SuspendableTicker {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &SuspendableTicker{
-		ticker: time.NewTicker(d),
-		C:      make(chan time.Time),
-		cancel: cancel,
+		ticker:  time.NewTicker(d),
+		C:       make(chan time.Time),
+		cancel:  cancel,
+		stopped: ctx.Done(),
 	}
 	if initiallySuspended {
 		s.suspended.Store(true)
@@ -66,11 +69,15 @@ func (s *SuspendableTicker) Stop() {
 }
 
 // TickNow generates a tick at this point in time. It may block
-// if nothing consumes the tick.
+// if nothing consumes the tick, until the ticker is stopped, which
+// drops the tick.
 func (s *SuspendableTicker) TickNow() {
 	if !s.suspended.Load() {
 		// not suspended
-		s.C <- time.Now()
+		select {
+		case <-s.stopped:
+		case s.C <- time.Now():
+		}
 	}
 }
 
