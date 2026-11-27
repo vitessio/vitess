@@ -1112,9 +1112,16 @@ func (erp *EmergencyReparenter) reparentReplicas(
 				// we call InitPrimary when the PrimaryAlias in the ShardInfo is empty. This happens when we have an uninitialized cluster.
 				position, err = erp.tmc.InitPrimary(primaryCtx, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0)
 			} else {
-				erp.logger.Info("starting promotion for the new primary", slog.String("tablet", alias))
-				// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-				position, err = erp.tmc.PromoteReplica(primaryCtx, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0)
+				erp.logger.Info("starting promotion and populating the reparent journal for the new primary", slog.String("tablet", alias))
+				// a zero journal timeout uses the tablet's default
+				promoteErr, journalErr := promoteReplicaAndJournal(primaryCtx, erp.tmc, tablet, policy.SemiSyncAckers(opts.durability, tablet) > 0, now, opts.lockAction, 0)
+				if promoteErr != nil {
+					return vterrors.Wrapf(promoteErr, "primary-elect tablet %v failed to be upgraded to primary", alias)
+				}
+				if journalErr != nil {
+					return vterrors.Wrapf(journalErr, "failed to PopulateReparentJournal on primary")
+				}
+				return nil
 			}
 			if err != nil {
 				return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary", alias)

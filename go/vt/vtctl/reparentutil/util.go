@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -649,4 +651,25 @@ func lowestLagTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Stat
 	}
 
 	return chosen
+}
+
+// promoteReplicaAndJournal promotes the tablet and writes its journal row in one
+// call. A failed call counts as a promotion failure.
+func promoteReplicaAndJournal(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, semiSync bool, timeCreatedNS int64, actionName string, journalTimeout time.Duration) (promoteErr error, journalErr error) {
+	response, err := tmc.PromoteReplicaAndJournal(ctx, tablet, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+		SemiSync:                       semiSync,
+		TimeCreated:                    protoutil.TimeToProto(time.Unix(0, timeCreatedNS)),
+		ActionName:                     actionName,
+		PopulateReparentJournalTimeout: protoutil.DurationToProto(journalTimeout),
+	})
+	if err != nil {
+		return err, nil
+	}
+	if rpcErr := response.GetPromoteReplicaError(); rpcErr != nil {
+		return vterrors.FromVTRPC(rpcErr), nil
+	}
+	if rpcErr := response.GetPopulateReparentJournalError(); rpcErr != nil {
+		return nil, vterrors.FromVTRPC(rpcErr)
+	}
+	return nil, nil
 }

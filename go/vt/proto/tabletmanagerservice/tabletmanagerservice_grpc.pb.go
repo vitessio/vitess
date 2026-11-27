@@ -104,6 +104,7 @@ const (
 	TabletManager_ReplicaWasRestarted_FullMethodName             = "/tabletmanagerservice.TabletManager/ReplicaWasRestarted"
 	TabletManager_StopReplicationAndGetStatus_FullMethodName     = "/tabletmanagerservice.TabletManager/StopReplicationAndGetStatus"
 	TabletManager_PromoteReplica_FullMethodName                  = "/tabletmanagerservice.TabletManager/PromoteReplica"
+	TabletManager_PromoteReplicaAndJournal_FullMethodName        = "/tabletmanagerservice.TabletManager/PromoteReplicaAndJournal"
 	TabletManager_Backup_FullMethodName                          = "/tabletmanagerservice.TabletManager/Backup"
 	TabletManager_RestoreFromBackup_FullMethodName               = "/tabletmanagerservice.TabletManager/RestoreFromBackup"
 	TabletManager_CheckThrottler_FullMethodName                  = "/tabletmanagerservice.TabletManager/CheckThrottler"
@@ -221,6 +222,8 @@ type TabletManagerClient interface {
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
+	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
+	PromoteReplicaAndJournal(ctx context.Context, in *tabletmanagerdata.PromoteReplicaAndJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.BackupResponse], error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.RestoreFromBackupResponse], error)
@@ -898,6 +901,16 @@ func (c *tabletManagerClient) PromoteReplica(ctx context.Context, in *tabletmana
 	return out, nil
 }
 
+func (c *tabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, in *tabletmanagerdata.PromoteReplicaAndJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(tabletmanagerdata.PromoteReplicaAndJournalResponse)
+	err := c.cc.Invoke(ctx, TabletManager_PromoteReplicaAndJournal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[tabletmanagerdata.BackupResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &TabletManager_ServiceDesc.Streams[0], TabletManager_Backup_FullMethodName, cOpts...)
@@ -1067,6 +1080,8 @@ type TabletManagerServer interface {
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)
+	// PromoteReplicaAndJournal promotes the replica and writes the reparent journal
+	PromoteReplicaAndJournal(context.Context, *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error)
 	Backup(*tabletmanagerdata.BackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.BackupResponse]) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.RestoreFromBackupResponse]) error
@@ -1281,6 +1296,9 @@ func (UnimplementedTabletManagerServer) StopReplicationAndGetStatus(context.Cont
 }
 func (UnimplementedTabletManagerServer) PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PromoteReplica not implemented")
+}
+func (UnimplementedTabletManagerServer) PromoteReplicaAndJournal(context.Context, *tabletmanagerdata.PromoteReplicaAndJournalRequest) (*tabletmanagerdata.PromoteReplicaAndJournalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PromoteReplicaAndJournal not implemented")
 }
 func (UnimplementedTabletManagerServer) Backup(*tabletmanagerdata.BackupRequest, grpc.ServerStreamingServer[tabletmanagerdata.BackupResponse]) error {
 	return status.Error(codes.Unimplemented, "method Backup not implemented")
@@ -2503,6 +2521,24 @@ func _TabletManager_PromoteReplica_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_PromoteReplicaAndJournal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.PromoteReplicaAndJournalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).PromoteReplicaAndJournal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TabletManager_PromoteReplicaAndJournal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).PromoteReplicaAndJournal(ctx, req.(*tabletmanagerdata.PromoteReplicaAndJournalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(tabletmanagerdata.BackupRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -2831,6 +2867,10 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PromoteReplica",
 			Handler:    _TabletManager_PromoteReplica_Handler,
+		},
+		{
+			MethodName: "PromoteReplicaAndJournal",
+			Handler:    _TabletManager_PromoteReplicaAndJournal_Handler,
 		},
 		{
 			MethodName: "CheckThrottler",

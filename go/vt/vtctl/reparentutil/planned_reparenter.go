@@ -952,18 +952,35 @@ func (pr *PlannedReparenter) reparentTablets(
 		}(alias, tabletInfo.Tablet)
 	}
 
-	// If `PromoteReplica` call is required, we should call it and use the position that it returns.
 	if promoteReplicaRequired {
-		// Promote the candidate primary to type:PRIMARY.
-		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, policy.SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
-		if err != nil {
-			pr.logger.Warn("primary failed to PromoteReplica; cancelling replica reparent attempts", slog.String("tablet", primaryElectAliasStr), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		// Under semi-sync the journal write waits for a repointed replica (above).
+		// It gets what is left of replCtx, and keeps running if we give up on it.
+		deadline, _ := replCtx.Deadline()
+		journalTimeout := max(time.Until(deadline), time.Millisecond)
+		pr.logger.Info("promoting new primary and populating its reparent journal", slog.String("tablet", primaryElectAliasStr))
+		promoteErr, journalErr := promoteReplicaAndJournal(replCtx, pr.tmc, ev.NewPrimary, policy.SemiSyncAckers(opts.durability, ev.NewPrimary) > 0, reparentJournalTimestamp, "PlannedReparentShard", journalTimeout)
+		if promoteErr != nil {
+			pr.logger.Warn("primary failed to PromoteReplicaAndJournal; cancelling replica reparent attempts", slog.String("tablet", primaryElectAliasStr), slog.Any("error", promoteErr), slog.String("error_code", vterrors.Code(promoteErr).String()))
 			replCancel()
 			replicasWg.Wait()
 
-			return vterrors.Wrapf(err, "failed PromoteReplica(primary=%v, ts=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, err)
+			return vterrors.Wrapf(promoteErr, "failed PromoteReplica(primary=%v, ts=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, promoteErr)
 		}
-		reparentJournalPosition = primaryPosition
+		if journalErr != nil {
+			pr.logger.Warn("primary failed to populate the reparent journal; cancelling replica reparent attempts", slog.String("tablet", primaryElectAliasStr), slog.Any("error", journalErr), slog.String("error_code", vterrors.Code(journalErr).String()))
+			replCancel()
+			replicasWg.Wait()
+
+			return vterrors.Wrapf(journalErr, "failed PopulateReparentJournal(primary=%v, ts=%v): %v", primaryElectAliasStr, reparentJournalTimestamp, journalErr)
+		}
+
+		replicasWg.Wait()
+		if err := rec.Error(); err != nil {
+			msg := "some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias (%v) to retry failed replicas"
+			pr.logger.Error("some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias to retry failed replicas", slog.String("tablet", primaryElectAliasStr), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+			return vterrors.Wrapf(err, msg, primaryElectAliasStr)
+		}
+		return nil
 	}
 
 	// Add a reparent journal entry on the new primary. If semi-sync is enabled,
