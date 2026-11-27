@@ -2178,6 +2178,151 @@
     }
   },
   {
+    "comment": "Recursive CTE that cannot be merged, joined to a derived union on two columns",
+    "query": "with recursive cte as (select id, col from user where id = 5 union all select s.a, s.b from cte join (select id as a, col as b from music union all select user_id, col from user_extra) s on s.a = cte.id and s.b = cte.col) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, col from user where id = 5 union all select s.a, s.b from cte join (select id as a, col as b from music union all select user_id, col from user_extra) s on s.a = cte.id and s.b = cte.col) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "JoinVars": {
+              "cte_col": 1,
+              "cte_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, col from `user` where 1 != 1",
+                "Query": "select id, col from `user` where id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select s.a, s.b from (select id as a, col as b from music where 1 != 1 union all select user_id, col from user_extra where 1 != 1) as s where 1 != 1",
+                "Query": "select s.a, s.b from (select id as a, col as b from music where id = :cte_id and col = :cte_col union all select user_id, col from user_extra where user_id = :cte_id and col = :cte_col) as s"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE that cannot be merged, routed by its predicate pushed into a derived union",
+    "query": "with recursive cte as (select 1 as n from dual union all select s.m from cte join (select user_id as n, col as m from music union all select user_id, col from user_extra) s on s.n = cte.n) select n from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select 1 as n from dual union all select s.m from cte join (select user_id as n, col as m from music union all select user_id, col from user_extra) s on s.n = cte.n) select n from cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_n": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as n from dual where 1 != 1",
+            "Query": "select 1 as n from dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select s.m from (select user_id as n, col as m from music where 1 != 1 union all select user_id, col from user_extra where 1 != 1) as s where 1 != 1",
+            "Query": "select s.m from (select user_id as n, col as m from music where user_id = :cte_n union all select user_id, col from user_extra where user_id = :cte_n) as s",
+            "Values": [
+              ":cte_n"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE that cannot be merged, with a term predicate pushed into a derived union from its WHERE clause",
+    "query": "with recursive cte as (select id as n from user where id = 1 union all select cte.n + s.n from cte, (select col as n from user union all select col from user) s where s.n = cte.n) select n from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id as n from user where id = 1 union all select cte.n + s.n from cte, (select col as n from user union all select col from user) s where s.n = cte.n) select n from cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_n": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as n from `user` where 1 != 1",
+            "Query": "select id as n from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :cte_n + s.n as `cte.n + s.n` from (select col as n from `user` where 1 != 1 union all select col from `user` where 1 != 1) as s where 1 != 1",
+            "Query": "select :cte_n + s.n as `cte.n + s.n` from (select col as n from `user` where col = :cte_n union all select col from `user` where col = :cte_n) as s"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Merge into a single dual route",
     "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
     "plan": {
@@ -2469,6 +2614,83 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "Merge CTE with its predicate pushed into a derived union",
+    "query": "with recursive cte as (select 1 as n from dual union all select s.n from cte join (select id as n from user.ref_with_source union all select id from user.ref_with_source) s on s.n = cte.n + 1) select n from cte",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select 1 as n from dual union all select s.n from cte join (select id as n from user.ref_with_source union all select id from user.ref_with_source) s on s.n = cte.n + 1) select n from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union all select s.n from cte, (select id as n from ref_with_source where 1 != 1 union all select id from ref_with_source where 1 != 1) as s where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 as n from dual union all select s.n from cte, (select id as n from ref_with_source union all select id from ref_with_source) as s where s.n = cte.n + 1) select n from cte"
+      },
+      "TablesUsed": [
+        "user.ref_with_source"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with UNION DISTINCT and its predicate pushed into a derived union",
+    "query": "with recursive cte as (select 1 as n from dual union distinct select s.n from cte join (select id as n from user.ref_with_source union all select id from user.ref_with_source) s on s.n = cte.n + 1) select n from cte",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select 1 as n from dual union distinct select s.n from cte join (select id as n from user.ref_with_source union all select id from user.ref_with_source) s on s.n = cte.n + 1) select n from cte",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select 1 as n from dual where 1 != 1 union select s.n from cte, (select id as n from ref_with_source where 1 != 1 union all select id from ref_with_source where 1 != 1) as s where 1 != 1) select n from cte where 1 != 1",
+        "Query": "with recursive cte as (select 1 as n from dual union select s.n from cte, (select id as n from ref_with_source union all select id from ref_with_source) as s where s.n = cte.n + 1) select n from cte"
+      },
+      "TablesUsed": [
+        "user.ref_with_source"
+      ]
+    }
+  },
+  {
+    "comment": "Merge CTE with its predicate pushed into a derived union whose legs pin the seed's shard",
+    "query": "with recursive cte as (select id, 0 as depth from user where id = 5 union all select refs.user_id, cte.depth + 1 from cte join (select user_id from music where user_id = 5 union all select user_id from user_extra where user_id = 5) as refs on refs.user_id = cte.id where cte.depth < 1) select id, depth from cte order by depth, id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, 0 as depth from user where id = 5 union all select refs.user_id, cte.depth + 1 from cte join (select user_id from music where user_id = 5 union all select user_id from user_extra where user_id = 5) as refs on refs.user_id = cte.id where cte.depth < 1) select id, depth from cte order by depth, id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive cte as (select id, 0 as depth from `user` where 1 != 1 union all select refs.user_id, cte.depth + 1 from cte, (select user_id from music where 1 != 1 union all select user_id from user_extra where 1 != 1) as refs where 1 != 1) select id, depth from cte where 1 != 1",
+        "Query": "with recursive cte as (select id, 0 as depth from `user` where id = 5 union all select refs.user_id, cte.depth + 1 from cte, (select user_id from music where user_id = 5 union all select user_id from user_extra where user_id = 5) as refs where cte.depth < 1 and refs.user_id = cte.id) select id, depth from cte order by cte.depth asc, cte.id asc",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and its predicate pushed into a derived union is unsupported on more than one shard",
+    "query": "with recursive cte as (select id as n from user union distinct select s.n from cte join (select id as n from user.ref_with_source union all select id from user.ref_with_source) s on s.n = cte.n + 1) select n from cte",
+    "plan": "VT12001: unsupported: UNION DISTINCT in a recursive CTE whose term joins a derived UNION"
   },
   {
     "comment": "Merged recursive CTE with DISTINCT",

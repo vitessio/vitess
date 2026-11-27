@@ -516,7 +516,7 @@
         "costly_map": {
           "column_vindexes": [
             {
-              "column": "name",
+              "column": "costly",
               "name": "user_md5_index"
             }
           ]
@@ -1038,6 +1038,10 @@
         }
       },
       "tables": {
+        "ref_with_sharded_source": {
+          "type": "reference",
+          "source": "user.sales"
+        },
         "order": {
           "column_vindexes": [
             {

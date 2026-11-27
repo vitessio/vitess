@@ -158,7 +158,7 @@ CREATE TABLE name_user_map
 CREATE TABLE costly_map
 (
     costly      VARCHAR(255),
-    keyspace_id VARCHAR(255)
+    keyspace_id VARBINARY(10)
 );
 
 CREATE TABLE unq_binary_idx
