@@ -262,6 +262,36 @@ func (g *TableGenerator) printUnicodeMappings(name, coll string, mappings []char
 	return tableName
 }
 
+// eightBitCollationTypes has the collations of 8-bit character sets that MySQL
+// does not compare with the 8bit_bin or 8bit_simple_ci handlers, and the
+// types of colldata that implement them. They have the tables of an 8-bit
+// collation in the dump, in simpletables, and compare in their own way:
+//
+//   - latin1_german2_ci expands letters: 'ä' = 'ae' is true.
+//   - tis620_thai_ci moves leading vowels and tone marks.
+//   - latin2_czech_cs compares in four passes, with the tables in
+//     colldata/czech_data.go, and cp1250_czech_cs in two.
+var eightBitCollationTypes = map[string]string{
+	"latin1_german2_ci": "Collation_latin1_german2_ci",
+	"tis620_thai_ci":    "Collation_tis620_thai_ci",
+	"latin2_czech_cs":   "Collation_latin2_czech_cs",
+	"cp1250_czech_cs":   "Collation_cp1250_czech_cs",
+}
+
+// toUnicodeFixups has the bytes of an 8-bit collation whose code point in the
+// dump is not the one that MySQL converts the byte to.
+//
+// The table of latin2_czech_cs has no character at 7F, but MySQL copies the
+// bytes below 80 when it converts to an ASCII-compatible character set.
+// Measured on MySQL 8.0.46 and 8.4.13: CONVERT((CONVERT(0x7F USING latin2)
+// COLLATE latin2_czech_cs) USING utf8mb4) is 7F, and so is that column in a
+// result with character_set_results=utf8mb4. Vitess converts results to
+// utf8mb4, so 7F decodes to U+007F. MySQL gives 003F for utf16, and U+007F
+// stays without a byte in latin2_czech_cs: an INSERT of it stores "?".
+var toUnicodeFixups = map[string]map[byte]uint16{
+	"latin2_czech_cs": {0x7F: 0x7F},
+}
+
 func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUnicode, tableFromUnicode string
 
@@ -276,19 +306,11 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	if meta.Charset != "latin1" {
 		if meta.TabToUni != nil {
 			toUni := meta.TabToUni
-			if meta.Name == "latin2_czech_cs" {
-				// The table of latin2_czech_cs has no character at 7F,
-				// but MySQL copies the bytes below 80 when it converts
-				// to an ASCII-compatible character set. Measured on
-				// MySQL 8.0.46 and 8.4.13: CONVERT((CONVERT(0x7F USING
-				// latin2) COLLATE latin2_czech_cs) USING utf8mb4) is 7F,
-				// and so is that column in a result with
-				// character_set_results=utf8mb4. Vitess converts results
-				// to utf8mb4, so 7F decodes to U+007F here. MySQL gives
-				// 003F for utf16, and U+007F stays without a byte in
-				// latin2_czech_cs: an INSERT of it stores "?".
+			if fixups := toUnicodeFixups[meta.Name]; fixups != nil {
 				toUni = slices.Clone(toUni)
-				toUni[0x7F] = 0x7F
+				for b, r := range fixups {
+					toUni[b] = r
+				}
 			}
 			tableToUnicode = g.Tables.printSlice("tounicode", meta.Name, codegen.Array16(toUni))
 		}
@@ -297,26 +319,12 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 		}
 	}
 
-	var collation string
+	collation := "Collation_8bit_simple_ci"
 	switch {
 	case meta.Flags.Binary:
 		collation = "Collation_8bit_bin"
-	case meta.Name == "latin1_german2_ci":
-		// The collation has the tables of an 8-bit collation, and
-		// does not compare as one: 'ä' = 'ae' is true.
-		collation = "Collation_latin1_german2_ci"
-	case meta.Name == "tis620_thai_ci":
-		// As latin1_german2_ci.
-		collation = "Collation_tis620_thai_ci"
-	case meta.Name == "latin2_czech_cs":
-		// As latin1_german2_ci. The tables of its four passes are
-		// in colldata/czech_data.go.
-		collation = "Collation_latin2_czech_cs"
-	case meta.Name == "cp1250_czech_cs":
-		// As latin2_czech_cs, with two passes.
-		collation = "Collation_cp1250_czech_cs"
-	default:
-		collation = "Collation_8bit_simple_ci"
+	case eightBitCollationTypes[meta.Name] != "":
+		collation = eightBitCollationTypes[meta.Name]
 	}
 
 	g.P(meta.Number, ": &", collation, "{")
@@ -479,8 +487,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUca900(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci" || meta.Name == "tis620_thai_ci" ||
-			meta.Name == "latin2_czech_cs" || meta.Name == "cp1250_czech_cs":
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || eightBitCollationTypes[meta.Name] != "":
 			g.printCollation8bit(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
