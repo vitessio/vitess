@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
@@ -424,17 +425,22 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 	case e2 == nil:
 		return e1, false
 	default:
-		v1str, ok := e1.(*sqlparser.Literal)
+		// Decline the merge unless both offsets are valid LIMIT literals, so
+		// the original values are still validated at execution
+		v1, ok := limitLiteral(e1)
 		if !ok {
 			return nil, true
 		}
-		v2str, ok := e2.(*sqlparser.Literal)
+		v2, ok := limitLiteral(e2)
 		if !ok {
 			return nil, true
 		}
-		v1, _ := strconv.Atoi(v1str.Val)
-		v2, _ := strconv.Atoi(v2str.Val)
-		return sqlparser.NewIntLiteral(strconv.Itoa(v1 + v2)), false
+		if v1 > math.MaxUint64-v2 {
+			// Saturate instead of overflowing: no result can hold this many rows,
+			// so both offsets skip every row
+			return sqlparser.NewIntLiteral(strconv.FormatUint(math.MaxUint64, 10)), false
+		}
+		return sqlparser.NewIntLiteral(strconv.FormatUint(v1+v2, 10)), false
 	}
 }
 
@@ -459,54 +465,39 @@ func mergeLimitExpressions(l1, l2, off2 sqlparser.Expr) (expr sqlparser.Expr, fa
 			// No offset, so the first limit is used directly.
 			return l1, false
 		}
-		off2, ok := off2.(*sqlparser.Literal)
-		if !ok {
-			// If the offset is not a literal, fail the merge.
+		v1, ok1 := limitLiteral(l1)
+		offset, ok2 := limitLiteral(off2)
+		if !ok1 || !ok2 {
 			return nil, true
 		}
-		lim1str, ok := l1.(*sqlparser.Literal)
-		if !ok {
-			// If the first limit is not a literal, return the first limit without failing.
-			return nil, false
-		}
-		// Calculate the remaining limit after the offset.
-		off2int, _ := strconv.Atoi(off2.Val)
-		l1int, _ := strconv.Atoi(lim1str.Val)
-		lim := max(l1int-off2int, 0)
-		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+		return sqlparser.NewIntLiteral(strconv.FormatUint(v1-min(v1, offset), 10)), false
 
 	default:
-		v1str, ok1 := l1.(*sqlparser.Literal)
-		if ok1 && v1str.Val == "1" {
+		// Validate both row counts before either can be discarded by the merge.
+		v1, ok1 := limitLiteral(l1)
+		v2, ok2 := limitLiteral(l2)
+		if !ok1 || !ok2 {
+			return nil, true
+		}
+		if l1.(*sqlparser.Literal).Val == "1" {
 			// If the first limit is "1", it dominates, so return it.
 			return l1, false
 		}
-		v2str, ok2 := l2.(*sqlparser.Literal)
-		if ok2 && v2str.Val == "1" {
+		if l2.(*sqlparser.Literal).Val == "1" {
 			// If the second limit is "1", it dominates, so return it.
 			return l2, false
 		}
-		if !ok1 || !ok2 {
-			// If either limit is not a literal, fail the merge.
-			return nil, true
-		}
-
-		var off2int int
+		var offset uint64
 		if off2 != nil {
-			off2, ok := off2.(*sqlparser.Literal)
+			var ok bool
+			offset, ok = limitLiteral(off2)
 			if !ok {
-				// If the offset is not a literal, fail the merge.
 				return nil, true
 			}
-			off2int, _ = strconv.Atoi(off2.Val)
 		}
 
-		v1, _ := strconv.Atoi(v1str.Val)
-		v2, _ := strconv.Atoi(v2str.Val)
-		lim := max(min(v2, v1-off2int),
-			// If the combined limit is negative, set it to zero.
-			0)
-		return sqlparser.NewIntLiteral(strconv.Itoa(lim)), false
+		lim := min(v2, v1-min(v1, offset))
+		return sqlparser.NewIntLiteral(strconv.FormatUint(lim, 10)), false
 	}
 }
 
@@ -516,15 +507,50 @@ func createPushedLimit(ctx *plancontext.PlanningContext, src Operator, orig *Lim
 		// we can't push down an offset, so we need to convert it to a rowcount
 		// by adding it to the already existing rowcount, and then let the LIMIT running on the vtgate do the rest
 		// this way we can still limit the number of rows that are returned
-		plus := &sqlparser.BinaryExpr{
-			Operator: sqlparser.PlusOp,
-			Left:     pushedLimit.Rowcount,
-			Right:    pushedLimit.Offset,
+		if upper, ok := literalUpperLimit(pushedLimit.Rowcount, pushedLimit.Offset); ok {
+			pushedLimit.Rowcount = upper
+		} else {
+			plus := &sqlparser.BinaryExpr{
+				Operator: sqlparser.PlusOp,
+				Left:     pushedLimit.Rowcount,
+				Right:    pushedLimit.Offset,
+			}
+			pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		}
-		pushedLimit.Rowcount = getLimitExpression(ctx, plus)
 		pushedLimit.Offset = nil
 	}
 	return newLimit(src, pushedLimit, false)
+}
+
+// literalUpperLimit adds integer rowcount and offset literals, saturating at
+// math.MaxUint64 on overflow, like the Limit primitive.
+func literalUpperLimit(rowcount, offset sqlparser.Expr) (sqlparser.Expr, bool) {
+	count, ok := limitLiteral(rowcount)
+	if !ok {
+		return nil, false
+	}
+	off, ok := limitLiteral(offset)
+	if !ok {
+		return nil, false
+	}
+	if count > math.MaxUint64-off {
+		return sqlparser.NewIntLiteral(strconv.FormatUint(math.MaxUint64, 10)), true
+	}
+	return sqlparser.NewIntLiteral(strconv.FormatUint(count+off, 10)), true
+}
+
+// limitLiteral returns the value of a non-negative integer literal used as a LIMIT
+// row count or offset. MySQL accepts values up to 18446744073709551615.
+func limitLiteral(expr sqlparser.Expr) (uint64, bool) {
+	lit, ok := expr.(*sqlparser.Literal)
+	if !ok || lit.Type != sqlparser.IntVal {
+		return 0, false
+	}
+	val, err := strconv.ParseUint(lit.Val, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return val, true
 }
 
 // getLimitExpression is a helper function to simplify an expression using the evalengine
