@@ -315,6 +315,12 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if servenv.GRPCAuth() == "mtls" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc-auth-mode", servenv.GRPCAuth(), "--grpc-key", servenv.GRPCKey(), "--grpc-cert", servenv.GRPCCert(), "--grpc-ca", servenv.GRPCCertificateAuthority(), "--grpc-auth-mtls-allowed-substrings", servenv.ClientCertSubstrings()}...)
 	}
+	if interval := servenv.TLSReloadInterval(); interval > 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--tls-reload-interval", interval.String())
+	}
+	if servenv.TLSReloadOnSIGHUP() {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--tls-reload-on-sighup")
+	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}

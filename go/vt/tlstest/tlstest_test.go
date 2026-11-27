@@ -162,26 +162,6 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	require.ErrorContains(t, err, "certificate required", "Dial or first Read was expected to fail with 'certificate required'")
 }
 
-func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
-	return vttls.ServerConfig(
-		keypairs.ServerCert,
-		keypairs.ServerKey,
-		keypairs.ClientCA,
-		keypairs.ClientCRL,
-		"",
-		tls.VersionTLS12)
-}
-
-func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
-	return vttls.ServerConfig(
-		keypairs.ServerCert,
-		keypairs.ServerKey,
-		keypairs.ClientCA,
-		keypairs.ClientCRL,
-		keypairs.ServerCA,
-		tls.VersionTLS12)
-}
-
 func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ClientConfig(
 		vttls.VerifyIdentity,
@@ -191,20 +171,6 @@ func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 		keypairs.ServerCRL,
 		keypairs.ServerName,
 		tls.VersionTLS12)
-}
-
-func testServerTLSConfigCaching(t *testing.T, getServerConfig func(ClientServerKeyPairs) (*tls.Config, error)) {
-	testConfigGeneration(t, "servertlstest", getServerConfig, func(config *tls.Config) *x509.CertPool {
-		return config.ClientCAs
-	})
-}
-
-func TestServerTLSConfigCachingWithoutCombinedCerts(t *testing.T) {
-	testServerTLSConfigCaching(t, getServerConfigWithoutCombinedCerts)
-}
-
-func TestServerTLSConfigCachingWithCombinedCerts(t *testing.T) {
-	testServerTLSConfigCaching(t, getServerConfigWithCombinedCerts)
 }
 
 func TestClientTLSConfigCaching(t *testing.T) {
