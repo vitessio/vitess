@@ -160,12 +160,16 @@ func (c *Collation_chinese_ci) WeightStringLen(numCodepoints int) int {
 	return numCodepoints * 2
 }
 
+// Wildcard returns a matcher for LIKE that matches a single byte by the sort
+// table and a two-byte character only with itself, as MySQL does for
+// gbk_chinese_ci and big5_chinese_ci: 'a中' LIKE 'A%' is true, and a
+// full-width "ａ" does not match "Ａ".
 func (c *Collation_chinese_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 // gbkSortOrder returns the value of a two-byte gbk character in
-// gbk_chinese_ci: 0x8100 and its position in gbkOrder. "中" (D6 D0) is
+// gbk_chinese_ci: 0x8100 plus its position in gbkOrder. "中" (D6 D0) is
 // 0xD321. The order has the Chinese characters of GB 2312 by pinyin.
 func gbkSortOrder(code uint16) uint16 {
 	idx, _ := simplifiedchinese.TwoByteIndex(byte(code>>8), byte(code))

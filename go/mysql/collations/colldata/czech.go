@@ -242,6 +242,9 @@ func (c *Collation_latin2_czech_cs) WeightStringLen(numBytes int) int {
 	return numBytes*4 + 4
 }
 
+// Wildcard returns a matcher for LIKE that compares one byte with one byte,
+// as MySQL does for latin2_czech_cs: LIKE does not see the letter "ch", so
+// 'ch' LIKE 'c_' is true and 'ch' LIKE '_' is false.
 func (c *Collation_latin2_czech_cs) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, collationBinary, pat, matchOne, matchMany, escape)
 }
@@ -332,7 +335,9 @@ func (s *cp1250CzechScanner) next() byte {
 // Collation_cp1250_czech_cs. MySQL does not look at the spaces at the end of
 // either string: 'a' = 'a ' is true, and x'6119' is after 'a ' although the
 // byte 19 has a lower value than the space, as it is after 'a'. A space
-// inside a string is a character as every other.
+// inside a string is a character as every other. When right is a prefix,
+// Collate compares left up to the length of right, and keeps the spaces at
+// the ends of both.
 //
 // A weight string has the values of the spaces at the end, also in MySQL, so
 // it does not have the order of Collate for such strings.

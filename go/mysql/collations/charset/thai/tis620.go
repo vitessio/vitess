@@ -34,8 +34,10 @@ import (
 //   - The nine bytes without a character, A0, DB-DE and FC-FF, decode to
 //     U+FFFD and are valid.
 //   - A code point above U+FFFF encodes as the code point with the same
-//     two lowest bytes does:
-//     U+10041 encodes to "A" (41), as U+0041. U+FFFD encodes to FF.
+//     two lowest bytes does: U+10041 encodes to "A" (41), as U+0041. A code
+//     point whose two lowest bytes are 00 00, such as U+10000, has no
+//     tis620 form, since only U+0000 encodes to 00.
+//   - U+FFFD encodes to FF.
 type Charset_tis620 struct{}
 
 func (Charset_tis620) Name() string {

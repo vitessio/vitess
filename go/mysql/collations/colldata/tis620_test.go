@@ -151,7 +151,8 @@ func TestTIS620ThaiCIZeroByte(t *testing.T) {
 		var leftHash, rightHash vthash.Hasher
 		coll.Hash(&leftHash, left, 0)
 		coll.Hash(&rightHash, right, 0)
-		tiny := coll.(TinyWeightCollation)
+		tiny, ok := coll.(TinyWeightCollation)
+		require.True(t, ok)
 		switch tc.cmp {
 		case 0:
 			assert.Equal(t, leftHash.Sum128(), rightHash.Sum128(), "hash of x'%s' and x'%s'", tc.left, tc.right)

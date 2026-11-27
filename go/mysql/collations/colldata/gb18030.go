@@ -136,6 +136,14 @@ func gb18030Upper(char []byte) uint32 {
 	}
 }
 
+// gb18030Pinyin4aFirst and gb18030Pinyin4bFirst are the first four-byte
+// characters of the two ranges that gb18030PinyinWeights4a and
+// gb18030PinyinWeights4b have the pinyin of.
+const (
+	gb18030Pinyin4aFirst = 0x8138FD38
+	gb18030Pinyin4bFirst = 0x95328236
+)
+
 const (
 	gb18030PinyinWeightBase = 0xFFA00000
 	gb18030CommonWeightBase = 0xFF000000
@@ -162,10 +170,10 @@ func gb18030Weight(char []byte) uint32 {
 	case 0x8140 <= code && code <= 0xFE9F:
 		idx, _ := simplifiedchinese.TwoByteIndex(char[0], char[1])
 		pinyin = gb18030PinyinWeights2[idx]
-	case 0x8138FD38 <= code && code <= 0x82359232:
-		pinyin = gb18030PinyinWeights4a[gb18030Diff(char)-11328]
-	case 0x95328236 <= code && code <= 0x98399836:
-		pinyin = gb18030PinyinWeights4b[gb18030Diff(char)-254536]
+	case gb18030Pinyin4aFirst <= code && code <= 0x82359232:
+		pinyin = gb18030PinyinWeights4a[gb18030Diff(char)-gb18030DiffOfCode(gb18030Pinyin4aFirst)]
+	case gb18030Pinyin4bFirst <= code && code <= 0x98399836:
+		pinyin = gb18030PinyinWeights4b[gb18030Diff(char)-gb18030DiffOfCode(gb18030Pinyin4bFirst)]
 	}
 	if pinyin != 0 {
 		return gb18030PinyinWeightBase + uint32(pinyin)

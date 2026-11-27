@@ -98,6 +98,9 @@ func thaiSecondLevel(b byte) byte {
 // bytes in one pass.
 func thaiSortable(buf []byte, tolower *[256]byte) {
 	n := len(buf)
+	// A mark gets bias plus its rank as its byte. bias goes down by 8 with
+	// each ASCII byte and each consonant before the mark, as in MySQL, so a
+	// mark after more of them sorts before one after fewer.
 	bias := byte(256 - 8)
 
 	// w is where the next letter goes. The letters stay in their order, so

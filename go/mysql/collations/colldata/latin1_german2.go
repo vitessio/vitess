@@ -26,8 +26,9 @@ import (
 // order (DIN 5007-2). It sorts an umlaut as its vowel and an "E", and "ß" as
 // "SS": 'Müller' = 'MUELLER' and 'Straße' = 'strasse' are true.
 //
-// A LIKE pattern does not expand a character: 'ä' LIKE 'ae' is false. There
-// "ä" only matches "ä" and "Ä", the sort table of the collation.
+// A LIKE pattern does not expand a character: 'ä' LIKE 'ae' is false. In
+// LIKE, "ä" matches only "ä" and "Ä", the characters with its value in the
+// sort table of the collation.
 type Collation_latin1_german2_ci struct {
 	id   collations.ID
 	name string
