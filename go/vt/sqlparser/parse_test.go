@@ -1976,6 +1976,21 @@ var validSQL = []struct {
 	input:  "create table t (check (a > 0), key (a), a int, b int, unique key k (b), c int unique)",
 	output: "create table t (\n\tkey (a),\n\ta int,\n\tb int,\n\tunique key k (b),\n\tc int unique,\n\tcheck (a > 0)\n)",
 }, {
+	input:  "create table t (key k (x), x int)",
+	output: "create table t (\n\tkey k (x),\n\tx int\n)",
+}, {
+	input:  "create table t (constraint fk foreign key (x) references p (id), x int)",
+	output: "create table t (\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
+}, {
+	input:  "create table t (key k (x)) select x from u",
+	output: "create table t (\n\tkey k (x)\n) as select x from u",
+}, {
+	input:  "create table t (constraint fk foreign key (x) references p (id)) select x from u",
+	output: "create table t (\n\tconstraint fk foreign key (x) references p (id)\n) as select x from u",
+}, {
+	input:  "create table t (check (x > 0)) select x from u",
+	output: "create table t (\n\tcheck (x > 0)\n) as select x from u",
+}, {
 	input: "alter table t add column id bigint serial default value",
 }, {
 	input: "alter table t modify column id serial first",
@@ -4371,6 +4386,12 @@ func TestValid(t *testing.T) {
 			case DDLStatement:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			}
+			if createTable, ok := tree.(*CreateTable); ok && createTable.IsFullyParsed() {
+				for _, formatted := range []string{out, CanonicalString(tree)} {
+					_, err := parser.ParseStrictDDL(formatted)
+					require.NoError(t, err, "formatted CREATE TABLE must re-parse: %s", formatted)
+				}
+			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -4378,60 +4399,6 @@ func TestValid(t *testing.T) {
 			_ = Walk(func(node SQLNode) (bool, error) {
 				return true, nil
 			}, tree)
-		})
-	}
-}
-
-// TestTableSpecLeadingKeyRoundTrip verifies that formatted CREATE TABLE statements
-// preserve key-before-column order ahead of the first column and re-parse with
-// ParseStrictDDL across both Format and FormatFast.
-func TestTableSpecLeadingKeyRoundTrip(t *testing.T) {
-	testcases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "index before first column after check",
-			input:    "create table t (check (x > 0), key k (x), x int)",
-			expected: "create table t (\n\tkey k (x),\n\tx int,\n\tcheck (x > 0)\n)",
-		},
-		{
-			name:     "unique key before column with inline unique preserves key order",
-			input:    "create table t (check (a > 0), unique key a (b), a int unique, b int)",
-			expected: "create table t (\n\tunique key a (b),\n\ta int unique,\n\tb int,\n\tcheck (a > 0)\n)",
-		},
-		{
-			name:     "foreign key before first column after check",
-			input:    "create table t (check (x > 0), constraint fk foreign key (x) references p (id), x int)",
-			expected: "create table t (\n\tcheck (x > 0),\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
-		},
-		{
-			name:     "direct leading index",
-			input:    "create table t (key k (x), x int)",
-			expected: "create table t (\n\tkey k (x),\n\tx int\n)",
-		},
-		{
-			name:     "direct leading foreign key",
-			input:    "create table t (constraint fk foreign key (x) references p (id), x int)",
-			expected: "create table t (\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
-		},
-	}
-	parser := NewTestParser()
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := parser.ParseStrictDDL(tc.input)
-			require.NoError(t, err)
-
-			fast := String(stmt)
-			assert.Equal(t, tc.expected, fast)
-			assert.Equal(t, tc.expected, UnescapedString(stmt), "Format and FormatFast must match")
-
-			for _, formatted := range []string{fast, CanonicalString(stmt)} {
-				reparsed, err := parser.ParseStrictDDL(formatted)
-				require.NoError(t, err, "formatted SQL must re-parse: %s", formatted)
-				require.NotNil(t, reparsed)
-			}
 		})
 	}
 }
