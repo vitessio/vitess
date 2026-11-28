@@ -1839,6 +1839,16 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
+| index_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddIndex($1)
+  }
+| constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
 | check_constraint_definition
   {
     $$ = &TableSpec{}

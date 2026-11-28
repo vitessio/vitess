@@ -1127,29 +1127,26 @@ func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
 	indexesBefore, constraintsBefore := ts.keysBefore()
 	indexes, constraints := 0, 0
-	for i, col := range ts.Columns {
-		if i == 0 {
-			buf.WriteByte('\t')
-		} else {
-			buf.WriteString(",\n\t")
-		}
+	sep := "\t"
+	write := func(node SQLNode) {
+		buf.WriteString(sep)
+		node.FormatFast(buf)
+		sep = ",\n\t"
+	}
+	for _, col := range ts.Columns {
 		for end := indexesBefore[col.Name.Lowered()]; indexes < end; indexes++ {
-			ts.Indexes[indexes].FormatFast(buf)
-			buf.WriteString(",\n\t")
+			write(ts.Indexes[indexes])
 		}
 		for end := constraintsBefore[col.Name.Lowered()]; constraints < end; constraints++ {
-			ts.Constraints[constraints].FormatFast(buf)
-			buf.WriteString(",\n\t")
+			write(ts.Constraints[constraints])
 		}
-		col.FormatFast(buf)
+		write(col)
 	}
 	for _, idx := range ts.Indexes[indexes:] {
-		buf.WriteString(",\n\t")
-		idx.FormatFast(buf)
+		write(idx)
 	}
 	for _, c := range ts.Constraints[constraints:] {
-		buf.WriteString(",\n\t")
-		c.FormatFast(buf)
+		write(c)
 	}
 
 	buf.WriteString("\n)")

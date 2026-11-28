@@ -1976,6 +1976,21 @@ var validSQL = []struct {
 	input:  "create table t (check (a > 0), key (a), a int, b int, unique key k (b), c int unique)",
 	output: "create table t (\n\tkey (a),\n\ta int,\n\tb int,\n\tunique key k (b),\n\tc int unique,\n\tcheck (a > 0)\n)",
 }, {
+	input:  "create table t (key k (x), x int)",
+	output: "create table t (\n\tkey k (x),\n\tx int\n)",
+}, {
+	input:  "create table t (constraint fk foreign key (x) references p (id), x int)",
+	output: "create table t (\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
+}, {
+	input:  "create table t (key k (x)) select x from u",
+	output: "create table t (\n\tkey k (x)\n) as select x from u",
+}, {
+	input:  "create table t (constraint fk foreign key (x) references p (id)) select x from u",
+	output: "create table t (\n\tconstraint fk foreign key (x) references p (id)\n) as select x from u",
+}, {
+	input:  "create table t (check (x > 0)) select x from u",
+	output: "create table t (\n\tcheck (x > 0)\n) as select x from u",
+}, {
 	input: "alter table t add column id bigint serial default value",
 }, {
 	input: "alter table t modify column id serial first",
@@ -4370,6 +4385,12 @@ func TestValid(t *testing.T) {
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
 			case DDLStatement:
 				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
+			}
+			if createTable, ok := tree.(*CreateTable); ok && createTable.IsFullyParsed() {
+				for _, formatted := range []string{out, CanonicalString(tree)} {
+					_, err := parser.ParseStrictDDL(formatted)
+					require.NoError(t, err, "formatted CREATE TABLE must re-parse: %s", formatted)
+				}
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
