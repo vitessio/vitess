@@ -536,32 +536,12 @@ func (asm *assembler) Cmp_ne_n() {
 	}, "CMPFLAG NE [NULL]")
 }
 
-func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
-	elseOffset := 0
-	if hasElse {
-		elseOffset = 1
-	}
-
-	stackDepth := 2*cases + elseOffset
-	asm.adjustStack(-(stackDepth - 1))
-
+// Coerce converts the value at SP-1 to the given type, leaving NULL as is.
+func (asm *assembler) Coerce(tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
 	asm.emit(func(env *ExpressionEnv) int {
-		end := env.vm.sp - elseOffset
-		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
-			if env.vm.stack[sp] != nil && env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
-				goto done
-			}
-		}
-		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
-		} else {
-			env.vm.stack[env.vm.sp-stackDepth] = nil
-		}
-	done:
-		env.vm.sp -= stackDepth - 1
+		env.vm.stack[env.vm.sp-1], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
 		return 1
-	}, "CASE [%d cases, else = %v]", cases, hasElse)
+	}, "COERCE (SP-1) %s", tt)
 }
 
 func (asm *assembler) CmpNum_dd() {
@@ -3524,6 +3504,38 @@ func (asm *assembler) Neg_u() {
 		}
 		return 1
 	}, "NEG UINT64(SP-1)")
+}
+
+// JumpFalse pops the boolean at SP-1 and jumps to j unless it is true.
+func (asm *assembler) JumpFalse(j *jump) {
+	asm.adjustStack(-1)
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-1]
+		env.vm.sp--
+		if v == nil || v.(*evalInt64).i == 0 {
+			return j.offset()
+		}
+		return 1
+	}, "JUMP IF NOT TRUE (SP-1)")
+}
+
+// Jump jumps to j.
+func (asm *assembler) Jump(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		return j.offset()
+	}, "JUMP")
+}
+
+// JumpNotNull jumps to j, keeping the value at SP-1, if it is not NULL;
+// otherwise it pops it.
+func (asm *assembler) JumpNotNull(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] != nil {
+			return j.offset()
+		}
+		env.vm.sp--
+		return 1
+	}, "JUMP IF NOT NULL (SP-1) ELSE POP")
 }
 
 func (asm *assembler) NullCheck1(j *jump) {

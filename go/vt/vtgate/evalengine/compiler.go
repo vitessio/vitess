@@ -36,9 +36,12 @@ type frame func(env *ExpressionEnv) int
 type compiler struct {
 	collation    collations.ID
 	dynamicTypes []ctype
-	asm          assembler
-	sqlmode      SQLMode
-	env          *vtenv.Environment
+	// typeEnv, when set, types the columns and bind variables that were not
+	// typed at translation time from the values in this environment.
+	typeEnv *ExpressionEnv
+	asm     assembler
+	sqlmode SQLMode
+	env     *vtenv.Environment
 }
 
 type CompilerLog interface {

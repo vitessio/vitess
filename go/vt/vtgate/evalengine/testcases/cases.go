@@ -40,6 +40,7 @@ var Cases = []TestCase{
 	{Run: CharsetConversionOperators},
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
+	{Run: CaseExprShortCircuit},
 	{Run: If},
 	{Run: Base64},
 	{Run: Conversion},
@@ -340,6 +341,30 @@ func CaseExprWithPredicate(yield Query) {
 			), nil, false)
 		})
 	})
+}
+
+// CaseExprShortCircuit checks that only the returned branch is evaluated:
+// the overflowing branch must not fail the expression unless it is chosen.
+func CaseExprShortCircuit(yield Query) {
+	const overflow = "9223372036854775807 + 1"
+	for _, q := range []string{
+		"if(1, 0, %s)",
+		"if(0, 0, %s)",
+		"if(null, %s, 'a')",
+		"case when 1 then 'a' else %s end",
+		"case when 0 then 'a' else %s end",
+		"case when 0 then 1 when 1 then 2 when %s then 3 end",
+		"case 2 when 1 then 1 when 2 then 2 when %s then 3 else 4 end",
+		"case when 1 then 1 else %s end + 0.5e0",
+		"ifnull(1, %s)",
+		"ifnull(null, %s)",
+		"coalesce(1, %s)",
+		"coalesce(null, 2, %s)",
+		"coalesce(null, %s, 2)",
+		"nullif(1, %s)",
+	} {
+		yield(fmt.Sprintf(q, overflow), nil, false)
+	}
 }
 
 func FnCeil(yield Query) {

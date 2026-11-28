@@ -426,6 +426,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (IR, erro
 func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) {
 	var err error
 	var result CaseExpr
+	untypedFrom := len(ast.untyped)
 
 	if node.Else != nil {
 		result.Else, err = ast.translateExpr(node.Else)
@@ -468,6 +469,7 @@ func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) 
 		})
 	}
 
+	result.typing = ast.caseTyping(untypedFrom)
 	return &result, nil
 }
 
