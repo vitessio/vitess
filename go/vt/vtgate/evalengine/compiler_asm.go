@@ -4868,6 +4868,47 @@ func (asm *assembler) Fn_DATEADD_s(unit datetime.IntervalType, sub bool, col col
 	}, "FN DATEADD TEMPORAL(SP-2), INTERVAL(SP-1)")
 }
 
+// Fn_REGEXP_NULLCHECK returns NULL when an argument of a regexp function other
+// than the pattern (argument 1) and the match type (argument mt) is NULL.
+// MySQL compiles the pattern before it looks at those arguments, so when the
+// pattern was not compiled ahead of time, it is compiled here and a bad pattern
+// is an error, not NULL.
+func (asm *assembler) Fn_REGEXP_NULLCHECK(j *jump, compile bool, col collations.ID, flags icuregex.RegexpFlag, mt int, offset int, f string) {
+	asm.emit(func(env *ExpressionEnv) int {
+		args := env.vm.stack[env.vm.sp-offset-1 : env.vm.sp]
+		hasNull := false
+		for i, arg := range args {
+			if arg == nil && i != 1 && i != mt {
+				hasNull = true
+				break
+			}
+		}
+		if !hasNull {
+			return 1
+		}
+		if compile {
+			flags := flags
+			if mt < len(args) {
+				flags, env.vm.err = regexpFlags(args[mt], flags, f)
+			}
+			var pat *evalBytes
+			if env.vm.err == nil {
+				pat, env.vm.err = evalToVarchar(args[1], col, true)
+			}
+			if env.vm.err == nil {
+				_, env.vm.err = compileRegex(pat, colldata.Lookup(col).Charset(), flags)
+			}
+			if env.vm.err != nil {
+				env.vm.sp -= offset
+				return 1
+			}
+		}
+		args[0] = nil
+		env.vm.sp -= offset
+		return j.offset()
+	}, "FN REGEXP_NULLCHECK (SP-%d)...(SP-1)", offset+1)
+}
+
 func (asm *assembler) Fn_REGEXP_LIKE(m *icuregex.Matcher, negate bool, c charset.Charset, offset int) {
 	asm.adjustStack(-offset)
 	asm.emit(func(env *ExpressionEnv) int {

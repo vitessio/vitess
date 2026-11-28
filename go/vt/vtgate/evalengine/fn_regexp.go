@@ -261,6 +261,44 @@ func resultCollation(in collations.TypedCollation) collations.TypedCollation {
 	return in
 }
 
+// compileRegexpNullCheck emits the NULL check of the arguments of a regexp
+// function other than the pattern and the match type (argument mt). They are
+// checked only after all the arguments have been evaluated, so that the pattern
+// can be compiled first like MySQL does; see Fn_REGEXP_NULLCHECK. p is the
+// pattern compiled ahead of time, if any.
+func compileRegexpNullCheck(c *compiler, args []ctype, p *icuregex.Pattern, merged collations.TypedCollation, flags icuregex.RegexpFlag, mt int, f string) *jump {
+	for i, arg := range args {
+		if i != 1 && i != mt && arg.nullable() {
+			j := c.asm.jumpFrom()
+			c.asm.Fn_REGEXP_NULLCHECK(j, p == nil, merged.Collation, flags, mt, len(args)-1, f)
+			return j
+		}
+	}
+	return nil
+}
+
+// regexpNullArg returns the result of a regexp function when an argument
+// other than the pattern and the match type is NULL: NULL, unless the pattern
+// does not compile, because MySQL compiles the pattern before it looks at
+// those arguments. input is nil when the subject itself is NULL.
+func regexpNullArg(env *collations.Environment, input, pat, mt eval, f string) (eval, error) {
+	if input == nil {
+		input = pat
+	}
+	_, pat, typedCol, flags, err := evalRegexpCollation(env, input, pat, f)
+	if err != nil {
+		return nil, err
+	}
+	if mt != nil {
+		flags, err = regexpFlags(mt, flags, f)
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = compileRegex(pat, colldata.Lookup(typedCol.Collation).Charset(), flags)
+	return nil, err
+}
+
 type builtinRegexpLike struct {
 	CallExpr
 	Negate bool
@@ -268,7 +306,7 @@ type builtinRegexpLike struct {
 
 func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 	input, err := r.Arguments[0].eval(env)
-	if err != nil || input == nil {
+	if err != nil {
 		return nil, err
 	}
 
@@ -277,18 +315,30 @@ func (r *builtinRegexpLike) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_like")
-	if err != nil {
-		return nil, err
-	}
-	collation := colldata.Lookup(typedCol.Collation)
-
-	if len(r.Arguments) > 2 {
-		m, err := r.Arguments[2].eval(env)
-		if err != nil || m == nil {
+	var typedCol collations.TypedCollation
+	var flags icuregex.RegexpFlag
+	if input != nil {
+		input, pat, typedCol, flags, err = evalRegexpCollation(env.collationEnv, input, pat, "regexp_like")
+		if err != nil {
 			return nil, err
 		}
-		flags, err = regexpFlags(m, flags, "regexp_like")
+	}
+
+	var mt eval
+	if len(r.Arguments) > 2 {
+		mt, err = r.Arguments[2].eval(env)
+		if err != nil || mt == nil {
+			return nil, err
+		}
+	}
+
+	if input == nil {
+		return regexpNullArg(env.collationEnv, input, pat, mt, "regexp_like")
+	}
+
+	collation := colldata.Lookup(typedCol.Collation)
+	if mt != nil {
+		flags, err = regexpFlags(mt, flags, "regexp_like")
 		if err != nil {
 			return nil, err
 		}
@@ -329,7 +379,6 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 	var skips []*jump
-	skips = append(skips, c.compileNullCheckArg(input, 0))
 
 	pat, err := r.Arguments[1].compile(c)
 	if err != nil {
@@ -351,14 +400,15 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	p, err := compileConstantRegex(c, r.Arguments, 1, 2, merged, flags, "regexp_like")
+	skips = append(skips, compileRegexpNullCheck(c, []ctype{input, pat, f}[:len(r.Arguments)], p, merged, flags, 2, "regexp_like"))
 
 	if !input.isTextual() || input.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
 	}
 
-	// We optimize for the case where the pattern is a constant. If not,
-	// we fall back to the slow path.
-	p, err := compileConstantRegex(c, r.Arguments, 1, 2, merged, flags, "regexp_like")
 	if err != nil {
 		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
 	}
@@ -377,42 +427,50 @@ type builtinRegexpInstr struct {
 
 func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 	input, err := r.Arguments[0].eval(env)
-	if err != nil || input == nil {
+	if err != nil {
 		return nil, err
 	}
+	hasNull := input == nil
 
 	pat, err := r.Arguments[1].eval(env)
 	if err != nil || pat == nil {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_instr")
-	if err != nil {
-		return nil, err
+	var typedCol collations.TypedCollation
+	var flags icuregex.RegexpFlag
+	if input != nil {
+		input, pat, typedCol, flags, err = evalRegexpCollation(env.collationEnv, input, pat, "regexp_instr")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var posExpr eval
 	if len(r.Arguments) > 2 {
 		posExpr, err = r.Arguments[2].eval(env)
-		if err != nil || posExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || posExpr == nil
 	}
 
 	var occExpr eval
 	if len(r.Arguments) > 3 {
 		occExpr, err = r.Arguments[3].eval(env)
-		if err != nil || occExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || occExpr == nil
 	}
 
 	var retExpr eval
 	if len(r.Arguments) > 4 {
 		retExpr, err = r.Arguments[4].eval(env)
-		if err != nil || retExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || retExpr == nil
 	}
 
 	var mtExpr eval
@@ -421,6 +479,10 @@ func (r *builtinRegexpInstr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil || mtExpr == nil {
 			return nil, err
 		}
+	}
+
+	if hasNull {
+		return regexpNullArg(env.collationEnv, input, pat, mtExpr, "regexp_instr")
 	}
 
 	collation := colldata.Lookup(typedCol.Collation)
@@ -502,7 +564,6 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 	var skips []*jump
-	skips = append(skips, c.compileNullCheckArg(input, 0))
 
 	pat, err := r.Arguments[1].compile(c)
 	if err != nil {
@@ -516,8 +577,9 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(pos, 2))
+		j := c.compileNullCheckOffset(pos, 1)
 		_ = c.compileToInt64(pos, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var occ ctype
@@ -526,8 +588,9 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(occ, 3))
+		j := c.compileNullCheckOffset(occ, 1)
 		_ = c.compileToInt64(occ, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var returnOpt ctype
@@ -536,8 +599,9 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(returnOpt, 4))
+		j := c.compileNullCheckOffset(returnOpt, 1)
 		_ = c.compileToInt64(returnOpt, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var matchType ctype
@@ -558,14 +622,15 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_instr")
+	skips = append(skips, compileRegexpNullCheck(c, []ctype{input, pat, pos, occ, returnOpt, matchType}[:len(r.Arguments)], p, merged, flags, 5, "regexp_instr"))
 
 	if !input.isTextual() || input.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
 	}
 
-	// We optimize for the case where the pattern is a constant. If not,
-	// we fall back to the slow path.
-	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_instr")
 	if err != nil {
 		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
 	}
@@ -584,35 +649,42 @@ type builtinRegexpSubstr struct {
 
 func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 	input, err := r.Arguments[0].eval(env)
-	if err != nil || input == nil {
+	if err != nil {
 		return nil, err
 	}
+	hasNull := input == nil
 
 	pat, err := r.Arguments[1].eval(env)
 	if err != nil || pat == nil {
 		return nil, err
 	}
 
-	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_substr")
-	if err != nil {
-		return nil, err
+	var typedCol collations.TypedCollation
+	var flags icuregex.RegexpFlag
+	if input != nil {
+		input, pat, typedCol, flags, err = evalRegexpCollation(env.collationEnv, input, pat, "regexp_substr")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var posExpr eval
 	// For some reason this gets checked before NULL checks of the other values
 	if len(r.Arguments) > 2 {
 		posExpr, err = r.Arguments[2].eval(env)
-		if err != nil || posExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || posExpr == nil
 	}
 
 	var occExpr eval
 	if len(r.Arguments) > 3 {
 		occExpr, err = r.Arguments[3].eval(env)
-		if err != nil || occExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || occExpr == nil
 	}
 
 	var mtExpr eval
@@ -621,6 +693,10 @@ func (r *builtinRegexpSubstr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil || mtExpr == nil {
 			return nil, err
 		}
+	}
+
+	if hasNull {
+		return regexpNullArg(env.collationEnv, input, pat, mtExpr, "regexp_substr")
 	}
 
 	collation := colldata.Lookup(typedCol.Collation)
@@ -688,7 +764,6 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 	var skips []*jump
-	skips = append(skips, c.compileNullCheckArg(input, 0))
 
 	pat, err := r.Arguments[1].compile(c)
 	if err != nil {
@@ -702,8 +777,9 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(pos, 2))
+		j := c.compileNullCheckOffset(pos, 1)
 		_ = c.compileToInt64(pos, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var occ ctype
@@ -712,8 +788,9 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(occ, 3))
+		j := c.compileNullCheckOffset(occ, 1)
 		_ = c.compileToInt64(occ, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var matchType ctype
@@ -734,14 +811,15 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	p, err := compileConstantRegex(c, r.Arguments, 1, 4, merged, flags, "regexp_substr")
+	skips = append(skips, compileRegexpNullCheck(c, []ctype{input, pat, pos, occ, matchType}[:len(r.Arguments)], p, merged, flags, 4, "regexp_substr"))
 
 	if !input.isTextual() || input.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
 	}
 
-	// We optimize for the case where the pattern is a constant. If not,
-	// we fall back to the slow path.
-	p, err := compileConstantRegex(c, r.Arguments, 1, 4, merged, flags, "regexp_substr")
 	if err != nil {
 		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
 	}
@@ -812,9 +890,10 @@ func regexpReplace(m *icuregex.Matcher, inputRunes, replRunes []rune, pos, occ i
 
 func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 	input, err := r.Arguments[0].eval(env)
-	if err != nil || input == nil {
+	if err != nil {
 		return nil, err
 	}
+	hasNull := input == nil
 
 	pat, err := r.Arguments[1].eval(env)
 	if err != nil || pat == nil {
@@ -822,30 +901,37 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	replArg, err := r.Arguments[2].eval(env)
-	if err != nil || replArg == nil {
-		return nil, err
-	}
-
-	input, pat, typedCol, flags, err := evalRegexpCollation(env.collationEnv, input, pat, "regexp_replace")
 	if err != nil {
 		return nil, err
+	}
+	hasNull = hasNull || replArg == nil
+
+	var typedCol collations.TypedCollation
+	var flags icuregex.RegexpFlag
+	if input != nil {
+		input, pat, typedCol, flags, err = evalRegexpCollation(env.collationEnv, input, pat, "regexp_replace")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var posExpr eval
 	// For some reason this gets checked before NULL checks of the other values
 	if len(r.Arguments) > 3 {
 		posExpr, err = r.Arguments[3].eval(env)
-		if err != nil || posExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || posExpr == nil
 	}
 
 	var occExpr eval
 	if len(r.Arguments) > 4 {
 		occExpr, err = r.Arguments[4].eval(env)
-		if err != nil || occExpr == nil {
+		if err != nil {
 			return nil, err
 		}
+		hasNull = hasNull || occExpr == nil
 	}
 
 	var mtExpr eval
@@ -854,6 +940,10 @@ func (r *builtinRegexpReplace) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil || mtExpr == nil {
 			return nil, err
 		}
+	}
+
+	if hasNull {
+		return regexpNullArg(env.collationEnv, input, pat, mtExpr, "regexp_replace")
 	}
 
 	collation := colldata.Lookup(typedCol.Collation)
@@ -922,7 +1012,6 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 	var skips []*jump
-	skips = append(skips, c.compileNullCheckArg(input, 0))
 
 	pat, err := r.Arguments[1].compile(c)
 	if err != nil {
@@ -934,7 +1023,6 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-	skips = append(skips, c.compileNullCheckArg(repl, 2))
 
 	var pos ctype
 	if len(r.Arguments) > 3 {
@@ -942,8 +1030,9 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(pos, 3))
+		j := c.compileNullCheckOffset(pos, 1)
 		_ = c.compileToInt64(pos, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var occ ctype
@@ -952,8 +1041,9 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		skips = append(skips, c.compileNullCheckArg(occ, 4))
+		j := c.compileNullCheckOffset(occ, 1)
 		_ = c.compileToInt64(occ, 1)
+		c.asm.jumpDestination(j)
 	}
 
 	var matchType ctype
@@ -974,6 +1064,10 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
+	// We optimize for the case where the pattern is a constant. If not,
+	// we fall back to the slow path.
+	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_replace")
+	skips = append(skips, compileRegexpNullCheck(c, []ctype{input, pat, repl, pos, occ, matchType}[:len(r.Arguments)], p, merged, flags, 5, "regexp_replace"))
 
 	if !input.isTextual() || input.Col.Collation != merged.Collation {
 		c.asm.Convert_xce(len(r.Arguments), sqltypes.VarChar, merged.Collation)
@@ -983,9 +1077,6 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xce(len(r.Arguments)-2, sqltypes.VarChar, merged.Collation)
 	}
 
-	// We optimize for the case where the pattern is a constant. If not,
-	// we fall back to the slow path.
-	p, err := compileConstantRegex(c, r.Arguments, 1, 5, merged, flags, "regexp_replace")
 	if err != nil {
 		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
 	}
