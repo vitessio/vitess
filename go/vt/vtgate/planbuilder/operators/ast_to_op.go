@@ -107,6 +107,10 @@ func addWherePredsToSubQueryBuilder(ctx *plancontext.PlanningContext, in sqlpars
 			expr = sqlparser.NewIntLiteral("0")
 		}
 
+		// a comma join with the recursion table has its join predicate here, as JOIN ... ON has in addJoinPredicates
+		if cte := ctx.ActiveCTE(); cte != nil && ctx.SemTable.DirectDeps(expr).IsOverlapping(cte.Id) {
+			expr = addCTEPredicate(ctx, expr, cte)
+		}
 		op = op.AddPredicate(ctx, expr)
 		addColumnEquality(ctx, expr)
 	}
