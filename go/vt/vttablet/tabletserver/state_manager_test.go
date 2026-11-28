@@ -531,6 +531,47 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	}
 }
 
+// TestStateManagerCheckMySQLKeepsNotServing verifies that after checkMySQL
+// recovers from a lost MySQL connection, the tablet goes back to the requested
+// state. A primary that was set to NOT_SERVING, for example by a
+// DisableQueryService tablet control, must not start serving again.
+func TestStateManagerCheckMySQLKeepsNotServing(t *testing.T) {
+	sm := newTestStateManager()
+	t.Cleanup(sm.StopService)
+	isRetrying := func() bool {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		return sm.retrying
+	}
+
+	reason := "TabletControl.DisableQueryService set"
+	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, reason)
+	require.NoError(t, err)
+	require.Equal(t, StateNotServing, sm.State())
+
+	orderBefore := order.Load()
+	sm.qe.(*testQueryEngine).failMySQL = true
+	sm.checkMySQL()
+
+	// Wait for checkMySQL to finish and for the retry to converge.
+	require.Eventually(t, func() bool {
+		return sm.isCheckMySQLRunning() == 0
+	}, 30*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return !isRetrying() }, 30*time.Second, 10*time.Millisecond)
+
+	// The schema engine was closed and opened again, so the reconnect happened.
+	assert.Greater(t, sm.se.(*testSchemaEngine).Order(), orderBefore)
+	assert.Equal(t, testStateOpen, sm.se.(*testSchemaEngine).State())
+
+	assert.False(t, sm.IsServing())
+	assert.Equal(t, StateNotServing, sm.State())
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	assert.Equal(t, StateNotServing, sm.wantState)
+	assert.Equal(t, reason, sm.reason)
+}
+
 func TestStateManagerValidations(t *testing.T) {
 	ctx := t.Context()
 	sm := newTestStateManager()
