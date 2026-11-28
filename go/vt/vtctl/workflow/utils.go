@@ -49,6 +49,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -651,6 +652,20 @@ func encodeString(in string) string {
 
 func getRenameFileName(tableName string) string {
 	return fmt.Sprintf(renameTableTemplate, tableName)
+}
+
+// validateConfigOverrides checks the keys and values of VReplication config
+// overrides the same way the tablets do when they start a stream, so that an
+// invalid override is rejected before any workflow state is written. An empty
+// value removes an override and is always accepted.
+func validateConfigOverrides(overrides map[string]string) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	if _, err := vttablet.NewVReplicationConfig(overrides); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid config overrides: %v", err)
+	}
+	return nil
 }
 
 func parseTabletTypes(tabletTypes []topodatapb.TabletType) (hasReplica, hasRdonly, hasPrimary bool, err error) {

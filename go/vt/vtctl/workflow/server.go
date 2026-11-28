@@ -816,6 +816,10 @@ func (s *Server) LookupVindexInternalize(ctx context.Context, req *vtctldatapb.L
 // Materialize performs the steps needed to materialize a list of
 // tables based on the materialization specs.
 func (s *Server) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
+	if err := validateConfigOverrides(ms.GetWorkflowOptions().GetConfig()); err != nil {
+		return err
+	}
+
 	mz := &materializer{
 		ctx:      ctx,
 		ts:       s.ts,
@@ -1083,6 +1087,10 @@ func (s *Server) moveTablesCreate(ctx context.Context, req *vtctldatapb.MoveTabl
 	span.Annotate("cells", req.Cells)
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("on_ddl", req.OnDdl)
+
+	if err := validateConfigOverrides(req.GetWorkflowOptions().GetConfig()); err != nil {
+		return nil, err
+	}
 
 	sourceKeyspace := req.SourceKeyspace
 	targetKeyspace := req.TargetKeyspace
@@ -1561,6 +1569,10 @@ func (s *Server) ReshardCreate(ctx context.Context, req *vtctldatapb.ReshardCrea
 	span.Annotate("tablet_types", req.TabletTypes)
 	span.Annotate("on_ddl", req.OnDdl)
 
+	if err := validateConfigOverrides(req.GetWorkflowOptions().GetConfig()); err != nil {
+		return nil, err
+	}
+
 	keyspace := req.Keyspace
 	cells := req.Cells
 	// TODO: validate workflow does not exist.
@@ -1999,6 +2011,16 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("state", req.TabletRequest.State)
 	span.Annotate("config_overrides", req.TabletRequest.ConfigOverrides)
 	span.Annotate("shards", req.TabletRequest.Shards)
+
+	// The tablets trim the values of an update and treat a blank value as the
+	// removal of that override, so validate the values they will store.
+	overrides := make(map[string]string, len(req.TabletRequest.GetConfigOverrides()))
+	for k, v := range req.TabletRequest.GetConfigOverrides() {
+		overrides[k] = strings.TrimSpace(v)
+	}
+	if err := validateConfigOverrides(overrides); err != nil {
+		return nil, err
+	}
 
 	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc, s.env.Parser())
 	vx.SetShardSubset(req.TabletRequest.Shards)
