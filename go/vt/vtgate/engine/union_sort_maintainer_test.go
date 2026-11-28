@@ -139,19 +139,22 @@ func TestUnionSortIndependentProbesRunConcurrently(t *testing.T) {
 }
 
 func TestMemorySortSupportsServerWeightKeyOrderingCases(t *testing.T) {
-	for _, tc := range []struct{ collation, left, right string }{
-		{"tis620_thai_ci", "a", "a\x00"},
-		{"cp1250_czech_cs", "", "  "},
-		{"gb18030_chinese_ci", "ss", "ı"},
+	for _, tc := range []struct{ collation, left, right, indexedArm, indexedPredicate string }{
+		{"tis620_thai_ci", "a", "a\x00", "select value, weight_string(value) from t", ""},
+		{"cp1250_czech_cs", "", "  ", "select value, weight_string(value) from t force index (idx_value) where value in ('', '  ')", "value in ('', '  ')"},
+		{"gb18030_chinese_ci", "ss", "ı", "select value, weight_string(value) from t force index (idx_value) where value in ('ss', 'ı')", "value in ('ss', 'ı')"},
 	} {
 		name := tc.collation
 		t.Run(name, func(t *testing.T) {
 			env := collations.MySQL8()
 			id, _ := env.LookupID(name)
 			input := NewConcatenate([]Primitive{
-				unionSortTestRoute(t, "select value, weight_string(value) from t"),
+				unionSortTestRoute(t, tc.indexedArm),
 				unionSortTestRoute(t, "select value, weight_string(value) from u"),
 			}, nil)
+			if tc.indexedPredicate != "" {
+				assert.Contains(t, input.Sources[0].(*Route).Query, tc.indexedPredicate, "the indexed arm must contain both counterexample values")
+			}
 			metadata := &unionSortMetadata{
 				common: []collations.TypedCollation{{Collation: id}},
 				arms:   make([][]collations.TypedCollation, len(input.Sources)),
@@ -171,6 +174,11 @@ func TestMemorySortSupportsServerWeightKeyOrderingCases(t *testing.T) {
 				require.True(t, ok)
 				stmt := route.QueryStatement.(*sqlparser.Select)
 				assert.Equal(t, wantCap, stmt.Limit != nil, "collation=%s query=%s", tc.collation, route.Query)
+			}
+			if tc.collation != "tis620_thai_ci" {
+				primitive := Find(func(p Primitive) bool { _, ok := p.(*Route); return ok }, concat.Sources[0])
+				route := primitive.(*Route)
+				assert.Contains(t, route.Query, "force index (idx_value)", "the regression arm must exercise an indexed column")
 			}
 			t.Logf("MySQL UNION ordering case: %q / %q", tc.left, tc.right)
 		})
