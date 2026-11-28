@@ -3892,7 +3892,7 @@ func (asm *assembler) Fn_RandomBytes() {
 	asm.emit(func(env *ExpressionEnv) int {
 		size := env.vm.stack[env.vm.sp-1].(*evalInt64)
 		if size.i < 1 || size.i > 1024 {
-			env.vm.stack[env.vm.sp-1] = nil
+			env.vm.err = errRandomBytesLength
 			return 1
 		}
 		buf := make([]byte, size.i)
