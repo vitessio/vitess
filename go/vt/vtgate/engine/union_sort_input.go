@@ -76,6 +76,12 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 	for i := range global {
 		global[i].Type = evalengine.NewTypeEx(metadata.types[i], resolved[i].Collation, true, 0, metadata.scales[i], nil)
 	}
+	if unionSortNeedsUncappedArmReads(global, resolved, env) {
+		// MySQL may satisfy these collations' arm ORDER BY with an index whose
+		// order differs from the weight-key order used by the global UNION sort.
+		// Keep every row so MemorySort can apply the global comparator first.
+		count = math.MaxInt
+	}
 	if !unionSortNeedsNumericKeys(global) && unionSortSimpleSources(input) && (unionSortNonText(global) || unionSortRepeatableSources(input) && unionSortReusable(ms.OrderBy, metadata, env)) {
 		return unionSortPlainInput(input, global, count, metadata, env), nil, nil
 	}
@@ -121,6 +127,20 @@ func (ms *MemorySort) unionSortInput(metadata *unionSortMetadata, count int, env
 		layout = current
 	}
 	return &clone, layout, nil
+}
+
+func unionSortNeedsUncappedArmReads(order evalengine.Comparison, resolved []collations.TypedCollation, env *collations.Environment) bool {
+	for i, key := range order {
+		if !sqltypes.IsTextOrBinary(key.Type.Type()) || i >= len(resolved) {
+			continue
+		}
+		name, _ := env.LookupKnownCollation(resolved[i].Collation)
+		switch name {
+		case "cp1250_czech_cs", "gb18030_chinese_ci":
+			return true
+		}
+	}
+	return false
 }
 
 func unionSortSource(source Primitive, global evalengine.Comparison, resolved []collations.TypedCollation, armOrders []collations.TypedCollation, count int, env *collations.Environment) (Primitive, *unionSortLayout, error) {

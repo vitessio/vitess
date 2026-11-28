@@ -160,8 +160,18 @@ func TestMemorySortSupportsServerWeightKeyOrderingCases(t *testing.T) {
 				same:   true,
 			}
 			sort := &MemorySort{Input: input, OrderBy: evalengine.Comparison{{Col: 0, WeightStringCol: 1, Type: evalengine.NewType(sqltypes.VarChar, id)}}}
-			_, _, err := sort.unionSortInput(metadata, 1, env)
+			got, _, err := sort.unionSortInput(metadata, 1, env)
 			require.NoError(t, err)
+			concat, ok := got.(*Concatenate)
+			require.True(t, ok)
+			wantCap := tc.collation == "tis620_thai_ci"
+			for _, source := range concat.Sources {
+				primitive := Find(func(p Primitive) bool { _, ok := p.(*Route); return ok }, source)
+				route, ok := primitive.(*Route)
+				require.True(t, ok)
+				stmt := route.QueryStatement.(*sqlparser.Select)
+				assert.Equal(t, wantCap, stmt.Limit != nil, "collation=%s query=%s", tc.collation, route.Query)
+			}
 			t.Logf("MySQL UNION ordering case: %q / %q", tc.left, tc.right)
 		})
 	}

@@ -46,7 +46,7 @@ func TestServerWeightKeyComparison(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			switch name {
 			case "tis620_thai_ci", "cp1250_czech_cs", "gb18030_chinese_ci":
-				t.Skip("MySQL weight strings are not order-preserving; UNION key generation rejects this comparator")
+				t.Skip("MySQL weight-key order differs from strcmp; UNION ordering is covered directly")
 			}
 			properties, err := conn.ExecuteFetch("select pad_attribute from information_schema.collations where id="+entry[1].ToString(), 1, true)
 			require.NoError(t, err)
