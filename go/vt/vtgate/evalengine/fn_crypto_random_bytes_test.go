@@ -44,12 +44,12 @@ func TestRandomBytesLength(t *testing.T) {
 		{bind: sqltypes.Int64BindVariable(-1), err: errLength},
 		{bind: sqltypes.Int64BindVariable(1025), err: errLength},
 		{bind: sqltypes.Uint64BindVariable(18446744073709551615), err: errLength},
-		{bind: sqltypes.Float64BindVariable(0.4), err: errLength},
-		{bind: sqltypes.Float64BindVariable(1024.5), err: errLength},
+		{bind: sqltypes.DecimalBindVariable("0.4"), err: errLength},
+		{bind: sqltypes.DecimalBindVariable("1024.5"), err: errLength},
 		{bind: sqltypes.StringBindVariable("abc"), err: errLength},
 		{bind: sqltypes.Int64BindVariable(1), result: `INT64(1)`},
 		{bind: sqltypes.Int64BindVariable(1024), result: `INT64(1024)`},
-		{bind: sqltypes.Float64BindVariable(0.5), result: `INT64(1)`},
+		{bind: sqltypes.DecimalBindVariable("0.5"), result: `INT64(1)`},
 		{bind: sqltypes.NullBindVariable, result: `NULL`},
 	}
 
