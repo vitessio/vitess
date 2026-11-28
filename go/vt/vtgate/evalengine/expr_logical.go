@@ -17,8 +17,14 @@ limitations under the License.
 package evalengine
 
 import (
+	"errors"
+	"slices"
+	"sync"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type (
@@ -64,6 +70,9 @@ type (
 	CaseExpr struct {
 		cases []WhenThen
 		Else  IR
+		// typing types the expression when it is interpreted; nil if the
+		// expression was not built by translation.
+		typing *caseTyping
 	}
 )
 
@@ -585,14 +594,112 @@ func (is *IsExpr) compile(c *compiler) (ctype, error) {
 }
 
 func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
+	// MySQL evaluates the WHEN conditions in order and only the branch it
+	// returns, so a branch that would fail (e.g. EXP(710)) must not fail the
+	// whole expression unless it is chosen. The type of the result still
+	// depends on every branch, so it comes from their static types.
+	ct, err := c.typeof(env)
+	if err != nil {
+		return c.evalAllBranches(env)
+	}
+
+	result := c.Else
+	for _, whenThen := range c.cases {
+		when, err := whenThen.when.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if evalIsTruthy(when) == boolTrue {
+			result = whenThen.then
+			break
+		}
+	}
+	if result == nil {
+		return nil, nil
+	}
+	e, err := result.eval(env)
+	if err != nil {
+		return nil, err
+	}
+	return evalCoerce(e, ct.Type, ct.Size, ct.Scale, ct.Col.Collation, env.now, env.sqlmode.AllowZeroDate())
+}
+
+// typeof returns the type that the compiler gives the CASE expression, typing
+// the columns and bind variables that were not typed at translation from env.
+func (c *CaseExpr) typeof(env *ExpressionEnv) (ctype, error) {
+	if c.typing == nil {
+		return ctype{}, errCaseUntyped
+	}
+	return c.typing.typeof(env, c)
+}
+
+var errCaseUntyped = errors.New("CASE expression without typing information")
+
+// caseTyping caches the type of an interpreted CASE expression for each set
+// of types of its untyped columns and bind variables, like UntypedExpr does
+// for compiled programs.
+type caseTyping struct {
+	env       *vtenv.Environment
+	collation collations.ID
+	untyped   []typedIR
+
+	mu    sync.Mutex
+	types []caseType
+}
+
+type caseType struct {
+	dynamic []ctype
+	ct      ctype
+	err     error
+}
+
+func (ast *astCompiler) caseTyping(untypedFrom int) *caseTyping {
+	return &caseTyping{
+		env:       ast.cfg.Environment,
+		collation: ast.cfg.Collation,
+		untyped:   slices.Clone(ast.untyped[untypedFrom:]),
+	}
+}
+
+func (t *caseTyping) typeof(env *ExpressionEnv, c *CaseExpr) (ctype, error) {
+	var dynamic []ctype
+	if len(t.untyped) > 0 {
+		dynamic = make([]ctype, len(t.untyped))
+		for i, expr := range t.untyped {
+			var err error
+			if dynamic[i], err = expr.typeof(env); err != nil {
+				return ctype{}, err
+			}
+		}
+	}
+
+	// ponytail: one lock per evaluation, as UntypedExpr.Compile; make it
+	// lock-free if it shows up under contention
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, typ := range t.types {
+		if slices.EqualFunc(typ.dynamic, dynamic, func(a, b ctype) bool { return a.equal(b) }) {
+			return typ.ct, typ.err
+		}
+	}
+	comp := compiler{
+		env:       t.env,
+		collation: t.collation,
+		sqlmode:   env.sqlmode,
+		typeEnv:   env,
+	}
+	ct, err := c.compile(&comp)
+	t.types = append(t.types, caseType{dynamic: dynamic, ct: ct, err: err})
+	return ct, err
+}
+
+// evalAllBranches evaluates every branch and aggregates the result type from
+// the values. It is the fallback for expressions the compiler cannot type.
+func (c *CaseExpr) evalAllBranches(env *ExpressionEnv) (eval, error) {
 	var ta typeAggregation
 	var ca collationAggregation
 	var result eval
 	matched := false
-
-	// From what we can tell, MySQL actually evaluates all the branches
-	// of a CASE expression, even after a truthy match. I.e. the CASE
-	// operator does _not_ short-circuit.
 
 	for _, whenThen := range c.cases {
 		when, err := whenThen.when.eval(env)
@@ -655,28 +762,25 @@ func (c *CaseExpr) constant() bool {
 }
 
 func (c *CaseExpr) simplify(env *ExpressionEnv) error {
-	var err error
 	for i := range c.cases {
 		whenThen := &c.cases[i]
-		whenThen.when, err = simplifyExpr(env, whenThen.when)
-		if err != nil {
-			return err
-		}
-		whenThen.then, err = simplifyExpr(env, whenThen.then)
-		if err != nil {
-			return err
-		}
+		whenThen.when = simplifyBranch(env, whenThen.when)
+		whenThen.then = simplifyBranch(env, whenThen.then)
 	}
 	if c.Else != nil {
-		c.Else, err = simplifyExpr(env, c.Else)
+		c.Else = simplifyBranch(env, c.Else)
 	}
-	return err
+	return nil
 }
 
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
+	var done []*jump
 
+	// Only the chosen branch runs: a false or NULL WHEN jumps over its THEN,
+	// and every THEN jumps to the end, where the result is coerced to the
+	// type of the whole expression.
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
 		if err != nil {
@@ -686,16 +790,26 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		if err := c.compileCheckTrue(when, 1); err != nil {
 			return ctype{}, err
 		}
+		next := c.asm.jumpFrom()
+		c.asm.JumpFalse(next)
 
 		then, err := wt.then.compile(c)
 		if err != nil {
 			return ctype{}, err
 		}
+		then = c.constantBranchType(wt.then, then)
 
 		ta.add(then.Type, then.Flag, then.Size, then.Scale)
 		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
+
+		j := c.asm.jumpFrom()
+		c.asm.Jump(j)
+		done = append(done, j)
+		// the next WHEN starts without this THEN's result on the stack
+		c.asm.adjustStack(-1)
+		c.asm.jumpDestination(next)
 	}
 
 	if cs.Else != nil {
@@ -703,20 +817,51 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
+		els = c.constantBranchType(cs.Else, els)
 
 		ta.add(els.Type, els.Flag, els.Size, els.Scale)
 		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
+	} else {
+		c.asm.PushNull()
 	}
+	c.asm.jumpDestination(done...)
 
 	var f typeFlag
 	if ta.nullable {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	c.asm.Coerce(ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
+}
+
+// constantBranchType types a constant branch by its value, as constant folding
+// would. The compiler types some constants optimistically and corrects them
+// at run time (e.g. -9223372036854775809 is compiled as a BIGINT negation that
+// deoptimizes into a DECIMAL), which never happens for a branch that is not
+// taken. A branch that fails to evaluate keeps its compiled type.
+func (c *compiler) constantBranchType(expr IR, ct ctype) ctype {
+	if !expr.constant() {
+		return ct
+	}
+	v, err := expr.eval(EmptyExpressionEnv(c.env))
+	if err != nil || v == nil || v.SQLType() == ct.Type {
+		return ct
+	}
+	ct.Type, ct.Size, ct.Scale = v.SQLType(), v.Size(), v.Scale()
+	return ct
+}
+
+// simplifyBranch folds a branch that is only evaluated when it is chosen. A
+// branch that fails to fold is kept as is, so that it fails only if chosen.
+func simplifyBranch(env *ExpressionEnv, e IR) IR {
+	simplified, err := simplifyExpr(env, e)
+	if err != nil {
+		return e
+	}
+	return simplified
 }
 
 var _ IR = (*CaseExpr)(nil)

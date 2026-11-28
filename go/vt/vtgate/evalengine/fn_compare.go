@@ -48,26 +48,32 @@ var (
 )
 
 func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
-	args, err := b.args(env)
-	if err != nil {
-		return nil, err
-	}
-	for _, arg := range args {
-		if arg != nil {
-			return arg, nil
+	// Like MySQL, stop at the first non-NULL argument without evaluating the rest.
+	for _, arg := range b.Arguments {
+		e, err := arg.eval(env)
+		if err != nil || e != nil {
+			return e, err
 		}
 	}
 	return nil, nil
 }
 
+func (b *builtinCoalesce) simplify(env *ExpressionEnv) error {
+	for i, arg := range b.Arguments {
+		b.Arguments[i] = simplifyBranch(env, arg)
+	}
+	return nil
+}
+
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 	var (
-		ta typeAggregation
-		ca collationAggregation
+		ta   typeAggregation
+		ca   collationAggregation
+		done []*jump
 	)
 
 	f := flagNullable
-	for _, arg := range b.Arguments {
+	for i, arg := range b.Arguments {
 		tt, err := arg.compile(c)
 		if err != nil {
 			return ctype{}, err
@@ -79,20 +85,15 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if err := ca.add(tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
-	}
-
-	args := len(b.Arguments)
-	c.asm.adjustStack(-(args - 1))
-	c.asm.emit(func(env *ExpressionEnv) int {
-		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
-			if env.vm.stack[sp] != nil {
-				env.vm.stack[env.vm.sp-args] = env.vm.stack[sp]
-				break
-			}
+		if i < len(b.Arguments)-1 {
+			// a non-NULL argument is the result: skip the remaining ones
+			j := c.asm.jumpFrom()
+			c.asm.JumpNotNull(j)
+			done = append(done, j)
+			c.asm.adjustStack(-1)
 		}
-		env.vm.sp -= args - 1
-		return 1
-	}, "COALESCE (SP-%d) ... (SP-1)", args)
+	}
+	c.asm.jumpDestination(done...)
 
 	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
 }

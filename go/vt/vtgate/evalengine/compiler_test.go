@@ -1663,3 +1663,71 @@ func TestJSONColumnDecimals(t *testing.T) {
 		})
 	}
 }
+
+// TestCompilerShortCircuit checks that CASE, IF, IFNULL and COALESCE evaluate
+// only the branch they return, as MySQL does, in both the interpreter and the
+// compiled program, with and without constant folding, while the result type
+// still comes from every branch.
+func TestCompilerShortCircuit(t *testing.T) {
+	const overflow = "BIGINT value is out of range in '(9223372036854775807 + 1)'"
+	testCases := []struct {
+		expression string
+		result     string
+		err        string
+	}{
+		{expression: "IF(:v = 1, 0, 9223372036854775807 + :v)", result: "INT64(0)"},
+		{expression: "IF(:v = 0, 0, 9223372036854775807 + :v)", err: overflow},
+		{expression: "CASE WHEN :v = 1 THEN 'a' ELSE 9223372036854775807 + :v END", result: `VARCHAR("a")`},
+		{expression: "CASE WHEN :v = 0 THEN 1 WHEN :v = 1 THEN 2 WHEN 9223372036854775807 + :v THEN 3 END", result: "INT64(2)"},
+		{expression: "CASE WHEN :v = 0 THEN 1 END", result: "NULL"},
+		{expression: "CASE WHEN :v = 1 THEN 1 ELSE 1.5e0 END", result: "FLOAT64(1)"},
+		{expression: "IFNULL(:v, 9223372036854775807 + :v)", result: "INT64(1)"},
+		{expression: "COALESCE(:v, 9223372036854775807 + :v)", result: "INT64(1)"},
+		{expression: "COALESCE(NULL, :v, 9223372036854775807 + :v)", result: "INT64(1)"},
+		{expression: "COALESCE(NULL, 9223372036854775807 + :v, :v)", err: overflow},
+		{expression: "NULLIF(:v, 9223372036854775807 + :v)", err: overflow},
+		// constant branches are folded only if they evaluate, and typed by value
+		{expression: "CASE WHEN :v = 1 THEN 0 ELSE 9223372036854775807 + 1 END", result: "INT64(0)"},
+		{expression: "CASE WHEN :v = 0 THEN 0 ELSE 9223372036854775807 + 1 END", err: overflow},
+		{expression: "CASE WHEN :v = 1 THEN 0 ELSE -9223372036854775809 END", result: "DECIMAL(0)"},
+		{expression: "COALESCE(:v, 9223372036854775807 + 1)", result: "INT64(1)"},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		for _, folding := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/folding=%v", tc.expression, folding), func(t *testing.T) {
+				expr, err := venv.Parser().ParseExpr(tc.expression)
+				require.NoError(t, err)
+
+				cfg := &evalengine.Config{
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: !folding,
+				}
+				translated, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+				untyped, ok := translated.(*evalengine.UntypedExpr)
+				require.True(t, ok)
+
+				bvars := map[string]*querypb.BindVariable{"v": sqltypes.Int64BindVariable(1)}
+				env := evalengine.NewExpressionEnv(t.Context(), bvars, evalengine.NewEmptyVCursor(venv, nil))
+
+				check := func(res evalengine.EvalResult, err error) {
+					if tc.err != "" {
+						require.EqualError(t, err, tc.err)
+						return
+					}
+					require.NoError(t, err)
+					assert.Equal(t, tc.result, res.String())
+				}
+
+				check(env.EvaluateAST(untyped))
+
+				compiled, err := untyped.Compile(env)
+				require.NoError(t, err)
+				check(env.EvaluateVM(compiled))
+			})
+		}
+	}
+}
