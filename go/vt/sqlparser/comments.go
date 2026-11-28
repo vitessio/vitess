@@ -497,6 +497,90 @@ func (c *ParsedComments) Directives() *CommentDirectives {
 	return c._directives
 }
 
+// MySQLStatementHints builds one optimizer comment for a generated outer
+// statement. Only the first optimizer comment is effective in MySQL. Keep its
+// statement-scoped hints in their original order (including duplicates, whose
+// first occurrence takes precedence); table and query-block hints stay inside
+// the original query block. Additional hints belong to the generated block.
+func (c *ParsedComments) MySQLStatementHints(additional ...string) Comments {
+	var hints []string
+	if c != nil {
+		for _, comment := range c.comments {
+			if !strings.HasPrefix(comment, queryOptimizerPrefix) {
+				continue
+			}
+			body := strings.TrimSuffix(strings.TrimPrefix(comment, queryOptimizerPrefix), "*/")
+			for pos := 0; pos < len(body); {
+				for pos < len(body) && strings.ContainsRune(" \t\r\n", rune(body[pos])) {
+					pos++
+				}
+				start := pos
+				for pos < len(body) && body[pos] != '(' && !strings.ContainsRune(" \t\r\n", rune(body[pos])) {
+					pos++
+				}
+				name := body[start:pos]
+				for pos < len(body) && strings.ContainsRune(" \t\r\n", rune(body[pos])) {
+					pos++
+				}
+				if pos == len(body) || body[pos] != '(' {
+					break
+				}
+				end := statementHintEnd(body, pos)
+				if end < 0 {
+					break
+				}
+				switch strings.ToUpper(name) {
+				case "SET_VAR", "MAX_EXECUTION_TIME", "RESOURCE_GROUP":
+					hints = append(hints, body[start:end])
+				}
+				pos = end
+			}
+			break
+		}
+	}
+	hints = append(hints, additional...)
+	if len(hints) == 0 {
+		return nil
+	}
+	return Comments{"/*+ " + strings.Join(hints, " ") + " */"}
+}
+
+// statementHintEnd skips quoted arguments without interpreting or rewriting
+// them. The returned offset includes the closing parenthesis.
+func statementHintEnd(body string, pos int) int {
+	depth := 0
+	var quote byte
+	for ; pos < len(body); pos++ {
+		ch := body[pos]
+		if quote != 0 {
+			if ch == '\\' {
+				pos++
+				continue
+			}
+			if ch == quote {
+				if pos+1 < len(body) && body[pos+1] == quote {
+					pos++
+				} else {
+					quote = 0
+				}
+			}
+			continue
+		}
+		switch ch {
+		case '\'', '"', '`':
+			quote = ch
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return pos + 1
+			}
+		}
+	}
+	return -1
+}
+
 // GetMySQLSetVarValue gets the value of the given variable if it is part of a /*+ SET_VAR() */ MySQL optimizer hint.
 func (c *ParsedComments) GetMySQLSetVarValue(key string) string {
 	if c == nil {

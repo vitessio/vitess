@@ -21,12 +21,17 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -37,6 +42,16 @@ type MemorySort struct {
 	UpperLimit evalengine.Expr
 	OrderBy    evalengine.Comparison
 	Input      Primitive
+
+	// CollationQueries resolve UNION expression collations and coercibilities
+	// without reading arm rows. Result-field collations can instead describe
+	// character_set_results and cannot establish a common UNION comparator.
+	CollationQueries []Primitive
+
+	// UnionCollationKnown means all ordered arm expressions are schema-known
+	// columns with the same collation. Runtime result encodings still need
+	// lossless keys, but resolving the collation cannot change this plan.
+	UnionCollationKnown bool
 
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
@@ -51,13 +66,55 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
+	if count == 0 {
+		fields, err := ms.GetFields(ctx, vcursor, bindVars)
+		if err != nil {
+			return nil, err
+		}
+		return fields.Truncate(ms.TruncateColumnCount), nil
+	}
+
+	if len(ms.CollationQueries) > 0 {
+		ctx = withUnionSortLookupCache(ctx)
+	}
+	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	var resolved []collations.TypedCollation
+	if metadata != nil {
+		resolved = metadata.common
+	}
+	input, layout, err := ms.unionSortInput(metadata, count, vcursor.Environment().CollationEnv())
+	if err != nil {
+		return nil, err
+	}
+	result, err := vcursor.ExecutePrimitive(ctx, input, bindVars, wantfields || layout != nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ms.OrderBy.SortResult(result); err != nil {
+	orderBy := ms.OrderBy
+	width := 0
+	if layout != nil {
+		width = layout.width
+	}
+	if len(resolved) > 0 {
+		orderBy, err = unionSortComparison(orderBy, result.Fields, layout, resolved, vcursor.Environment().CollationEnv())
+		if err != nil {
+			return nil, err
+		}
+	}
+	if layout != nil {
+		if err := layout.validate(result); err != nil {
+			return nil, err
+		}
+	}
+	if err = orderBy.SortResult(result); err != nil {
 		return nil, err
+	}
+	if layout != nil {
+		result = result.Truncate(width)
 	}
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
@@ -74,7 +131,37 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return err
 	}
 
+	if count == 0 {
+		fields, err := ms.GetFields(ctx, vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		return callback(fields.Truncate(ms.TruncateColumnCount))
+	}
+
+	if len(ms.CollationQueries) > 0 {
+		ctx = withUnionSortLookupCache(ctx)
+	}
+	metadata, err := ms.resolveUnionCollations(ctx, vcursor, bindVars)
+	if err != nil {
+		return err
+	}
+	var resolved []collations.TypedCollation
+	if metadata != nil {
+		resolved = metadata.common
+	}
+	input, layout, err := ms.unionSortInput(metadata, count, vcursor.Environment().CollationEnv())
+	if err != nil {
+		return err
+	}
+	width := 0
+	if layout != nil {
+		width = layout.width
+	}
 	cb := func(qr *sqltypes.Result) error {
+		if layout != nil {
+			qr = qr.Truncate(width)
+		}
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
@@ -84,11 +171,23 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	}
 
 	var mu sync.Mutex
-	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ctx, input, bindVars, wantfields || layout != nil, func(qr *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
+			if len(resolved) > 0 {
+				var err error
+				sorter.Compare, err = unionSortComparison(ms.OrderBy, qr.Fields, layout, resolved, vcursor.Environment().CollationEnv())
+				if err != nil {
+					return err
+				}
+			}
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
+				return err
+			}
+		}
+		if layout != nil {
+			if err := layout.validate(qr); err != nil {
 				return err
 			}
 		}
@@ -106,6 +205,71 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
 }
 
+// Concatenate can aggregate TEXT to Blob. The server-generated binary key
+// captures the common collation independently of that result type and of any
+// lossy character_set_results conversion. Numeric values keep numeric ordering.
+func unionSortComparison(orderBy evalengine.Comparison, fields []*querypb.Field, layout *unionSortLayout, resolved []collations.TypedCollation, env *collations.Environment) (evalengine.Comparison, error) {
+	if layout != nil && (len(fields) != layout.columnCount() || len(orderBy) != len(layout.keys)) {
+		return nil, vterrors.VT13001("UNION sort fields do not match its column layout")
+	}
+	orderBy = slices.Clone(orderBy)
+	for i := range orderBy {
+		order := &orderBy[i]
+		if order.Col < 0 || order.Col >= len(fields) {
+			return nil, vterrors.VT13001("UNION ordering column is outside the result")
+		}
+		field := fields[order.Col]
+		order.Type = evalengine.NewTypeFromField(field)
+		oldWeight := order.WeightStringCol
+		order.WeightStringCol = -1
+		order.PadSpaceWeight = nil
+		order.PadSpaceWeightCol = 0
+		if sqltypes.IsTextOrBinary(field.Type) {
+			if layout != nil {
+				order.Col = layout.keys[i]
+			} else {
+				order.Col = oldWeight
+			}
+			order.Type = evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID)
+			var err error
+			order.PadSpaceWeight, err = unionSortPadWeight(env, resolved[i].Collation)
+			if layout != nil && len(layout.pads) > i {
+				order.PadSpaceWeightCol = layout.pads[i]
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return orderBy, nil
+}
+
+// Padding follows the collation that produced the key, independently of the
+// result's wire charset and of any common collation chosen for another sort.
+func unionSortPadWeight(env *collations.Environment, id collations.ID) ([]byte, error) {
+	pad, known := env.PadSpace(id)
+	if !known {
+		return nil, vterrors.VT12001("UNION collation padding is unknown")
+	}
+	if !pad {
+		return nil, nil
+	}
+	collation := colldata.Lookup(id)
+	if collation == nil {
+		return nil, nil
+	}
+	var encoded [4]byte
+	n := collation.Charset().EncodeRune(encoded[:], ' ')
+	if n <= 0 {
+		return nil, vterrors.VT13001("UNION collation cannot encode SPACE")
+	}
+	weight := collation.WeightString(nil, encoded[:n], 0)
+	if len(weight) == 0 {
+		return nil, vterrors.VT13001("UNION collation has no SPACE weight")
+	}
+	return weight, nil
+}
+
 // GetFields satisfies the Primitive interface.
 func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return ms.Input.GetFields(ctx, vcursor, bindVars)
@@ -113,7 +277,16 @@ func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 
 // Inputs returns the input to memory sort
 func (ms *MemorySort) Inputs() ([]Primitive, []map[string]any) {
-	return []Primitive{ms.Input}, nil
+	inputs := append([]Primitive{ms.Input}, ms.CollationQueries...)
+	if len(ms.CollationQueries) == 0 {
+		return inputs, nil
+	}
+	names := make([]map[string]any, len(inputs))
+	names[0] = map[string]any{inputName: "Rows"}
+	for i := range ms.CollationQueries {
+		names[i+1] = map[string]any{inputName: fmt.Sprintf("Collation metadata %d", i+1)}
+	}
+	return inputs, names
 }
 
 // NeedsTransaction implements the Primitive interface
@@ -145,6 +318,9 @@ func (ms *MemorySort) fetchCount(ctx context.Context, vcursor VCursor, bindVars 
 func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	other := map[string]any{"OrderBy": orderByIndexes}
+	if ms.UpperLimit != nil {
+		other["UpperLimit"] = sqlparser.String(ms.UpperLimit)
+	}
 	if ms.TruncateColumnCount > 0 {
 		other["ResultColumns"] = ms.TruncateColumnCount
 	}
@@ -178,4 +354,9 @@ func GenericJoin(input any, f func(any) string) string {
 		panic("GenericJoin doesn't know how to deal with " + sl.Kind().String())
 	}
 	return strings.Join(keys, ", ")
+}
+
+func unionSortNeedsServerSpace(env *collations.Environment, id collations.ID) bool {
+	pad, _ := env.PadSpace(id)
+	return pad && colldata.Lookup(id) == nil
 }

@@ -25,6 +25,22 @@
     }
   },
   "tables": {
+    "union_collations": {
+      "columns": [
+        {
+          "name": "enum_sort",
+          "type": "ENUM",
+          "collation_name": "utf8mb4_0900_ai_ci",
+          "values": ["b", "a"]
+        }
+      ],
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
     "t1": {
       "column_vindexes": [
         {

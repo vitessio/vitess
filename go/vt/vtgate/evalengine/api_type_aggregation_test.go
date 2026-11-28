@@ -71,3 +71,12 @@ func TestEvalengineTypeAggregations(t *testing.T) {
 		})
 	}
 }
+
+func TestTypeAggregatorASCIIRepertoire(t *testing.T) {
+	env := collations.MySQL8()
+	var agg TypeAggregator
+	require.NoError(t, agg.Add(NewType(sqltypes.VarChar, env.LookupByName("ascii_general_ci")), env))
+	require.NoError(t, agg.Add(NewType(sqltypes.VarChar, env.LookupByName("latin1_swedish_ci")), env))
+	typ := agg.Type()
+	require.Equal(t, env.LookupByName("latin1_swedish_ci"), typ.Collation())
+}

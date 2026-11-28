@@ -327,7 +327,7 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
 }
 
 func (t *noopVCursor) InReservedConn() bool {
-	panic("implement me")
+	return false
 }
 
 func (t *noopVCursor) ShardSession() []*srvtopo.ResolvedShard {

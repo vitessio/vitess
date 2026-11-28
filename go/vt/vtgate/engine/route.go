@@ -84,6 +84,10 @@ type Route struct {
 	// QueryStatement is the parsed AST of Query
 	QueryStatement sqlparser.Statement
 
+	// unionSortOriginal associates an execution-local UNION rewrite with its
+	// cached route for VEXPLAIN. Cached routes leave this nil.
+	unionSortOriginal *Route
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
@@ -598,15 +602,27 @@ func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
 		return "", false
 	}
 
-	lock := sel.GetLock()
-	if lock != sqlparser.ForUpdateLock &&
-		lock != sqlparser.ForUpdateLockNoWait &&
-		lock != sqlparser.ForUpdateLockSkipLocked {
+	forUpdate := func(lock sqlparser.Lock) bool {
+		return lock == sqlparser.ForUpdateLock || lock == sqlparser.ForUpdateLockNoWait || lock == sqlparser.ForUpdateLockSkipLocked
+	}
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if block, ok := node.(sqlparser.SelectStatement); ok && forUpdate(block.GetLock()) {
+			found = true
+		}
+		return !found, nil
+	}, sel)
+	if !found {
 		return "", false
 	}
 
 	clonedSel := sqlparser.CloneSelectStatement(sel)
-	clonedSel.SetLock(sqlparser.NoLock)
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if block, ok := node.(sqlparser.SelectStatement); ok && forUpdate(block.GetLock()) {
+			block.SetLock(sqlparser.NoLock)
+		}
+		return true, nil
+	}, clonedSel)
 
 	return sqlparser.String(clonedSel), true
 }

@@ -65,7 +65,11 @@ func (ta *TypeAggregator) Add(typ Type, env *collations.Environment) error {
 	}
 
 	ta.types.addNullable(typ.typ, typ.nullable, typ.size, typ.scale)
-	if err := ta.collations.add(typedCoercionCollation(typ.typ, typ.collation), env); err != nil {
+	tc := typedCoercionCollation(typ.typ, typ.collation)
+	if env.LookupCharsetName(tc.Collation) == "ascii" {
+		tc.Repertoire = collations.RepertoireASCII
+	}
+	if err := ta.collations.add(tc, env); err != nil {
 		return err
 	}
 	ta.size = max(typ.size, ta.size)

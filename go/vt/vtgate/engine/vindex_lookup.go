@@ -53,6 +53,26 @@ type VindexLookup struct {
 
 	// This is the side that needs to be routed
 	SendTo *Route
+
+	// unionSortLookupSource identifies execution-local UNION metadata probes
+	// and the corresponding data arm so their lookup results can be shared.
+	unionSortLookupSource *VindexLookup
+}
+
+// NewUnionSortLookupProbe clones a lookup arm around a metadata-only route.
+// The source identity lets MemorySort reuse the resolved lookup for its data read.
+func NewUnionSortLookupProbe(source *VindexLookup, route *Route) *VindexLookup {
+	clone := *source
+	clone.SendTo = route
+	clone.unionSortLookupSource = source.unionSortLookupKey()
+	return &clone
+}
+
+func (vr *VindexLookup) unionSortLookupKey() *VindexLookup {
+	if vr.unionSortLookupSource != nil {
+		return vr.unionSortLookupSource
+	}
+	return vr
 }
 
 // GetFields implements the Primitive interface
@@ -67,6 +87,15 @@ func (vr *VindexLookup) NeedsTransaction() bool {
 
 // TryExecute implements the Primitive interface
 func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	cache := unionSortLookupCacheFromContext(ctx)
+	lookupKey := vr.unionSortLookupKey()
+	cacheable := cache != nil && vr.unionSortLookupSource != nil
+	if cacheable {
+		if cached, ok := cache.get(lookupKey); ok {
+			vr.setListBindVariable(cached.ids, bindVars)
+			return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, cached.ids, cached.dest)
+		}
+	}
 	ids, err := vr.generateIds(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -75,10 +104,12 @@ func (vr *VindexLookup) TryExecute(ctx context.Context, vcursor VCursor, bindVar
 	if err != nil {
 		return nil, err
 	}
-
 	dest, err := vr.mapVindexToDestination(ids, results, bindVars)
 	if err != nil {
 		return nil, err
+	}
+	if cacheable {
+		cache.set(lookupKey, unionSortLookupResult{ids: ids, dest: dest})
 	}
 
 	return vr.SendTo.executeAfterLookup(ctx, vcursor, bindVars, wantfields, ids, dest)
@@ -90,6 +121,11 @@ func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*
 		return nil, err
 	}
 
+	vr.setListBindVariable(ids, bindVars)
+	return dest, nil
+}
+
+func (vr *VindexLookup) setListBindVariable(ids []sqltypes.Value, bindVars map[string]*querypb.BindVariable) {
 	if vr.Opcode == IN {
 		valsBV := &querypb.BindVariable{Type: querypb.Type_TUPLE}
 		valsBV.Values = make([]*querypb.Value, 0, len(ids))
@@ -98,11 +134,19 @@ func (vr *VindexLookup) mapVindexToDestination(ids []sqltypes.Value, results []*
 		}
 		bindVars[ListVarName] = valsBV
 	}
-	return dest, nil
 }
 
 // TryStreamExecute implements the Primitive interface
 func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	cache := unionSortLookupCacheFromContext(ctx)
+	lookupKey := vr.unionSortLookupKey()
+	cacheable := cache != nil && vr.unionSortLookupSource != nil
+	if cacheable {
+		if cached, ok := cache.get(lookupKey); ok {
+			vr.setListBindVariable(cached.ids, bindVars)
+			return vr.SendTo.streamExecuteAfterLookup(ctx, vcursor, bindVars, wantfields, callback, cached.ids, cached.dest)
+		}
+	}
 	ids, err := vr.generateIds(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
@@ -112,10 +156,12 @@ func (vr *VindexLookup) TryStreamExecute(ctx context.Context, vcursor VCursor, b
 	if err != nil {
 		return err
 	}
-
 	dest, err := vr.mapVindexToDestination(ids, results, bindVars)
 	if err != nil {
 		return err
+	}
+	if cacheable {
+		cache.set(lookupKey, unionSortLookupResult{ids: ids, dest: dest})
 	}
 
 	return vr.SendTo.streamExecuteAfterLookup(ctx, vcursor, bindVars, wantfields, callback, ids, dest)

@@ -321,7 +321,6 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 				}
 			}
 		}
-
 		s.push(nScope)
 	}
 	return nil
