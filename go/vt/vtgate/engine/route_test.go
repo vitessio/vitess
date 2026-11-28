@@ -727,6 +727,52 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	expectResult(t, result, &sqltypes.Result{})
 }
 
+// An IN lookup miss must send the evaluated list to the fallback shard in both
+// execution modes, without modifying the caller's bind variables.
+func TestSelectINNoRouteBindsFallbackValues(t *testing.T) {
+	vindex, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{
+		"table": "lkp",
+		"from":  "from",
+		"to":    "toc",
+	})
+	require.NoError(t, err)
+	values := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{
+		{Type: sqltypes.Int64, Value: []byte("1")},
+		{Type: sqltypes.Int64, Value: []byte("2")},
+	}}
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stream=%t", stream), func(t *testing.T) {
+			route := NewRoute(IN, &vindexes.Keyspace{Name: "ks", Sharded: true}, "dummy_select", "dummy_select_field")
+			route.Vindex = vindex
+			route.Values = []evalengine.Expr{evalengine.TupleExpr{
+				evalengine.NewLiteralInt(1),
+				evalengine.NewLiteralInt(2),
+			}}
+			route.NoRoutesSpecialHandling = true
+			bindVars := map[string]*querypb.BindVariable{"kept": sqltypes.Int64BindVariable(7)}
+			vc := &loggingVCursor{shards: []string{"-20", "20-"}}
+			if stream {
+				_, err = wrapStreamExecute(route, vc, bindVars, false)
+			} else {
+				_, err = route.TryExecute(t.Context(), vc, bindVars, false)
+			}
+			require.NoError(t, err)
+			execution := fmt.Sprintf("ExecuteMultiShard ks.-20: dummy_select {__vals: %v kept: %v} false false", values, bindVars["kept"])
+			if stream {
+				execution = fmt.Sprintf("StreamExecuteMulti dummy_select ks.-20: {__vals: %v kept: %v} ", values, bindVars["kept"])
+			}
+			vc.ExpectLog(t, []string{
+				fmt.Sprintf("Execute select from, toc from lkp where from in ::from from: %v false", values),
+				fmt.Sprintf("ResolveDestinations ks [%v %v] Destinations:DestinationNone(),DestinationNone()", sqltypes.Int64BindVariable(1), sqltypes.Int64BindVariable(2)),
+				"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+				execution,
+			})
+			require.Len(t, bindVars, 1, "do not add fallback bindings to the caller's map")
+			assert.True(t, proto.Equal(sqltypes.Int64BindVariable(7), bindVars["kept"]))
+		})
+	}
+}
+
 func TestINUnique(t *testing.T) {
 	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(

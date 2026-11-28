@@ -73,6 +73,67 @@ func TestPlanTestSuite(t *testing.T) {
 	suite.Run(t, new(planTestSuite))
 }
 
+// Merged reference and dual UNION inputs must survive a lookup miss, including
+// when subsequent UNION, subquery, join, or recursive CTE merges rebuild the route.
+func TestReferenceUnionByDestinationHandlesLookupMiss(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name                string
+		query               string
+		wantSpecialHandling bool
+	}{
+		{"reference-first", "select id from ref union all select id from music where id = 1", true},
+		{"reference-last", "select id from music where id = 1 union all select id from ref", true},
+		{"join", "select d.id from (select id from ref union all select id from music where id = 1) as d cross join ref r", true},
+		// A join must also retain a replicated UNION input from its right side.
+		{"join-right", "select d.id from ref r cross join (select id from ref union all select id from music where id = 1) as d", true},
+		{"lookup-only", "select id from music where id = 1", false},
+		{"non-planable-equal", "select user_id from ref union all select user_id from user_metadata where non_planable = 'foo'", true},
+		{"non-planable-in", "select user_id from ref union all select user_id from user_metadata where non_planable in ('foo', 'bar')", true},
+		{"non-planable-only", "select user_id from user_metadata where non_planable = 'foo'", false},
+		// Dual inputs must be recognized even without a reference table.
+		{"dual", "select 1 from dual union all select id from music where id = 1", true},
+		// A later sharded/sharded merge must retain the earlier reference input.
+		{"sharded-merge", "select id from ref union all select id from music where id = 1 union all select id from music where id = 1", true},
+		// Merging an empty arm must not erase an earlier reference input.
+		{"none-merge", "select id from ref union all select id from music where id = 1 union all select id from music where 1 = 0", true},
+		// Subquery merging must retain fallback handling from the nested UNION.
+		{"subquery", "select id from ref where id in (select id from (select id from ref union all select id from music where id = 1) x)", true},
+		// An EXISTS inside OR takes the non-top-level subquery merge branch.
+		{"non-top-level-subquery", "select d.id from (select id from ref union all select id from music where id = 1) d where d.id = 5 or exists (select 1 from ref)", true},
+		// A merged recursive CTE must retain its reference UNION seed's fallback.
+		{"recursive-cte", "with recursive c as (select id from (select id from ref union all select id from music where id = 1) d union all select id + 1 from c where id < 3) select id from c", true},
+		// A later merge can make the route empty. Do not execute the remaining
+		// predicates on an arbitrary shard using an inherited UNION marker.
+		{"none-does-not-fallback", "select d.id from (select id from ref union all select id from music where id = 1) d left join (select id from music where 1 != 1) e on d.id = e.id where not exists (select 1 from music m2 where m2.id = 1)", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())
+			require.NoError(t, err)
+
+			var route *engine.Route
+			switch instructions := plan.Instructions.(type) {
+			case *engine.Route:
+				route = instructions
+			case *engine.VindexLookup:
+				route = instructions.SendTo
+			}
+			require.NotNil(t, route, "expected a route for query %q, got %T", tc.query, plan.Instructions)
+			assert.Equal(t, tc.wantSpecialHandling, route.NoRoutesSpecialHandling, tc.query)
+			switch tc.name {
+			case "non-planable-in":
+				assert.Equal(t, engine.IN, route.Opcode, "the regression must exercise IN fallback bindings")
+			case "none-does-not-fallback":
+				assert.Equal(t, engine.None, route.Opcode)
+			}
+		})
+	}
+}
+
 func (s *planTestSuite) TestPlan() {
 	defer utils.EnsureNoLeaks(s.T())
 

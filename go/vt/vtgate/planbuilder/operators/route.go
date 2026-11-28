@@ -41,6 +41,10 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
+		// ContainsSpecialUnionInput records a reference or dual UNION input.
+		// Runtime fallback also requires the final routing to use a lookup vindex.
+		ContainsSpecialUnionInput bool
+
 		Routing Routing
 
 		Ordering []RouteOrdering
@@ -115,6 +119,15 @@ type (
 		resetRoutingLogic(ctx *plancontext.PlanningContext) Routing
 	}
 )
+
+func inheritSpecialUnionInput(route *Route, sources ...*Route) {
+	for _, source := range sources {
+		if source != nil && source.ContainsSpecialUnionInput {
+			route.ContainsSpecialUnionInput = true
+			return
+		}
+	}
+}
 
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {

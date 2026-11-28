@@ -107,9 +107,15 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"user", "lookup"}
+		tables := []string{"user", "lookup", "lookup_unique", "lookup_non_planable_map"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		_, err := mcmp.MySQLConn.ExecuteFetch("delete from ref", 1000, true)
+		require.NoError(t, err)
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("delete from ref", shardedKs, true)
+			require.NoError(t, err)
 		}
 	}
 
@@ -144,6 +150,34 @@ func TestLookupQueries(t *testing.T) {
 			mcmp.AssertMatches("select id from user where lookup_unique = 'not there'", "[]")
 			mcmp.AssertMatchesNoOrder("select id from user where lookup_unique in ('apa', 'bandar')", "[[INT64(1)] [INT64(2)]]")
 			mcmp.AssertMatches("select count(*) from user where lookup_unique in ('apa', 'monkey', 'bandar')", "[[INT64(3)]]")
+		})
+	}
+}
+
+// Lookup misses must preserve the reference UNION input through route merges,
+// including true multi-value IN fallback in buffered and streaming execution.
+func TestReferenceUnionAllLookupMiss(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", shardedKs, true)
+		require.NoError(t, err)
+	}
+
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, query := range []string{
+				"select id from ref union all select id from user where lookup_unique = 'not there'",
+				"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') as d cross join ref r",
+				"select d.id from ref r cross join (select id from ref union all select id from user where lookup_unique = 'not there') as d",
+				"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') d where d.id = 5 or exists (select 1 from ref)",
+				"select id from ref union all select id from user where lookup_non_planable in ('not there', 'also missing')",
+			} {
+				mcmp.AssertMatches(query, "[[INT64(100)]]")
+			}
 		})
 	}
 }

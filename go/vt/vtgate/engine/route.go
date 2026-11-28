@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/rand/v2"
 	"sort"
 	"strings"
@@ -128,6 +129,30 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 }
 
 var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
+
+func (route *Route) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+	rss, bvs, err := route.RoutingParameters.anyShard(ctx, vcursor, bindVars)
+	if err != nil || !route.NoRoutesSpecialHandling || route.Opcode != IN {
+		return rss, bvs, err
+	}
+
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	value, err := env.Evaluate(route.Values[0])
+	if err != nil {
+		return nil, nil, err
+	}
+	values := value.TupleValues()
+	protoValues := make([]*querypb.Value, len(values))
+	for i, value := range values {
+		protoValues[i] = sqltypes.ValueToProto(value)
+	}
+	fallbackBindVars := maps.Clone(bindVars)
+	fallbackBindVars[ListVarName] = &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: protoValues}
+	for i := range bvs {
+		bvs[i] = fallbackBindVars
+	}
+	return rss, bvs, nil
+}
 
 // TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
