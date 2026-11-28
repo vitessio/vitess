@@ -3837,9 +3837,31 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 		}},
 	}
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-80", "80-"})
-	defer env.close()
+	t.Cleanup(env.close)
 	tmc := &mutationRecordingTMClient{testMaterializerTMClient: env.tmc}
 	ws := NewServer(env.venv, env.topoServ, tmc)
+
+	// topoState describes the topology records that the workflow commands
+	// change: the routing rules and the vschema and shards of both keyspaces.
+	topoState := func(t *testing.T) string {
+		var state strings.Builder
+		rules, err := env.topoServ.GetRoutingRules(ctx)
+		require.NoError(t, err)
+		state.WriteString(prototext.Format(rules))
+		shardRules, err := env.topoServ.GetShardRoutingRules(ctx)
+		require.NoError(t, err)
+		state.WriteString(prototext.Format(shardRules))
+		for _, keyspace := range []string{ms.SourceKeyspace, ms.TargetKeyspace} {
+			vschema, err := env.topoServ.GetVSchema(ctx, keyspace)
+			require.NoError(t, err)
+			state.WriteString(prototext.Format(vschema.Keyspace))
+			shards, err := env.topoServ.GetShardNames(ctx, keyspace)
+			require.NoError(t, err)
+			fmt.Fprintf(&state, "%s shards: %v\n", keyspace, shards)
+		}
+		return state.String()
+	}
+	initialTopoState := topoState(t)
 
 	for _, tc := range []struct {
 		name      string
@@ -3854,6 +3876,7 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 				require.ErrorContains(t, err, tc.errMsg)
 				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
 				assert.Empty(t, tmc.takeCalls(), "tablet changes made before the overrides were rejected")
+				assert.Equal(t, initialTopoState, topoState(t), "topology changed before the overrides were rejected")
 			}
 			options := &vtctldatapb.WorkflowOptions{Config: tc.overrides}
 
