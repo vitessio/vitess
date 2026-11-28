@@ -35,11 +35,13 @@ import (
 // A NULL pattern or match type is still NULL. The expected results come from
 // MySQL 8.4.
 func TestRegexpNullArgumentWithBadPattern(t *testing.T) {
-	// MySQL 8.4 fails with ER_REGEXP_MISSING_CLOSE_BRACKET (3696) and
-	// ER_REGEXP_ILLEGAL_ARGUMENT (3685).
+	// MySQL 8.4 fails with ER_REGEXP_MISSING_CLOSE_BRACKET (3696),
+	// ER_REGEXP_ILLEGAL_ARGUMENT (3685) and, for a bad match type,
+	// ER_WRONG_ARGUMENTS (1210).
 	const (
 		errBracket = vterrors.RegexpMissingCloseBracket
 		errIllegal = vterrors.RegexpIllegalArgument
+		errWrong   = vterrors.WrongArguments
 	)
 	null := sqltypes.NullBindVariable
 	testCases := []struct {
@@ -66,6 +68,14 @@ func TestRegexpNullArgumentWithBadPattern(t *testing.T) {
 		{expr: `REGEXP_REPLACE('dog cat dog', '[', 'bar', :s, 1, 'i')`, s: null, err: errBracket},
 		{expr: `REGEXP_REPLACE('dog cat dog', '[', 'bar', 1, :s, 'i')`, s: null, err: errBracket},
 		{expr: `REGEXP_REPLACE(:s, :p, 'bar')`, s: null, p: sqltypes.StringBindVariable("["), err: errBracket},
+
+		// A bad match type is reported before the NULL result, and before a
+		// bad pattern.
+		{expr: `REGEXP_LIKE(:s, 'a', 'x')`, s: null, err: errWrong},
+		{expr: `REGEXP_INSTR(:s, 'a', 1, 1, 1, 'x')`, s: null, err: errWrong},
+		{expr: `REGEXP_INSTR(:s, '[', 1, 1, 1, 'x')`, s: null, err: errWrong},
+		{expr: `REGEXP_SUBSTR(:s, 'a', 1, 1, 'x')`, s: null, err: errWrong},
+		{expr: `REGEXP_REPLACE(:s, 'DOG', 'bar', 1, 1, 0)`, s: null, err: errWrong},
 
 		// A pattern that compiles, or a NULL pattern or match type, gives NULL.
 		{expr: `:s REGEXP :p`, s: null, p: sqltypes.StringBindVariable("a"), result: `NULL`},
