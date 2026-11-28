@@ -965,6 +965,116 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// UPPER over a JSON value case-maps the document's text, which uses utf8mb4_bin.
+			expression: `UPPER(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `VARCHAR("{\"A\": \"B\"}")`,
+			collation:  collations.CollationUtf8mb4BinID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4BinID, true, 0, 0, nil),
+		},
+		{
+			// LOWER over a JSON value returns text, so the comparison is not a JSON comparison.
+			expression: `LOWER(column0) = '{"a": "b"}'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `INT64(1)`,
+		},
+		{
+			// The utf8mb4_bin collation of the JSON text makes the comparison case-sensitive.
+			expression: `LOWER(column0) = '{"A": "B"}'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "b"}`))},
+			result:     `INT64(0)`,
+		},
+		{
+			// LOWER over a binary value stays binary, so bit functions see the bytes.
+			expression: `BIT_COUNT(LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `INT64(5)`,
+		},
+		{
+			expression: `HEX(~LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `VARCHAR("9EBD")`,
+		},
+		{
+			expression: `HEX(UPPER(column0) | LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `VARCHAR("6142")`,
+		},
+		{
+			expression: `JSON_ARRAY(LOWER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("aB")},
+			result:     `JSON("[\"base64:type15:YUI=\"]")`,
+		},
+		{
+			// LOWER over a number converts it to text instead of failing.
+			expression: `LOWER(column0) = 1`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `INT64(1)`,
+		},
+		{
+			// LOWER over a date is the date's text, compared as a string.
+			expression: `LOWER(column0) = '2020-1-2'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `LOWER(column0) = '2020-01-02'`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
+			result:     `INT64(1)`,
+		},
+		{
+			// The result of LOWER is no longer a hex literal, so it is not a number.
+			expression: `LOWER(0x41) + 0`,
+			result:     `FLOAT64(0)`,
+		},
+		{
+			// The result of UPPER is no longer a bit literal, so it is not a number.
+			expression: `UPPER(b'1100001') + 0`,
+			result:     `FLOAT64(0)`,
+		},
+		{
+			// The collation of the text converted from JSON is that of the JSON text, not the
+			// one of the string it is compared with, which is not case-insensitive.
+			expression: `CONVERT(column0 USING utf16) IN (LOWER(column1))`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`{"A": "B"}`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"A": "B"}`)),
+			},
+			result: `INT64(0)`,
+		},
+		{
+			// A BLOB in the binary collation is a VARBINARY result, in both paths.
+			expression: `BIT_COUNT(LOWER(CAST(column0 AS BINARY)))`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`123`))},
+			result:     `INT64(10)`,
+		},
+		{
+			// A BLOB in a Unicode collation is a text result, in both paths.
+			expression: `JSON_ARRAY(LOWER(JSON_UNQUOTE('"ABC"') COLLATE utf8mb4_0900_ai_ci))`,
+			result:     `JSON("[\"abc\"]")`,
+		},
+		{
+			// The text converted from JSON has the same collation in both paths.
+			expression: `column0 IN (LOWER(column1))`,
+			values: []sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte(`{"a": "b"}`)),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"A": "B"}`)),
+			},
+			result: `INT64(1)`,
+		},
+		{
+			// LOWER keeps the explicit collation of its argument, so the mix with a binary
+			// value is text, as in MySQL.
+			expression: `CASE WHEN 1 THEN LOWER('a' COLLATE utf8mb4_0900_as_cs) ELSE CAST('b' AS BINARY) END`,
+			result:     `VARCHAR("a")`,
+		},
+		{
+			// and so does UPPER, for a binary column
+			expression: `CASE WHEN 1 THEN UPPER('a' COLLATE utf8mb4_0900_as_cs) ELSE column0 END`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("b"))},
+			result:     `VARCHAR("A")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1015,6 +1125,125 @@ func TestCompilerSingle(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestChangeCaseNumericGeneralCI checks that LOWER and UPPER convert a number
+// to text under a collation that has no case mapping of its own.
+func TestChangeCaseNumericGeneralCI(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	tz, _ := time.LoadLocation("Europe/Madrid")
+
+	for _, tc := range []struct{ expression, result string }{
+		{`LOWER(1)`, `VARCHAR("1")`},
+		{`UPPER(1e20)`, `VARCHAR("1E20")`},
+		{`LOWER(1e20)`, `VARCHAR("1e20")`},
+	} {
+		for _, fold := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/fold=%v", tc.expression, fold), func(t *testing.T) {
+				expr, err := venv.Parser().ParseExpr(tc.expression)
+				require.NoError(t, err)
+
+				cfg := &evalengine.Config{
+					Collation:         collations.ID(45), // utf8mb4_general_ci
+					Environment:       venv,
+					NoConstantFolding: !fold,
+				}
+				converted, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+
+				env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
+				res, err := env.Evaluate(converted)
+				require.NoError(t, err)
+				assert.Equal(t, tc.result, res.String())
+			})
+		}
+	}
+}
+
+// TestChangeCaseBindVarLiteral checks that LOWER and UPPER keep a hex or bit
+// literal bind variable binary, as the normalizer turns 0x61 into one, so the
+// functions that read the static type of the result agree with its value.
+func TestChangeCaseBindVarLiteral(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	for _, tc := range []struct {
+		expression string
+		bindVar    *querypb.BindVariable
+		result     string
+	}{
+		{`HEX(~UPPER(:vtg1))`, sqltypes.HexNumBindVariable([]byte("0x61")), `VARCHAR("9E")`},
+		{`BIT_COUNT(UPPER(:vtg1))`, sqltypes.HexNumBindVariable([]byte("0x61")), `INT64(3)`},
+		{`JSON_ARRAY(UPPER(:vtg1))`, sqltypes.HexValBindVariable([]byte("x'61'")), `JSON("[\"base64:type15:YQ==\"]")`},
+		{`BIT_COUNT(UPPER(:vtg1))`, sqltypes.BitNumBindVariable([]byte("0b1100001")), `INT64(3)`},
+	} {
+		t.Run(tc.expression+"/"+tc.bindVar.Type.String(), func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			require.NoError(t, sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+				if arg, ok := node.(*sqlparser.Argument); ok {
+					arg.Type = tc.bindVar.Type
+				}
+				return true, nil
+			}, expr))
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = map[string]*querypb.BindVariable{"vtg1": tc.bindVar}
+
+			expected, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, expected.String(), "bad evaluation from eval engine")
+
+			res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "bad evaluation from compiler")
+		})
+	}
+}
+
+// TestChangeCaseExplicitCollationBindVar checks that a hex literal bind variable
+// with an explicit COLLATE keeps it through LOWER, so that the comparison with a
+// value of another explicit collation is refused in the compiler, as it is in
+// the interpreter, instead of becoming a comparison in the collation of the
+// other side.
+func TestChangeCaseExplicitCollationBindVar(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+
+	expr, err := venv.Parser().ParseExpr(`LOWER(:vtg1 COLLATE binary) = 'a' COLLATE utf8mb4_0900_ai_ci`)
+	require.NoError(t, err)
+	require.NoError(t, sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if arg, ok := node.(*sqlparser.Argument); ok {
+			arg.Type = sqltypes.HexNum
+		}
+		return true, nil
+	}, expr))
+
+	cfg := &evalengine.Config{
+		Collation:         collations.CollationUtf8mb4ID,
+		Environment:       venv,
+		NoConstantFolding: true,
+	}
+
+	// the compiler refuses the expression when it compiles it
+	_, compileErr := evalengine.Translate(expr, cfg)
+	require.Error(t, compileErr, "the compiler refuses to mix the two explicit collations")
+
+	// and the interpreter, when it evaluates it
+	cfg.NoCompilation = true
+	converted, err := evalengine.Translate(expr, cfg)
+	require.NoError(t, err)
+	env := evalengine.EmptyExpressionEnv(venv)
+	env.BindVars = map[string]*querypb.BindVariable{"vtg1": sqltypes.HexNumBindVariable([]byte("0x41"))}
+	_, astErr := env.EvaluateAST(converted)
+	require.Error(t, astErr, "the interpreter refuses to mix the two explicit collations")
+
+	assert.Equal(t, astErr.Error(), compileErr.Error())
 }
 
 func TestBindVarLiteral(t *testing.T) {

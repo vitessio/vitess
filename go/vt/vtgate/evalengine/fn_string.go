@@ -587,36 +587,114 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
+// changeCaseType is the type of the result of LOWER and UPPER: a value in the
+// binary collation stays binary, anything else is text.
+func changeCaseType(col collations.ID) sqltypes.Type {
+	if col == collations.CollationBinaryID {
+		return sqltypes.VarBinary
+	}
+	return sqltypes.VarChar
+}
+
+// hasUnicaseFallback reports whether MySQL changes the case of text in the
+// collation with its default unicase table, which is the one of utf8mb4_bin,
+// although the collation has no case mapping in Vitess. That is the case of the
+// utf8mb4 and utf8mb3 collations other than the _unicode_520_ci and the _turkish_ci
+// ones, which have case mappings of their own in MySQL. A collation of another
+// character set is not one: the table is for UTF-8 text.
+func hasUnicaseFallback(id collations.ID) bool {
+	switch id {
+	case 201, 214, 233, 246:
+		// utf8mb3_turkish_ci, utf8mb3_unicode_520_ci, utf8mb4_turkish_ci and
+		// utf8mb4_unicode_520_ci
+		return false
+	}
+	// Lookup has no collation for one that is known but not supported.
+	coll := colldata.Lookup(id)
+	if coll == nil {
+		return false
+	}
+	switch coll.Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
+		return true
+	}
+	return false
+}
+
+// changeCaseBytes changes the case of src using the case mapping of its
+// collation. With utf8Fallback, a collation without a case mapping of its own
+// uses the mapping of utf8mb4_bin, which is MySQL's default unicase table. That
+// is right for valid UTF-8 text, such as the text of a number or a date, and
+// for the labels of an ENUM or SET column in a collation that
+// hasUnicaseFallback.
+func changeCaseBytes(col collations.ID, src []byte, upcase, utf8Fallback bool) ([]byte, error) {
+	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
+	if !ok && utf8Fallback {
+		csa, ok = colldata.Lookup(collations.CollationUtf8mb4BinID).(colldata.CaseAwareCollation)
+	}
+	switch {
+	case !ok:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+	case upcase:
+		return csa.ToUpper(nil, src), nil
+	default:
+		return csa.ToLower(nil, src), nil
+	}
+}
+
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	arg, err := call.arg1(env)
 	if err != nil {
 		return nil, err
 	}
 
+	var b *evalBytes
+	var converted bool
 	switch e := arg.(type) {
 	case nil:
 		return nil, nil
 
-	case evalNumeric:
-		return evalToVarchar(e, call.collate, false)
-
 	case *evalBytes:
-		coll := colldata.Lookup(e.col.Collation)
-		csa, ok := coll.(colldata.CaseAwareCollation)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
+		b = e
+
+	case *evalJSON:
+		b = newEvalText(e.ToRawBytes(), collationJSON)
+
+	case *evalEnum, *evalSet:
+		// The label bytes are in the character set of the column, which the value does not
+		// carry: take the collation from the column.
+		// A column the planner has no type for takes it from the fields of the row, as
+		// Column.typeof does, and has none to take otherwise.
+		col := typedCoercionCollation(sqltypes.VarChar, call.collate)
+		if column, ok := call.Arguments[0].(*Column); ok && (column.typed() || column.Offset < len(env.Fields)) {
+			typ, err := column.typeof(env)
+			if err != nil {
+				return nil, err
+			}
+			if typ.Col.Collation != collations.Unknown {
+				col = typ.Col
+			}
 		}
-		var newcase []byte
-		if call.upcase {
-			newcase = csa.ToUpper(nil, e.bytes)
-		} else {
-			newcase = csa.ToLower(nil, e.bytes)
-		}
-		return newEvalText(newcase, e.col), nil
+		b = newEvalText(e.ToRawBytes(), col)
+		converted = hasUnicaseFallback(col.Collation)
 
 	default:
-		return e, nil
+		b, err = evalToVarchar(e, call.collate, true)
+		if err != nil {
+			return nil, err
+		}
+		converted = true
 	}
+
+	newcase, err := changeCaseBytes(b.col.Collation, b.bytes, call.upcase, converted)
+	if err != nil {
+		return nil, err
+	}
+	res := newEvalRaw(changeCaseType(b.col.Collation), newcase, b.col)
+	// the result keeps the explicit collation of its argument, but is no longer a
+	// hex or bit literal
+	res.flag = b.flag & flagExplicitCollation
+	return res, nil
 }
 
 func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
@@ -627,16 +705,51 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(str)
 
+	var col *collations.TypedCollation
+	var utf8Fallback bool
+	// The result keeps the explicit collation of its argument, as in MySQL, and
+	// is no longer a hex or bit literal.
+	res := ctype{Size: str.Size, Col: str.Col, Flag: nullableFlags(str.Flag) | str.Flag&flagExplicitCollation}
 	switch {
+	case (str.Type == sqltypes.Enum || str.Type == sqltypes.Set) && str.Col.Collation != collations.Unknown:
+		// The labels of an ENUM or SET are in the character set of the column: keep
+		// its collation, and change their case with it.
+		c.asm.Convert_xc(1, sqltypes.VarChar, str.Col.Collation, nil)
+		res.Size = 0
+		col = &res.Col
+		utf8Fallback = hasUnicaseFallback(str.Col.Collation)
+	case str.Type == sqltypes.VarBinary && str.isHexOrBitLiteral() && str.Flag&flagExplicitCollation == 0:
+		// A hex or bit literal, such as a bind variable the normalizer made out
+		// of one, is a binary value whatever collation its static type names,
+		// unless a COLLATE clause names one explicitly. A cast keeps the literal
+		// flag of its argument although the result is no longer binary: only a
+		// binary value takes this arm, any other converts as its type does.
+		res.Col = collationBinary
 	case str.isTextual():
+	case str.Type == sqltypes.TypeJSON:
+		c.asm.Convert_xc(1, sqltypes.VarChar, collationJSON.Collation, nil)
+		res.Size = 0
+		res.Col = collationJSON
+		col = &res.Col
 	default:
+		utf8Fallback = true
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		res.Size = 0
+		// Convert_xc gives the converted value this collation: the text of a
+		// number or a date is ASCII, as in MySQL.
+		res.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+		col = &res.Col
 	}
+	res.Type = changeCaseType(res.Col.Collation)
 
-	c.asm.Fn_LUCASE(call.upcase)
+	c.asm.Fn_LUCASE(call.upcase, col, utf8Fallback)
 	c.asm.jumpDestination(skip)
 
-	return str, nil
+	return res, nil
 }
 
 func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
