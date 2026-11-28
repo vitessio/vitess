@@ -25,6 +25,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3766,6 +3767,59 @@ func TestValidateShardsHaveVReplicationPermissions(t *testing.T) {
 	}
 }
 
+// mutationRecordingTMClient records the tablet RPCs that change schema or
+// streams, so that a test can check a request was rejected before any of them.
+type mutationRecordingTMClient struct {
+	*testMaterializerTMClient
+
+	callsMu sync.Mutex
+	calls   []string
+}
+
+func (c *mutationRecordingTMClient) record(rpc string) {
+	c.callsMu.Lock()
+	defer c.callsMu.Unlock()
+	c.calls = append(c.calls, rpc)
+}
+
+func (c *mutationRecordingTMClient) takeCalls() []string {
+	c.callsMu.Lock()
+	defer c.callsMu.Unlock()
+	calls := c.calls
+	c.calls = nil
+	return calls
+}
+
+func (c *mutationRecordingTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
+	c.record("ApplySchema")
+	return c.testMaterializerTMClient.ApplySchema(ctx, tablet, change)
+}
+
+func (c *mutationRecordingTMClient) CreateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.CreateVReplicationWorkflowRequest) (*tabletmanagerdatapb.CreateVReplicationWorkflowResponse, error) {
+	c.record("CreateVReplicationWorkflow")
+	return c.testMaterializerTMClient.CreateVReplicationWorkflow(ctx, tablet, request)
+}
+
+func (c *mutationRecordingTMClient) UpdateVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVReplicationWorkflowRequest) (*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse, error) {
+	c.record("UpdateVReplicationWorkflow")
+	return c.testMaterializerTMClient.UpdateVReplicationWorkflow(ctx, tablet, req)
+}
+
+func (c *mutationRecordingTMClient) DeleteVReplicationWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.DeleteVReplicationWorkflowRequest) (*tabletmanagerdatapb.DeleteVReplicationWorkflowResponse, error) {
+	c.record("DeleteVReplicationWorkflow")
+	return c.testMaterializerTMClient.DeleteVReplicationWorkflow(ctx, tablet, request)
+}
+
+func (c *mutationRecordingTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	c.record("VReplicationExec")
+	return c.testMaterializerTMClient.VReplicationExec(ctx, tablet, query)
+}
+
+func (c *mutationRecordingTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	c.record("ExecuteFetchAsDba")
+	return c.testMaterializerTMClient.ExecuteFetchAsDba(ctx, tablet, usePool, req)
+}
+
 // TestConfigOverridesValidatedBeforeWorkflowChanges checks that the workflow
 // create and update entry points reject an invalid VReplication config
 // override before they deploy any schema or touch any stream. The tablets
@@ -3784,6 +3838,8 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ctx, ms, []string{"-"}, []string{"-80", "80-"})
 	defer env.close()
+	tmc := &mutationRecordingTMClient{testMaterializerTMClient: env.tmc}
+	ws := NewServer(env.venv, env.topoServ, tmc)
 
 	for _, tc := range []struct {
 		name      string
@@ -3797,10 +3853,11 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 			check := func(t *testing.T, err error) {
 				require.ErrorContains(t, err, tc.errMsg)
 				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, tmc.takeCalls(), "tablet changes made before the overrides were rejected")
 			}
 			options := &vtctldatapb.WorkflowOptions{Config: tc.overrides}
 
-			_, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
+			_, err := ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 				Workflow:        ms.Workflow,
 				SourceKeyspace:  ms.SourceKeyspace,
 				TargetKeyspace:  ms.TargetKeyspace,
@@ -3809,7 +3866,7 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 			})
 			check(t, err)
 
-			_, err = env.ws.ReshardCreate(ctx, &vtctldatapb.ReshardCreateRequest{
+			_, err = ws.ReshardCreate(ctx, &vtctldatapb.ReshardCreateRequest{
 				Workflow:        ms.Workflow,
 				Keyspace:        ms.TargetKeyspace,
 				SourceShards:    []string{"-80", "80-"},
@@ -3820,9 +3877,9 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 
 			materializeSettings := proto.Clone(ms).(*vtctldatapb.MaterializeSettings)
 			materializeSettings.WorkflowOptions = options
-			check(t, env.ws.Materialize(ctx, materializeSettings))
+			check(t, ws.Materialize(ctx, materializeSettings))
 
-			_, err = env.ws.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
+			_, err = ws.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
 				Keyspace: ms.TargetKeyspace,
 				TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
 					Workflow:        ms.Workflow,
@@ -3833,11 +3890,22 @@ func TestConfigOverridesValidatedBeforeWorkflowChanges(t *testing.T) {
 		})
 	}
 
-	// A valid value and an empty value (which removes an override) pass.
-	require.NoError(t, validateConfigOverrides(map[string]string{
-		"vreplication-copy-phase-duration": "1h",
-		"vreplication-retry-delay":         "",
-	}))
+	// An update with valid values reaches the tablets. The tablets trim the
+	// values and remove an override whose value is blank, so padded and blank
+	// values are valid too.
+	_, err := ws.WorkflowUpdate(ctx, &vtctldatapb.WorkflowUpdateRequest{
+		Keyspace: ms.TargetKeyspace,
+		TabletRequest: &tabletmanagerdatapb.UpdateVReplicationWorkflowRequest{
+			Workflow: ms.Workflow,
+			ConfigOverrides: map[string]string{
+				"vreplication-copy-phase-duration":       " 1h ",
+				"vreplication-retry-delay":               " ",
+				"vreplication-heartbeat-update-interval": "",
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Contains(t, tmc.takeCalls(), "UpdateVReplicationWorkflow")
 }
 
 func TestWorkflowUpdate(t *testing.T) {

@@ -2012,7 +2012,13 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	span.Annotate("config_overrides", req.TabletRequest.ConfigOverrides)
 	span.Annotate("shards", req.TabletRequest.Shards)
 
-	if err := validateConfigOverrides(req.TabletRequest.GetConfigOverrides()); err != nil {
+	// The tablets trim the values of an update and treat a blank value as the
+	// removal of that override, so validate the values they will store.
+	overrides := make(map[string]string, len(req.TabletRequest.GetConfigOverrides()))
+	for k, v := range req.TabletRequest.GetConfigOverrides() {
+		overrides[k] = strings.TrimSpace(v)
+	}
+	if err := validateConfigOverrides(overrides); err != nil {
 		return nil, err
 	}
 
