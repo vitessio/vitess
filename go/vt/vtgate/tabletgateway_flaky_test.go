@@ -33,6 +33,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TestGatewayBufferingWhenPrimarySwitchesServingState is used to test that the buffering mechanism buffers the queries when a primary goes to a non serving state and
@@ -266,6 +267,46 @@ func TestGatewayBufferingWhileReparenting(t *testing.T) {
 		case <-time.After(15 * time.Second):
 			require.Fail(t, "timed out waiting for query to execute")
 		}
+	})
+}
+
+// TestGatewayBufferedQueryRetriesSamePrimary covers an in-flight query when a failed reparent restores the same primary.
+func TestGatewayBufferedQueryRetriesSamePrimary(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buffer.SetBufferingModeInTestingEnv(true)
+		t.Cleanup(func() { buffer.SetBufferingModeInTestingEnv(false) })
+
+		ctx := utils.LeakCheckContext(t)
+		hc := discovery.NewFakeHealthCheck(make(chan *discovery.TabletHealth))
+		tg := NewTabletGateway(ctx, hc, &econtext.FakeTopoServer{}, "cell")
+		t.Cleanup(func() { tg.Close(ctx) })
+
+		// The keyspace is consistent only after both shards have a serving primary.
+		sbc := hc.AddTestTablet("cell", "1.1.1.1", 1001, "ks1", "-80", topodatapb.TabletType_PRIMARY, true, 10, nil)
+		hc.AddTestTablet("cell", "1.1.1.2", 1002, "ks1", "80-", topodatapb.TabletType_PRIMARY, true, 10, nil)
+		hc.BroadcastAll()
+		require.NoError(t, tg.kev.WaitForConsistentKeyspaces(ctx, []string{"ks1"}))
+		synctest.Wait()
+
+		sbc.MustFailCodes[vtrpcpb.Code_CLUSTER_EVENT] = 1
+		target := &querypb.Target{Keyspace: "ks1", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+		done := make(chan error, 1)
+		go func() {
+			_, err := tg.Execute(ctx, nil, target, "select 1", nil, 0, 0, nil)
+			done <- err
+		}()
+		synctest.Wait()
+		require.EqualValues(t, 1, sbc.ExecCount.Load())
+		require.Empty(t, done, "the query should be buffered")
+
+		primary := sbc.Tablet()
+		hc.SetServing(primary, false)
+		hc.Broadcast(primary)
+		hc.SetServing(primary, true)
+		hc.Broadcast(primary)
+
+		require.NoError(t, <-done)
+		require.EqualValues(t, 2, sbc.ExecCount.Load())
 	})
 }
 
