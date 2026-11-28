@@ -3821,3 +3821,55 @@ func TestValidateSerialColumns(t *testing.T) {
 		})
 	}
 }
+
+// TestApplyLeadingKeyBeforeFirstColumn verifies that applying ALTER TABLE operations
+// that make a key's _beforeColumn target become the first column preserves key order
+// and still produces CREATE TABLE SQL that round-trips through ParseStrictDDL.
+func TestApplyLeadingKeyBeforeFirstColumn(t *testing.T) {
+	testcases := []struct {
+		name     string
+		from     string
+		alter    string
+		expected string
+	}{
+		{
+			name:     "modify column first",
+			from:     "create table t (a int, key k (a), b int)",
+			alter:    "alter table t modify b int first",
+			expected: "CREATE TABLE `t` (\n\tKEY `k` (`a`),\n\t`b` int,\n\t`a` int\n)",
+		},
+		{
+			name:     "drop earlier column",
+			from:     "create table t (a int, key k (b), b int)",
+			alter:    "alter table t drop column a",
+			expected: "CREATE TABLE `t` (\n\tKEY `k` (`b`),\n\t`b` int\n)",
+		},
+		{
+			name:     "modify column first with foreign key",
+			from:     "create table t (a int, constraint fk foreign key (a) references p (id), b int)",
+			alter:    "alter table t modify b int first",
+			expected: "CREATE TABLE `t` (\n\tCONSTRAINT `fk` FOREIGN KEY (`a`) REFERENCES `p` (`id`),\n\t`b` int,\n\t`a` int,\n\tKEY `fk` (`a`)\n)",
+		},
+	}
+	env := NewTestEnv()
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			from, err := NewCreateTableEntityFromSQL(env, tc.from)
+			require.NoError(t, err)
+
+			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+
+			applied, err := from.Apply(&AlterTableEntityDiff{from: from, alterTable: alterTable})
+			require.NoError(t, err)
+
+			canonical := applied.Create().CanonicalStatementString()
+			assert.Equal(t, tc.expected, canonical)
+
+			_, err = env.Parser().ParseStrictDDL(canonical)
+			require.NoError(t, err, "canonical SQL must re-parse: %s", canonical)
+		})
+	}
+}

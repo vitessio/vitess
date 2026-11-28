@@ -4382,6 +4382,60 @@ func TestValid(t *testing.T) {
 	}
 }
 
+// TestTableSpecLeadingKeyRoundTrip verifies that formatted CREATE TABLE statements
+// preserve key-before-column order ahead of the first column and re-parse with
+// ParseStrictDDL across both Format and FormatFast.
+func TestTableSpecLeadingKeyRoundTrip(t *testing.T) {
+	testcases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "index before first column after check",
+			input:    "create table t (check (x > 0), key k (x), x int)",
+			expected: "create table t (\n\tkey k (x),\n\tx int,\n\tcheck (x > 0)\n)",
+		},
+		{
+			name:     "unique key before column with inline unique preserves key order",
+			input:    "create table t (check (a > 0), unique key a (b), a int unique, b int)",
+			expected: "create table t (\n\tunique key a (b),\n\ta int unique,\n\tb int,\n\tcheck (a > 0)\n)",
+		},
+		{
+			name:     "foreign key before first column after check",
+			input:    "create table t (check (x > 0), constraint fk foreign key (x) references p (id), x int)",
+			expected: "create table t (\n\tcheck (x > 0),\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
+		},
+		{
+			name:     "direct leading index",
+			input:    "create table t (key k (x), x int)",
+			expected: "create table t (\n\tkey k (x),\n\tx int\n)",
+		},
+		{
+			name:     "direct leading foreign key",
+			input:    "create table t (constraint fk foreign key (x) references p (id), x int)",
+			expected: "create table t (\n\tconstraint fk foreign key (x) references p (id),\n\tx int\n)",
+		},
+	}
+	parser := NewTestParser()
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			stmt, err := parser.ParseStrictDDL(tc.input)
+			require.NoError(t, err)
+
+			fast := String(stmt)
+			assert.Equal(t, tc.expected, fast)
+			assert.Equal(t, tc.expected, UnescapedString(stmt), "Format and FormatFast must match")
+
+			for _, formatted := range []string{fast, CanonicalString(stmt)} {
+				reparsed, err := parser.ParseStrictDDL(formatted)
+				require.NoError(t, err, "formatted SQL must re-parse: %s", formatted)
+				require.NotNil(t, reparsed)
+			}
+		})
+	}
+}
+
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
 func TestParallelValid(t *testing.T) {
 	parallelism := 100
